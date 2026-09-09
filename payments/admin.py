@@ -11,4 +11,4 @@ class PaymentRecordAdmin(admin.ModelAdmin):
     )
     list_filter = ('gateway_id', 'status', 'currency')
     search_fields = ('reference', 'recipient_name', 'recipient_email', 'external_id')
-    readonly_fields = ('created_at', 'created_by', 'changed_at', 'changed_by')
+    readonly_fields = ('created_at', 'created_by', 'updated_at', 'changed_by')

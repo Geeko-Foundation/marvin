@@ -13,7 +13,6 @@ urlpatterns = [
     path('signup/banking/skip/', views.signup_skip_banking, name='signup_skip_banking'),
     path('signup/complete/', views.signup_complete, name='signup_complete'),
     path('', views.dashboard, name='dashboard'),
-    path('profile/', views.profile_view, name='profile'),
     path('onboarding/profile/', views.onboarding_personal, name='onboarding_personal'),
     path('onboarding/wise/', views.onboarding_wise, name='onboarding_wise'),
     path('events/', views.event_list, name='event_list'),

@@ -34,7 +34,7 @@ GROUP_PERMISSIONS = {
 
 
 def _profile_permissions() -> dict[str, Permission]:
-    from tsp.models import UserProfile
+    from profile.models import UserProfile
 
     ct = ContentType.objects.get_for_model(UserProfile)
     codenames = {codename for perms in GROUP_PERMISSIONS.values() for codename in perms}

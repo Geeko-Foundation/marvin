@@ -1,9 +1,9 @@
 """Redirect requestors through onboarding until profile and Wise setup are complete."""
 
 from django.shortcuts import redirect
-from django.urls import resolve, reverse
+from django.urls import resolve
 
-from tsp.decorators import get_profile
+from profile.decorators import get_profile
 
 
 ONBOARDING_URL_NAMES = {

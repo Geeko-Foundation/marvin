@@ -6,7 +6,7 @@
     "permissions": [
       [
         "submit_travel_requests",
-        "tsp",
+        "profile",
         "userprofile"
       ]
     ]
@@ -19,22 +19,22 @@
     "permissions": [
       [
         "manage_events",
-        "tsp",
+        "profile",
         "userprofile"
       ],
       [
         "review_travel_requests",
-        "tsp",
+        "profile",
         "userprofile"
       ],
       [
         "submit_travel_requests",
-        "tsp",
+        "profile",
         "userprofile"
       ],
       [
         "view_reports",
-        "tsp",
+        "profile",
         "userprofile"
       ]
     ]
@@ -47,12 +47,12 @@
     "permissions": [
       [
         "process_payments",
-        "tsp",
+        "profile",
         "userprofile"
       ],
       [
         "view_reports",
-        "tsp",
+        "profile",
         "userprofile"
       ]
     ]
@@ -248,12 +248,12 @@
   }
 },
 {
-  "model": "tsp.userprofile",
+  "model": "profile.userprofile",
   "pk": 1,
   "fields": {
     "created_at": "2026-09-08T15:09:52.637Z",
     "created_by": null,
-    "changed_at": "2026-09-08T15:09:52.658Z",
+    "updated_at": "2026-09-08T15:09:52.658Z",
     "changed_by": null,
     "user": [
       "admin"
@@ -272,12 +272,12 @@
   }
 },
 {
-  "model": "tsp.userprofile",
+  "model": "profile.userprofile",
   "pk": 2,
   "fields": {
     "created_at": "2026-09-08T15:09:52.637Z",
     "created_by": null,
-    "changed_at": "2026-09-08T15:09:52.658Z",
+    "updated_at": "2026-09-08T15:09:52.658Z",
     "changed_by": null,
     "user": [
       "requester"
@@ -296,12 +296,12 @@
   }
 },
 {
-  "model": "tsp.userprofile",
+  "model": "profile.userprofile",
   "pk": 3,
   "fields": {
     "created_at": "2026-09-08T15:09:52.637Z",
     "created_by": null,
-    "changed_at": "2026-09-08T15:09:52.658Z",
+    "updated_at": "2026-09-08T15:09:52.658Z",
     "changed_by": null,
     "user": [
       "finance"
@@ -320,12 +320,12 @@
   }
 },
 {
-  "model": "tsp.userprofile",
+  "model": "profile.userprofile",
   "pk": 4,
   "fields": {
     "created_at": "2026-09-08T15:09:52.637Z",
     "created_by": null,
-    "changed_at": "2026-09-08T15:09:52.658Z",
+    "updated_at": "2026-09-08T15:09:52.658Z",
     "changed_by": null,
     "user": [
       "newuser1"
@@ -344,12 +344,12 @@
   }
 },
 {
-  "model": "tsp.userprofile",
+  "model": "profile.userprofile",
   "pk": 5,
   "fields": {
     "created_at": "2026-09-08T15:09:52.637Z",
     "created_by": null,
-    "changed_at": "2026-09-08T15:09:52.658Z",
+    "updated_at": "2026-09-08T15:09:52.658Z",
     "changed_by": null,
     "user": [
       "patrick.f.fitzgerald@googlemail.com"
@@ -368,12 +368,12 @@
   }
 },
 {
-  "model": "tsp.userprofile",
+  "model": "profile.userprofile",
   "pk": 6,
   "fields": {
     "created_at": "2026-09-08T15:09:52.637Z",
     "created_by": null,
-    "changed_at": "2026-09-08T15:09:52.658Z",
+    "updated_at": "2026-09-08T15:09:52.658Z",
     "changed_by": null,
     "user": [
       "ibanonly"
@@ -392,12 +392,12 @@
   }
 },
 {
-  "model": "tsp.userprofile",
+  "model": "profile.userprofile",
   "pk": 7,
   "fields": {
     "created_at": "2026-09-08T15:09:52.637Z",
     "created_by": null,
-    "changed_at": "2026-09-08T15:09:52.658Z",
+    "updated_at": "2026-09-08T15:09:52.658Z",
     "changed_by": null,
     "user": [
       "wizard1"
@@ -416,12 +416,12 @@
   }
 },
 {
-  "model": "tsp.userprofile",
+  "model": "profile.userprofile",
   "pk": 8,
   "fields": {
     "created_at": "2026-09-08T15:09:52.637Z",
     "created_by": null,
-    "changed_at": "2026-09-08T15:35:40.112Z",
+    "updated_at": "2026-09-08T15:35:40.112Z",
     "changed_by": [
       "wizard2"
     ],
@@ -442,14 +442,14 @@
   }
 },
 {
-  "model": "tsp.userprofile",
+  "model": "profile.userprofile",
   "pk": 9,
   "fields": {
     "created_at": "2026-09-08T15:14:37.513Z",
     "created_by": [
       "superuser"
     ],
-    "changed_at": "2026-09-08T15:24:33.086Z",
+    "updated_at": "2026-09-08T15:24:33.086Z",
     "changed_by": [
       "superuser"
     ],
@@ -475,7 +475,7 @@
   "fields": {
     "created_at": "2026-09-08T13:42:00.214Z",
     "created_by": null,
-    "changed_at": "2026-09-08T15:09:52.713Z",
+    "updated_at": "2026-09-08T15:09:52.713Z",
     "changed_by": null,
     "name": "openSUSE Conference 2026",
     "location": "Nuremberg, Germany",
@@ -490,7 +490,7 @@
   "fields": {
     "created_at": "2026-09-08T13:42:00.219Z",
     "created_by": null,
-    "changed_at": "2026-09-08T15:09:52.713Z",
+    "updated_at": "2026-09-08T15:09:52.713Z",
     "changed_by": null,
     "name": "FOSDEM 2026",
     "location": "Brussels, Belgium",
@@ -505,7 +505,7 @@
   "fields": {
     "created_at": "2026-09-08T13:42:00.223Z",
     "created_by": null,
-    "changed_at": "2026-09-08T15:09:52.713Z",
+    "updated_at": "2026-09-08T15:09:52.713Z",
     "changed_by": null,
     "name": "LinuxConf.au 2026",
     "location": "Sydney, Australia",
@@ -520,7 +520,7 @@
   "fields": {
     "created_at": "2026-09-08T13:42:00.227Z",
     "created_by": null,
-    "changed_at": "2026-09-08T15:09:52.713Z",
+    "updated_at": "2026-09-08T15:09:52.713Z",
     "changed_by": null,
     "name": "openSUSE Conference 2027",
     "location": "Prague, Czechia",

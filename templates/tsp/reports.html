@@ -62,7 +62,7 @@
         <tbody>
           {% for req in requests_list %}
           <tr>
-            <td>{{ req.changed_at|date:"Y-m-d" }}</td>
+            <td>{{ req.updated_at|date:"Y-m-d" }}</td>
             <td><a href="{% url 'request_detail' req.pk %}" class="link link-primary">{{ req.event.name }}</a></td>
             <td>{{ req.event.location }}</td>
             <td>{{ req.user.get_full_name|default:req.user.username }}</td>

@@ -40,6 +40,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'django_tables2',
     'payments',
+    'profile',
     'tsp',
 ]
 
@@ -68,7 +69,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
-                'tsp.context_processors.user_profile',
+                'profile.context_processors.user_profile',
             ],
         },
     },
@@ -144,7 +145,7 @@ PAYMENTS_ADAPTERS = [
     'tsp.payables.TravelRequestPayableAdapter',
 ]
 PAYMENTS_DEFAULT_ADAPTER = 'tsp.travelrequest'
-PAYMENTS_PERMISSION_CHECK = 'tsp.permissions.finance_can_process_payments'
+PAYMENTS_PERMISSION_CHECK = 'profile.permissions.finance_can_process_payments'
 
 # Wise API — sandbox by default (see api_tests3.py)
 WISE_API_TOKEN = os.environ.get(

@@ -2,8 +2,8 @@ from django import forms
 from django.contrib.auth.forms import AuthenticationForm
 from django.contrib.auth.models import User
 
+from profile.models import UserProfile
 from tsp.models import (
-    BankingMethod,
     Comment,
     Document,
     DocumentKind,
@@ -11,7 +11,6 @@ from tsp.models import (
     Expense,
     ExpenseCategory,
     TravelRequest,
-    UserProfile,
 )
 
 CURRENCY_CHOICES = [
@@ -88,7 +87,7 @@ class SignupAccountForm(forms.Form):
         return cleaned
 
     def save(self):
-        from tsp.groups import GROUP_REQUESTER, assign_user_to_group
+        from profile.groups import GROUP_REQUESTER, assign_user_to_group
 
         user = User.objects.create_user(
             username=self.cleaned_data['username'],
@@ -100,143 +99,6 @@ class SignupAccountForm(forms.Form):
         UserProfile.objects.create(user=user)
         assign_user_to_group(user, GROUP_REQUESTER, replace=True)
         return user
-
-
-class ProfileForm(forms.ModelForm):
-    """Personal details only — banking is managed via Wise onboarding for requestors."""
-
-    first_name = forms.CharField(max_length=150, required=True)
-    last_name = forms.CharField(max_length=150, required=False)
-    email = forms.EmailField(required=True)
-
-    class Meta:
-        model = UserProfile
-        fields = ['phone', 'address_line', 'city', 'state', 'country', 'postal_code']
-        widgets = {
-            'phone': forms.TextInput(attrs={'class': 'input input-bordered w-full'}),
-            'address_line': forms.TextInput(attrs={'class': 'input input-bordered w-full'}),
-            'city': forms.TextInput(attrs={'class': 'input input-bordered w-full'}),
-            'state': forms.TextInput(attrs={'class': 'input input-bordered w-full'}),
-            'country': forms.TextInput(attrs={'class': 'input input-bordered w-full'}),
-            'postal_code': forms.TextInput(attrs={'class': 'input input-bordered w-full'}),
-        }
-
-    def __init__(self, *args, **kwargs):
-        user = kwargs.pop('user', None)
-        super().__init__(*args, **kwargs)
-        if user:
-            self.fields['first_name'].initial = user.first_name
-            self.fields['last_name'].initial = user.last_name
-            self.fields['email'].initial = user.email
-        for name in ('first_name', 'last_name', 'email'):
-            self.fields[name].widget.attrs.update({'class': 'input input-bordered w-full'})
-
-    def save(self, user, commit=True):
-        profile = super().save(commit=False)
-        user.first_name = self.cleaned_data['first_name']
-        user.last_name = self.cleaned_data['last_name']
-        user.email = self.cleaned_data['email']
-        user.save()
-        if commit:
-            profile.save()
-        return profile
-
-
-class OnboardingPersonalForm(ProfileForm):
-    """First-time requestor profile — all address fields required."""
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fields['address_line'].required = True
-        self.fields['city'].required = True
-        self.fields['country'].required = True
-
-    def save(self, user, commit=True):
-        from django.utils import timezone
-
-        profile = super().save(user, commit=False)
-        profile.profile_completed_at = timezone.now()
-        if commit:
-            profile.save()
-        return profile
-
-
-class WiseRecipientForm(forms.Form):
-    """Banking details sent to Wise only — never stored in Marvin."""
-
-    banking_method = forms.ChoiceField(
-        choices=BankingMethod.choices,
-        widget=forms.Select(attrs={'class': 'select select-bordered w-full'}),
-    )
-    banking_currency = forms.ChoiceField(
-        choices=CURRENCY_CHOICES,
-        widget=forms.Select(attrs={'class': 'select select-bordered w-full'}),
-    )
-    bank_iban = forms.CharField(
-        required=False,
-        widget=forms.TextInput(attrs={'class': 'input input-bordered w-full'}),
-    )
-    bank_swift = forms.CharField(
-        required=False,
-        widget=forms.TextInput(attrs={
-            'class': 'input input-bordered w-full',
-            'placeholder': 'Optional for SEPA / EUR',
-        }),
-    )
-    bank_account_no = forms.CharField(
-        required=False,
-        widget=forms.TextInput(attrs={'class': 'input input-bordered w-full'}),
-    )
-    bank_routing_no = forms.CharField(
-        required=False,
-        widget=forms.TextInput(attrs={'class': 'input input-bordered w-full'}),
-    )
-    bank_ifsc = forms.CharField(
-        required=False,
-        widget=forms.TextInput(attrs={'class': 'input input-bordered w-full'}),
-    )
-
-    def __init__(self, *args, profile=None, **kwargs):
-        super().__init__(*args, **kwargs)
-        if profile:
-            if profile.banking_method:
-                self.fields['banking_method'].initial = profile.banking_method
-            if profile.banking_currency:
-                self.fields['banking_currency'].initial = profile.banking_currency
-        self.fields['bank_swift'].help_text = (
-            'Optional for many SEPA transfers — IBAN alone is usually enough within the EU.'
-        )
-
-    def clean(self):
-        cleaned = super().clean()
-        method = cleaned.get('banking_method')
-        if method == BankingMethod.IBAN:
-            if not cleaned.get('bank_iban'):
-                raise forms.ValidationError('IBAN is required for international banking.')
-        elif method == BankingMethod.US_BANK:
-            if not cleaned.get('bank_account_no') or not cleaned.get('bank_routing_no'):
-                raise forms.ValidationError('Account number and routing number are required for US banking.')
-        elif method == BankingMethod.INDIA_IFSC:
-            if not cleaned.get('bank_account_no') or not cleaned.get('bank_ifsc'):
-                raise forms.ValidationError('Account number and IFSC code are required for India banking.')
-        elif not method:
-            raise forms.ValidationError('Select a banking method.')
-        return cleaned
-
-
-class StaffBankingForm(forms.ModelForm):
-    """Non-sensitive banking metadata for staff profiles (no account numbers stored)."""
-
-    class Meta:
-        model = UserProfile
-        fields = ['banking_method', 'banking_currency']
-        widgets = {
-            'banking_method': forms.Select(attrs={'class': 'select select-bordered w-full'}),
-            'banking_currency': forms.Select(
-                choices=CURRENCY_CHOICES,
-                attrs={'class': 'select select-bordered w-full'},
-            ),
-        }
 
 
 class EventForm(forms.ModelForm):

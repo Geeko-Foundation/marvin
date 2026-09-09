@@ -9,8 +9,8 @@ from django.utils import timezone
 
 from payments.gateways.wise_api import WiseApiError, get_wise_client
 from payments.gateways.wise_logging import log_wise_error, log_wise_step
-from tsp.models import UserProfile
-from tsp.services.wise_recipient import (
+from profile.models import UserProfile
+from profile.services.wise_recipient import (
     bank_details_kwargs_from_banking,
     recipient_type_for_method,
     resolve_country,
@@ -47,10 +47,6 @@ def init_verification_state(banking: dict | None = None) -> dict:
 
 
 def run_verification_step(profile: UserProfile, state: dict, step_id: str) -> dict:
-    """
-    Run a single verification step. Returns updated state fields and step result.
-    Raises WiseVerificationError on failure.
-    """
     if step_id not in [s[0] for s in VERIFICATION_STEPS]:
         raise WiseVerificationError(step_id, f'Unknown step: {step_id}')
 
@@ -181,7 +177,6 @@ def run_verification_step(profile: UserProfile, state: dict, step_id: str) -> di
 
 
 def setup_wise_recipient(profile: UserProfile, banking: dict) -> dict:
-    """Run all verification steps synchronously (used by management commands)."""
     state = init_verification_state(banking)
     last_result = {}
     for step_id, _label in VERIFICATION_STEPS:

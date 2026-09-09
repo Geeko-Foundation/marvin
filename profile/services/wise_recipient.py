@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from payments.gateways.wise_api import WiseApiError, get_wise_client
-from tsp.models import BankingMethod, UserProfile
+from profile.models import BankingMethod, UserProfile
 
 
 RETURN_TO_SESSION_KEY = 'signup_return_to'
@@ -88,7 +88,6 @@ def format_payee_summary(payee: dict, profile: UserProfile) -> str:
 
 
 def clear_stale_wise_recipient(profile: UserProfile) -> None:
-    """Remove a Wise recipient ID that no longer exists at the provider."""
     profile.wise_account_id = None
     profile.wise_recipient_verified_at = None
     profile.save(update_fields=['wise_account_id', 'wise_recipient_verified_at'])
@@ -99,8 +98,7 @@ def _account_missing_error(exc: WiseApiError) -> bool:
 
 
 def recreate_wise_recipient(profile: UserProfile, banking: dict) -> dict:
-    """Run the full Wise verification flow and return a check-style result."""
-    from tsp.services.wise_verification import WiseVerificationError, setup_wise_recipient
+    from profile.services.wise_verification import WiseVerificationError, setup_wise_recipient
 
     try:
         setup_wise_recipient(profile, banking)
@@ -128,7 +126,6 @@ def check_wise_recipient(
     banking: dict | None = None,
     auto_recreate: bool = False,
 ) -> dict:
-    """Fetch live status from Wise; optionally recreate if the account is missing."""
     if not profile.wise_account_id:
         if auto_recreate and banking:
             return recreate_wise_recipient(profile, banking)

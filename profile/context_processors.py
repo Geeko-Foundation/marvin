@@ -1,4 +1,4 @@
-from tsp.decorators import get_profile
+from profile.decorators import get_profile
 
 
 def user_profile(request):

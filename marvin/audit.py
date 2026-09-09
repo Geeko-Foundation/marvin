@@ -35,7 +35,7 @@ class AuditModel(models.Model):
         blank=True,
         related_name='%(app_label)s_%(class)s_created',
     )
-    changed_at = models.DateTimeField(auto_now=True)
+    updated_at = models.DateTimeField(auto_now=True)
     changed_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -57,7 +57,7 @@ class AuditModel(models.Model):
         update_fields = kwargs.get('update_fields')
         if update_fields is not None:
             fields = set(update_fields)
-            fields.add('changed_at')
+            fields.add('updated_at')
             if self._state.adding:
                 fields.add('created_at')
             if self.created_by_id:

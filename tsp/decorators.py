@@ -5,20 +5,11 @@ from django.contrib.auth.decorators import login_required as django_login_requir
 from django.core.exceptions import PermissionDenied
 from django.shortcuts import get_object_or_404
 
-from tsp.groups import user_in_any_group
-from tsp.models import TravelRequest, UserProfile
+from profile.decorators import get_profile
+from profile.groups import user_in_any_group
+from tsp.models import TravelRequest
 
 login_required = partial(django_login_required, login_url=settings.APP_LOGIN_URL)
-
-
-def get_profile(user):
-    if not user.is_authenticated:
-        return None
-    profile, created = UserProfile.objects.get_or_create(user=user)
-    if created:
-        from tsp.groups import GROUP_REQUESTER, assign_user_to_group
-        assign_user_to_group(user, GROUP_REQUESTER)
-    return profile
 
 
 def group_required(*group_names):

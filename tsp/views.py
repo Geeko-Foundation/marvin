@@ -16,7 +16,22 @@ from django.views.decorators.http import require_POST
 
 from django_tables2 import RequestConfig
 
-from tsp.decorators import get_profile, group_required, login_required, staff_or_owner
+from profile.decorators import get_profile
+from profile.forms import OnboardingPersonalForm, WiseRecipientForm
+from profile.groups import GROUP_FINANCE, GROUP_REQUESTER, GROUP_TSP
+from profile.services.wise_recipient import (
+    RETURN_TO_SESSION_KEY,
+    banking_session_payload,
+    check_wise_recipient,
+)
+from profile.services.wise_verification import (
+    SESSION_KEY,
+    VERIFICATION_STEPS,
+    WiseVerificationError,
+    init_verification_state,
+    run_verification_step,
+)
+from tsp.decorators import group_required, login_required, staff_or_owner
 from tsp.forms import (
     AcceptForm,
     ApprovalForm,
@@ -25,17 +40,12 @@ from tsp.forms import (
     EventForm,
     ExpenseFormSet,
     LoginForm,
-    OnboardingPersonalForm,
-    ProfileForm,
     RejectForm,
     ReportFilterForm,
     SearchForm,
     SignupAccountForm,
-    StaffBankingForm,
     TravelRequestForm,
-    WiseRecipientForm,
 )
-from tsp.groups import GROUP_FINANCE, GROUP_REQUESTER, GROUP_TSP
 from tsp.tables import EventTable, UserTable
 from tsp.models import (
     Document,
@@ -43,24 +53,11 @@ from tsp.models import (
     Expense,
     RequestState,
     TravelRequest,
-    UserProfile,
 )
 from tsp.services.state_machine import (
     StateTransitionError,
     create_request_with_history,
     transition_request,
-)
-from tsp.services.wise_recipient import (
-    RETURN_TO_SESSION_KEY,
-    banking_session_payload,
-    check_wise_recipient,
-)
-from tsp.services.wise_verification import (
-    SESSION_KEY,
-    VERIFICATION_STEPS,
-    WiseVerificationError,
-    init_verification_state,
-    run_verification_step,
 )
 from payments.models import PaymentRecord
 
@@ -372,7 +369,7 @@ def dashboard(request):
         )
         recently_paid = TravelRequest.objects.filter(
             state=RequestState.PAID,
-        ).select_related('user', 'event').prefetch_related('payments').order_by('-changed_at')[:10]
+        ).select_related('user', 'event').prefetch_related('payments').order_by('-updated_at')[:10]
 
         travel_request_ct = ContentType.objects.get_for_model(TravelRequest)
         paid_total = PaymentRecord.objects.filter(
@@ -387,40 +384,6 @@ def dashboard(request):
         return render(request, 'tsp/dashboard/finance.html', context)
 
     raise PermissionDenied
-
-
-@login_required
-def profile_view(request):
-    profile = get_profile(request.user)
-    banking_form = None
-
-    if request.method == 'POST' and not profile.is_requester and 'banking_submit' in request.POST:
-        banking_form = StaffBankingForm(request.POST, instance=profile)
-        form = ProfileForm(instance=profile, user=request.user)
-        if banking_form.is_valid():
-            banking_form.save()
-            messages.success(request, 'Banking details updated.')
-            return redirect('profile')
-    elif request.method == 'POST':
-        form = ProfileForm(request.POST, instance=profile, user=request.user)
-        if form.is_valid():
-            form.save(request.user)
-            if profile.is_requester and profile.is_profile_complete() and not profile.profile_completed_at:
-                profile.profile_completed_at = timezone.now()
-                profile.save(update_fields=['profile_completed_at'])
-            messages.success(request, 'Profile updated successfully.')
-            return redirect('profile')
-    else:
-        form = ProfileForm(instance=profile, user=request.user)
-
-    if not profile.is_requester and banking_form is None:
-        banking_form = StaffBankingForm(instance=profile)
-
-    return render(request, 'tsp/profile.html', {
-        'form': form,
-        'banking_form': banking_form,
-        'profile': profile,
-    })
 
 
 @login_required
@@ -798,7 +761,7 @@ def reports(request):
         if form.cleaned_data.get('status'):
             qs = qs.filter(state=form.cleaned_data['status'])
 
-    requests_list = qs.order_by('-changed_at')[:100]
+    requests_list = qs.order_by('-updated_at')[:100]
 
     total_requests = qs.count()
     total_approved = Expense.objects.filter(
@@ -823,7 +786,7 @@ def reports(request):
             paid = req.payment.amount if req.payment else ''
             method = req.payment.method_label if req.payment else ''
             writer.writerow([
-                req.changed_at.date(),
+                req.updated_at.date(),
                 req.event.name,
                 req.event.location,
                 req.user.get_full_name() or req.user.username,
