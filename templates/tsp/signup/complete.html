@@ -1,0 +1,17 @@
+{% extends "tsp/signup/wizard_base.html" %}
+
+{% block title %}Welcome to Marvin{% endblock %}
+
+{% block wizard_content %}
+<div class="card bg-base-100 shadow-xl">
+  <div class="card-body text-center py-12">
+    <div class="text-6xl mb-4">✓</div>
+    <h2 class="card-title justify-center text-2xl">You're all set!</h2>
+    <p class="opacity-60 mt-2 mb-6">
+      Your account, profile, and Wise recipient are ready.
+      You can now browse events and submit travel support requests.
+    </p>
+    <a href="{% url 'dashboard' %}" class="btn btn-primary">Go to Dashboard</a>
+  </div>
+</div>
+{% endblock %}

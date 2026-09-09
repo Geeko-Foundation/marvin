@@ -1,0 +1,124 @@
+{% extends "tsp/signup/wizard_base.html" %}
+
+{% block title %}Sign Up — Wise Banking{% endblock %}
+
+{% block wizard_content %}
+<div class="card bg-base-100 shadow-xl">
+  <div class="card-body">
+    <h2 class="card-title">{% if recreate %}Recreate{% else %}Set up{% endif %} Wise banking</h2>
+    {% if recreate %}
+    <div class="alert alert-warning text-sm mb-4">
+      Your previous Wise recipient was not found. Enter bank details to rerun verification.
+    </div>
+    {% endif %}
+    <p class="text-sm opacity-60 mb-4">
+      Enter your bank details below. They are sent directly to Wise and are
+      <strong>not stored</strong> in Marvin — only your Wise recipient ID is kept.
+    </p>
+
+    <div class="alert alert-info mb-4 text-sm">
+      <div>
+        <p class="font-semibold">When you submit, Marvin calls the Wise API to:</p>
+        <ol class="list-decimal list-inside mt-1 opacity-80 space-y-1">
+          <li>Create your payee (recipient) account</li>
+          <li>Attach your bank details to that account</li>
+          <li>Send a small test transfer to confirm the account works</li>
+          <li>Immediately cancel / reverse that test transfer</li>
+        </ol>
+        {% if wise_api_sandbox %}
+        <p class="mt-3 opacity-80">
+          <span class="badge badge-warning badge-sm">Wise sandbox</span>
+          Calls go to the Wise sandbox API. Transfer funding may use Wise simulation endpoints.
+        </p>
+        {% else %}
+        <p class="mt-3 opacity-80">
+          <span class="badge badge-error badge-sm">Wise live</span>
+          Real Wise API calls — funding may require manual approval in the Wise app (UK/EU).
+        </p>
+        {% endif %}
+      </div>
+    </div>
+
+    <form method="post" class="grid gap-4">
+      {% csrf_token %}
+      {% if recreate %}<input type="hidden" name="recreate" value="1">{% endif %}
+      <div class="grid gap-4 md:grid-cols-2">
+        <div class="form-control">
+          <label class="label"><span class="label-text">Banking Method *</span></label>
+          {{ form.banking_method }}
+        </div>
+        <div class="form-control">
+          <label class="label"><span class="label-text">Account Currency *</span></label>
+          {{ form.banking_currency }}
+        </div>
+      </div>
+
+      <div id="iban-fields" class="grid gap-4 md:grid-cols-2">
+        <div class="form-control md:col-span-2">
+          <label class="label"><span class="label-text">IBAN *</span></label>
+          {{ form.bank_iban }}
+        </div>
+        <div class="form-control md:col-span-2">
+          <label class="label">
+            <span class="label-text">SWIFT/BIC</span>
+            <span class="label-text-alt">Optional — required for some non-SEPA routes</span>
+          </label>
+          {{ form.bank_swift }}
+        </div>
+      </div>
+      <div id="us-fields" class="grid gap-4 md:grid-cols-2 hidden">
+        <div class="form-control">
+          <label class="label"><span class="label-text">Account Number *</span></label>
+          {{ form.bank_account_no }}
+        </div>
+        <div class="form-control">
+          <label class="label"><span class="label-text">ABA Routing Number *</span></label>
+          {{ form.bank_routing_no }}
+        </div>
+      </div>
+      <div id="india-fields" class="grid gap-4 md:grid-cols-2 hidden">
+        <div class="form-control">
+          <label class="label"><span class="label-text">Account Number *</span></label>
+          {{ form.bank_account_no }}
+        </div>
+        <div class="form-control">
+          <label class="label"><span class="label-text">IFSC Code *</span></label>
+          {{ form.bank_ifsc }}
+        </div>
+      </div>
+
+      {% if form.non_field_errors %}
+      <div class="alert alert-error">
+        {% for error in form.non_field_errors %}<span>{{ error }}</span>{% endfor %}
+      </div>
+      {% endif %}
+
+      <button type="submit" class="btn btn-primary w-full">Verify &amp; Complete Sign Up</button>
+    </form>
+
+    {% if can_skip_banking %}
+    <form method="post" action="{% url 'signup_skip_banking' %}" class="mt-3">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-ghost w-full">Skip for now</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  const methodSelect = document.querySelector('[name="banking_method"]');
+  const ibanFields = document.getElementById('iban-fields');
+  const usFields = document.getElementById('us-fields');
+  const indiaFields = document.getElementById('india-fields');
+  function toggleBankingFields() {
+    const method = methodSelect?.value;
+    ibanFields?.classList.toggle('hidden', method !== 'iban');
+    usFields?.classList.toggle('hidden', method !== 'us_bank');
+    indiaFields?.classList.toggle('hidden', method !== 'india_ifsc');
+  }
+  methodSelect?.addEventListener('change', toggleBankingFields);
+  toggleBankingFields();
+</script>
+{% endblock %}

@@ -1,0 +1,532 @@
+[
+{
+  "model": "auth.group",
+  "fields": {
+    "name": "Requester",
+    "permissions": [
+      [
+        "submit_travel_requests",
+        "tsp",
+        "userprofile"
+      ]
+    ]
+  }
+},
+{
+  "model": "auth.group",
+  "fields": {
+    "name": "TSP Committee",
+    "permissions": [
+      [
+        "manage_events",
+        "tsp",
+        "userprofile"
+      ],
+      [
+        "review_travel_requests",
+        "tsp",
+        "userprofile"
+      ],
+      [
+        "submit_travel_requests",
+        "tsp",
+        "userprofile"
+      ],
+      [
+        "view_reports",
+        "tsp",
+        "userprofile"
+      ]
+    ]
+  }
+},
+{
+  "model": "auth.group",
+  "fields": {
+    "name": "Finance",
+    "permissions": [
+      [
+        "process_payments",
+        "tsp",
+        "userprofile"
+      ],
+      [
+        "view_reports",
+        "tsp",
+        "userprofile"
+      ]
+    ]
+  }
+},
+{
+  "model": "auth.user",
+  "fields": {
+    "password": "pbkdf2_sha256$1500000$bKuBNTPQxn2xSljlSawN6P$5/BKRZBvTPGqXivSAvtUvArSy0d0bcS8xhqEkfHOghY=",
+    "last_login": "2026-09-08T18:09:18.733Z",
+    "is_superuser": true,
+    "username": "admin",
+    "first_name": "TSP",
+    "last_name": "Admin",
+    "email": "admin@example.com",
+    "is_staff": true,
+    "is_active": true,
+    "date_joined": "2026-09-08T13:41:59.607Z",
+    "groups": [
+      [
+        "TSP Committee"
+      ]
+    ],
+    "user_permissions": []
+  }
+},
+{
+  "model": "auth.user",
+  "fields": {
+    "password": "pbkdf2_sha256$1500000$0BfD3cgDKMO60Shzxz3a6D$sdMwkXNhroogY8yAMS3gjdLSvw0U0zDx/t21OUWxSDs=",
+    "last_login": "2026-09-08T18:09:18.926Z",
+    "is_superuser": false,
+    "username": "requester",
+    "first_name": "Douglas",
+    "last_name": "DeMaio",
+    "email": "douglas@example.com",
+    "is_staff": false,
+    "is_active": true,
+    "date_joined": "2026-09-08T13:41:59.798Z",
+    "groups": [
+      [
+        "Requester"
+      ]
+    ],
+    "user_permissions": []
+  }
+},
+{
+  "model": "auth.user",
+  "fields": {
+    "password": "pbkdf2_sha256$1500000$fzuet0LJ0r7Dx4gdimaqup$qffdi/TbtvUBB5/pDWaw6eFbtSOKcRCg7J5VR+BU+iA=",
+    "last_login": "2026-09-08T14:08:29.140Z",
+    "is_superuser": false,
+    "username": "finance",
+    "first_name": "Finance",
+    "last_name": "Team",
+    "email": "finance@example.com",
+    "is_staff": false,
+    "is_active": true,
+    "date_joined": "2026-09-08T13:41:59.994Z",
+    "groups": [
+      [
+        "Finance"
+      ]
+    ],
+    "user_permissions": []
+  }
+},
+{
+  "model": "auth.user",
+  "fields": {
+    "password": "pbkdf2_sha256$1500000$1yBvMheH8tQmb7QaI8Lj3z$ea6vr9acuk0VTOusqLUKrrER2Dbzv0qoKU7fqrbkNA4=",
+    "last_login": "2026-09-08T15:37:30.150Z",
+    "is_superuser": false,
+    "username": "newuser1",
+    "first_name": "Jane",
+    "last_name": "Doe",
+    "email": "jane@example.com",
+    "is_staff": false,
+    "is_active": true,
+    "date_joined": "2026-09-08T14:12:36.933Z",
+    "groups": [
+      [
+        "Requester"
+      ]
+    ],
+    "user_permissions": []
+  }
+},
+{
+  "model": "auth.user",
+  "fields": {
+    "password": "pbkdf2_sha256$1500000$wys0urXdipo3mniwEMbT9r$9Ll/mc/LFOIvN+RzLfx10snOy5rU262x/YoL9fWtV5Q=",
+    "last_login": "2026-09-08T14:18:24.481Z",
+    "is_superuser": false,
+    "username": "patrick.f.fitzgerald@googlemail.com",
+    "first_name": "Patrick",
+    "last_name": "Fitzgerald",
+    "email": "patrick.f.fitzgerald@googlemail.com",
+    "is_staff": false,
+    "is_active": true,
+    "date_joined": "2026-09-08T14:18:24.253Z",
+    "groups": [
+      [
+        "Requester"
+      ]
+    ],
+    "user_permissions": []
+  }
+},
+{
+  "model": "auth.user",
+  "fields": {
+    "password": "pbkdf2_sha256$1500000$ZQq9eFU8m7DCyem5J8l7LK$sPLrRZ8tW/gyzLFJIu1nVuoEKGuX27gaYieWvEYD6Xg=",
+    "last_login": "2026-09-08T14:28:55.627Z",
+    "is_superuser": false,
+    "username": "ibanonly",
+    "first_name": "Test",
+    "last_name": "User",
+    "email": "ibanonly@example.com",
+    "is_staff": false,
+    "is_active": true,
+    "date_joined": "2026-09-08T14:28:55.418Z",
+    "groups": [
+      [
+        "Requester"
+      ]
+    ],
+    "user_permissions": []
+  }
+},
+{
+  "model": "auth.user",
+  "fields": {
+    "password": "pbkdf2_sha256$1500000$IafBol2a9EKVrRon2cRTXM$f0Kz4UhI8hi/3ysDzBwyiLb3PtpT3xmSeZxulsEE8pg=",
+    "last_login": "2026-09-08T14:31:44.427Z",
+    "is_superuser": false,
+    "username": "wizard1",
+    "first_name": "W",
+    "last_name": "Z",
+    "email": "wz@example.com",
+    "is_staff": false,
+    "is_active": true,
+    "date_joined": "2026-09-08T14:31:44.229Z",
+    "groups": [
+      [
+        "Requester"
+      ]
+    ],
+    "user_permissions": []
+  }
+},
+{
+  "model": "auth.user",
+  "fields": {
+    "password": "pbkdf2_sha256$1500000$WQViu5IdTolmQndHLWleY3$4vqy5U+sIwVFjY6RjZHIizIepoT9oGgjJh5p9WqOliA=",
+    "last_login": "2026-09-08T15:35:35.022Z",
+    "is_superuser": false,
+    "username": "wizard2",
+    "first_name": "W",
+    "last_name": "Z",
+    "email": "wz2@example.com",
+    "is_staff": false,
+    "is_active": true,
+    "date_joined": "2026-09-08T14:32:03.823Z",
+    "groups": [
+      [
+        "Requester"
+      ]
+    ],
+    "user_permissions": []
+  }
+},
+{
+  "model": "auth.user",
+  "fields": {
+    "password": "pbkdf2_sha256$1500000$BU1440JSHEMFSsQOakz4EM$6sXZr14CHIVHyRRJSzDc1Wp2IwBIT+t2e3C7wBbWw1Q=",
+    "last_login": "2026-09-08T15:14:37.488Z",
+    "is_superuser": true,
+    "username": "superuser",
+    "first_name": "Patrick",
+    "last_name": "Fitzgerald",
+    "email": "patrickf@geekos.org",
+    "is_staff": true,
+    "is_active": true,
+    "date_joined": "2026-09-08T15:14:14.449Z",
+    "groups": [
+      [
+        "Requester"
+      ]
+    ],
+    "user_permissions": []
+  }
+},
+{
+  "model": "tsp.userprofile",
+  "pk": 1,
+  "fields": {
+    "created_at": "2026-09-08T15:09:52.637Z",
+    "created_by": null,
+    "changed_at": "2026-09-08T15:09:52.658Z",
+    "changed_by": null,
+    "user": [
+      "admin"
+    ],
+    "phone": "",
+    "address_line": "",
+    "city": "",
+    "state": "",
+    "country": "Germany",
+    "postal_code": "",
+    "profile_completed_at": null,
+    "banking_method": null,
+    "banking_currency": "EUR",
+    "wise_account_id": null,
+    "wise_recipient_verified_at": null
+  }
+},
+{
+  "model": "tsp.userprofile",
+  "pk": 2,
+  "fields": {
+    "created_at": "2026-09-08T15:09:52.637Z",
+    "created_by": null,
+    "changed_at": "2026-09-08T15:09:52.658Z",
+    "changed_by": null,
+    "user": [
+      "requester"
+    ],
+    "phone": "",
+    "address_line": "123 Main St",
+    "city": "Nuremberg",
+    "state": "",
+    "country": "Germany",
+    "postal_code": "90402",
+    "profile_completed_at": "2026-09-08T14:04:21.869Z",
+    "banking_method": "iban",
+    "banking_currency": "EUR",
+    "wise_account_id": 1000,
+    "wise_recipient_verified_at": "2026-09-08T14:04:21.890Z"
+  }
+},
+{
+  "model": "tsp.userprofile",
+  "pk": 3,
+  "fields": {
+    "created_at": "2026-09-08T15:09:52.637Z",
+    "created_by": null,
+    "changed_at": "2026-09-08T15:09:52.658Z",
+    "changed_by": null,
+    "user": [
+      "finance"
+    ],
+    "phone": "",
+    "address_line": "",
+    "city": "",
+    "state": "",
+    "country": "Germany",
+    "postal_code": "",
+    "profile_completed_at": null,
+    "banking_method": null,
+    "banking_currency": "EUR",
+    "wise_account_id": null,
+    "wise_recipient_verified_at": null
+  }
+},
+{
+  "model": "tsp.userprofile",
+  "pk": 4,
+  "fields": {
+    "created_at": "2026-09-08T15:09:52.637Z",
+    "created_by": null,
+    "changed_at": "2026-09-08T15:09:52.658Z",
+    "changed_by": null,
+    "user": [
+      "newuser1"
+    ],
+    "phone": "",
+    "address_line": "1 Open Source Way",
+    "city": "Berlin",
+    "state": "",
+    "country": "Germany",
+    "postal_code": "10115",
+    "profile_completed_at": "2026-09-08T14:12:37.331Z",
+    "banking_method": "iban",
+    "banking_currency": "EUR",
+    "wise_account_id": 702418650,
+    "wise_recipient_verified_at": "2026-09-08T15:04:57.165Z"
+  }
+},
+{
+  "model": "tsp.userprofile",
+  "pk": 5,
+  "fields": {
+    "created_at": "2026-09-08T15:09:52.637Z",
+    "created_by": null,
+    "changed_at": "2026-09-08T15:09:52.658Z",
+    "changed_by": null,
+    "user": [
+      "patrick.f.fitzgerald@googlemail.com"
+    ],
+    "phone": "02033270027",
+    "address_line": "20 Bazelgette Court",
+    "city": "Bazelgette Court, London",
+    "state": "England",
+    "country": "United Kingdom",
+    "postal_code": "W69AG",
+    "profile_completed_at": "2026-09-08T14:18:37.084Z",
+    "banking_method": "iban",
+    "banking_currency": "EUR",
+    "wise_account_id": 1000,
+    "wise_recipient_verified_at": "2026-09-08T14:24:39.538Z"
+  }
+},
+{
+  "model": "tsp.userprofile",
+  "pk": 6,
+  "fields": {
+    "created_at": "2026-09-08T15:09:52.637Z",
+    "created_by": null,
+    "changed_at": "2026-09-08T15:09:52.658Z",
+    "changed_by": null,
+    "user": [
+      "ibanonly"
+    ],
+    "phone": "",
+    "address_line": "1 St",
+    "city": "Berlin",
+    "state": "",
+    "country": "DE",
+    "postal_code": "",
+    "profile_completed_at": "2026-09-08T14:28:55.657Z",
+    "banking_method": "iban",
+    "banking_currency": "EUR",
+    "wise_account_id": 1000,
+    "wise_recipient_verified_at": "2026-09-08T14:28:55.676Z"
+  }
+},
+{
+  "model": "tsp.userprofile",
+  "pk": 7,
+  "fields": {
+    "created_at": "2026-09-08T15:09:52.637Z",
+    "created_by": null,
+    "changed_at": "2026-09-08T15:09:52.658Z",
+    "changed_by": null,
+    "user": [
+      "wizard1"
+    ],
+    "phone": "",
+    "address_line": "1 St",
+    "city": "Berlin",
+    "state": "",
+    "country": "DE",
+    "postal_code": "",
+    "profile_completed_at": "2026-09-08T14:31:44.485Z",
+    "banking_method": "iban",
+    "banking_currency": "EUR",
+    "wise_account_id": null,
+    "wise_recipient_verified_at": null
+  }
+},
+{
+  "model": "tsp.userprofile",
+  "pk": 8,
+  "fields": {
+    "created_at": "2026-09-08T15:09:52.637Z",
+    "created_by": null,
+    "changed_at": "2026-09-08T15:35:40.112Z",
+    "changed_by": [
+      "wizard2"
+    ],
+    "user": [
+      "wizard2"
+    ],
+    "phone": "",
+    "address_line": "1 St",
+    "city": "Berlin",
+    "state": "",
+    "country": "DE",
+    "postal_code": "",
+    "profile_completed_at": "2026-09-08T14:32:04.122Z",
+    "banking_method": "iban",
+    "banking_currency": "EUR",
+    "wise_account_id": null,
+    "wise_recipient_verified_at": null
+  }
+},
+{
+  "model": "tsp.userprofile",
+  "pk": 9,
+  "fields": {
+    "created_at": "2026-09-08T15:14:37.513Z",
+    "created_by": [
+      "superuser"
+    ],
+    "changed_at": "2026-09-08T15:24:33.086Z",
+    "changed_by": [
+      "superuser"
+    ],
+    "user": [
+      "superuser"
+    ],
+    "phone": "02033270027",
+    "address_line": "20 Bazelgette Court",
+    "city": "Bazelgette Court, London",
+    "state": "England",
+    "country": "United Kingdom",
+    "postal_code": "W69AG",
+    "profile_completed_at": "2026-09-08T15:24:33.086Z",
+    "banking_method": null,
+    "banking_currency": "EUR",
+    "wise_account_id": null,
+    "wise_recipient_verified_at": null
+  }
+},
+{
+  "model": "tsp.event",
+  "pk": 1,
+  "fields": {
+    "created_at": "2026-09-08T13:42:00.214Z",
+    "created_by": null,
+    "changed_at": "2026-09-08T15:09:52.713Z",
+    "changed_by": null,
+    "name": "openSUSE Conference 2026",
+    "location": "Nuremberg, Germany",
+    "start_date": "2026-06-15",
+    "end_date": "2026-06-17",
+    "accepting_requests": true
+  }
+},
+{
+  "model": "tsp.event",
+  "pk": 2,
+  "fields": {
+    "created_at": "2026-09-08T13:42:00.219Z",
+    "created_by": null,
+    "changed_at": "2026-09-08T15:09:52.713Z",
+    "changed_by": null,
+    "name": "FOSDEM 2026",
+    "location": "Brussels, Belgium",
+    "start_date": "2026-02-01",
+    "end_date": "2026-02-02",
+    "accepting_requests": true
+  }
+},
+{
+  "model": "tsp.event",
+  "pk": 3,
+  "fields": {
+    "created_at": "2026-09-08T13:42:00.223Z",
+    "created_by": null,
+    "changed_at": "2026-09-08T15:09:52.713Z",
+    "changed_by": null,
+    "name": "LinuxConf.au 2026",
+    "location": "Sydney, Australia",
+    "start_date": "2026-01-13",
+    "end_date": "2026-01-17",
+    "accepting_requests": true
+  }
+},
+{
+  "model": "tsp.event",
+  "pk": 4,
+  "fields": {
+    "created_at": "2026-09-08T13:42:00.227Z",
+    "created_by": null,
+    "changed_at": "2026-09-08T15:09:52.713Z",
+    "changed_by": null,
+    "name": "openSUSE Conference 2027",
+    "location": "Prague, Czechia",
+    "start_date": "2027-06-14",
+    "end_date": "2027-06-16",
+    "accepting_requests": true
+  }
+}
+]

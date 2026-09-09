@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+
+{% block title %}Welcome to Marvin{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto">
+  <ul class="steps steps-horizontal w-full mb-8">
+    <li class="step step-primary">Your details</li>
+    <li class="step">Wise account</li>
+    <li class="step">Ready</li>
+  </ul>
+
+  <h1 class="text-2xl font-bold mb-2">Tell us about yourself</h1>
+  <p class="text-sm opacity-60 mb-6">
+    Before you can submit travel support requests, we need your name, email, and address.
+    This information is stored locally in Marvin.
+  </p>
+
+  <form method="post" class="card bg-base-100 shadow-sm">
+    {% csrf_token %}
+    <div class="card-body gap-4">
+      <div class="grid gap-4 md:grid-cols-2">
+        <div class="form-control">
+          <label class="label"><span class="label-text">First Name *</span></label>
+          {{ form.first_name }}
+        </div>
+        <div class="form-control">
+          <label class="label"><span class="label-text">Last Name</span></label>
+          {{ form.last_name }}
+        </div>
+        <div class="form-control md:col-span-2">
+          <label class="label"><span class="label-text">Email *</span></label>
+          {{ form.email }}
+        </div>
+        <div class="form-control md:col-span-2">
+          <label class="label"><span class="label-text">Street Address *</span></label>
+          {{ form.address_line }}
+        </div>
+        <div class="form-control">
+          <label class="label"><span class="label-text">City *</span></label>
+          {{ form.city }}
+        </div>
+        <div class="form-control">
+          <label class="label"><span class="label-text">State/Province</span></label>
+          {{ form.state }}
+        </div>
+        <div class="form-control">
+          <label class="label"><span class="label-text">Postal Code</span></label>
+          {{ form.postal_code }}
+        </div>
+        <div class="form-control">
+          <label class="label"><span class="label-text">Country *</span></label>
+          {{ form.country }}
+        </div>
+        <div class="form-control md:col-span-2">
+          <label class="label"><span class="label-text">Phone</span></label>
+          {{ form.phone }}
+        </div>
+      </div>
+
+      {% if form.non_field_errors %}
+      <div class="alert alert-error">
+        {% for error in form.non_field_errors %}<span>{{ error }}</span>{% endfor %}
+      </div>
+      {% endif %}
+
+      <div class="card-actions justify-end">
+        <button type="submit" class="btn btn-primary">Continue to Wise Setup</button>
+      </div>
+    </div>
+  </form>
+</div>
+{% endblock %}

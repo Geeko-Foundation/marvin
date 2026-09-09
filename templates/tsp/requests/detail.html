@@ -1,0 +1,226 @@
+{% extends "base.html" %}
+{% load tsp_tags %}
+
+{% block title %}Request #{{ travel_request.pk }}{% endblock %}
+
+{% block content %}
+<div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 mb-6">
+  <div>
+    <div class="flex items-center gap-3 mb-1">
+      <h1 class="text-2xl font-bold">Request #{{ travel_request.pk }}</h1>
+      <span class="badge {{ travel_request.state|state_badge }}">{{ travel_request.get_state_display }}</span>
+    </div>
+    <p class="opacity-60">{{ travel_request.event.name }} · {{ travel_request.event.location }}</p>
+    <p class="text-sm opacity-60">Requester: {{ travel_request.user.get_full_name|default:travel_request.user.username }}</p>
+  </div>
+  <div class="flex flex-wrap gap-2">
+    {% if travel_request.is_editable_by_requester and travel_request.user_id == user.id %}
+    <a href="{% url 'request_edit' travel_request.pk %}" class="btn btn-sm btn-outline">Edit</a>
+    {% endif %}
+    {% if travel_request.state == 'draft' and travel_request.user_id == user.id %}
+    <form method="post" action="{% url 'request_submit' travel_request.pk %}">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-sm btn-primary">Submit for Review</button>
+    </form>
+    {% endif %}
+    {% if travel_request.state == 'approved' and travel_request.user_id == user.id %}
+    <a href="{% url 'request_accept_page' travel_request.pk %}" class="btn btn-sm btn-warning">Accept Request</a>
+    {% endif %}
+    {% if travel_request.state == 'accepted' and travel_request.user_id == user.id %}
+    <form method="post" action="{% url 'request_submit_for_payment' travel_request.pk %}">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-sm btn-success" {% if missing_docs %}disabled title="Upload all required documents first"{% endif %}>Submit for Payment</button>
+    </form>
+    {% endif %}
+    {% if travel_request.state == 'draft' or travel_request.state == 'submitted' or travel_request.state == 'approved' %}
+    {% if travel_request.user_id == user.id or profile.is_tsp %}
+    <form method="post" action="{% url 'request_cancel' travel_request.pk %}" onsubmit="return confirm('Cancel this request?')">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-sm btn-error btn-outline">Cancel</button>
+    </form>
+    {% endif %}
+    {% endif %}
+    <a href="{% url 'request_form' travel_request.pk %}" class="btn btn-sm btn-ghost" target="_blank">Print Form</a>
+  </div>
+</div>
+
+<div class="grid gap-6 lg:grid-cols-3">
+  <div class="lg:col-span-2 flex flex-col gap-6">
+    <!-- Details -->
+    <div class="card bg-base-100 shadow-sm">
+      <div class="card-body">
+        <h2 class="card-title text-lg">Request Details</h2>
+        {% if travel_request.talk_title %}
+        <p><strong>Talk:</strong> {{ travel_request.talk_title }}
+          {% if travel_request.talk_url %}<a href="{{ travel_request.talk_url }}" class="link link-primary ml-2" target="_blank">View</a>{% endif %}
+        </p>
+        {% endif %}
+        <p class="whitespace-pre-wrap">{{ travel_request.description }}</p>
+      </div>
+    </div>
+
+    <!-- Expenses -->
+    <div class="card bg-base-100 shadow-sm">
+      <div class="card-body">
+        <h2 class="card-title text-lg">Expenses</h2>
+        <div class="overflow-x-auto">
+          <table class="table table-sm">
+            <thead>
+              <tr>
+                <th>Category</th>
+                <th>Description</th>
+                <th>Estimated</th>
+                {% if travel_request.state != 'draft' and travel_request.state != 'submitted' %}
+                <th>Approved</th>
+                {% endif %}
+              </tr>
+            </thead>
+            <tbody>
+              {% for expense in travel_request.expenses.all %}
+              <tr>
+                <td>{{ expense.get_category_display }}</td>
+                <td>{{ expense.description }}</td>
+                <td>{{ expense.estimated_amount }} {{ expense.estimated_currency }}</td>
+                {% if travel_request.state != 'draft' and travel_request.state != 'submitted' %}
+                <td>{% if expense.approved_amount %}{{ expense.approved_amount }} {{ expense.approved_currency }}{% else %}—{% endif %}</td>
+                {% endif %}
+              </tr>
+              {% endfor %}
+            </tbody>
+            <tfoot>
+              <tr class="font-semibold">
+                <td colspan="2">Total</td>
+                <td>{{ travel_request.total_estimated }} EUR</td>
+                {% if travel_request.state != 'draft' and travel_request.state != 'submitted' %}
+                <td>{{ travel_request.total_approved }} EUR</td>
+                {% endif %}
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+
+        {% if profile.is_tsp and travel_request.state == 'submitted' %}
+        <div class="divider">TSP Review</div>
+        <form method="post" action="{% url 'request_approve' travel_request.pk %}">
+          {% csrf_token %}
+          {% for expense in travel_request.expenses.all %}
+          <input type="hidden" name="expense_id" value="{{ expense.pk }}">
+          <div class="flex flex-wrap gap-3 items-end mb-3 p-3 bg-base-200 rounded-box">
+            <span class="text-sm flex-1">{{ expense.get_category_display }}: {{ expense.description }}</span>
+            <input type="number" name="approved_amount_{{ expense.pk }}" step="0.01" value="{{ expense.estimated_amount }}"
+                   class="input input-bordered input-sm w-28" placeholder="Amount">
+            <select name="approved_currency_{{ expense.pk }}" class="select select-bordered select-sm w-24">
+              <option value="EUR">EUR</option>
+              <option value="USD">USD</option>
+            </select>
+          </div>
+          {% endfor %}
+          <textarea name="notes" class="textarea textarea-bordered w-full mb-3" rows="2" placeholder="Approval notes (optional)"></textarea>
+          <div class="flex gap-2">
+            <button type="submit" class="btn btn-success btn-sm">Approve</button>
+          </div>
+        </form>
+        <form method="post" action="{% url 'request_reject' travel_request.pk %}" class="mt-3">
+          {% csrf_token %}
+          <textarea name="notes" class="textarea textarea-bordered w-full mb-2" rows="2" placeholder="Rejection reason (required)" required></textarea>
+          <button type="submit" class="btn btn-error btn-sm">Reject</button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Documents -->
+    <div class="card bg-base-100 shadow-sm">
+      <div class="card-body">
+        <h2 class="card-title text-lg">Documents</h2>
+        {% if missing_docs and travel_request.state == 'accepted' %}
+        <div class="alert alert-warning mb-4">
+          <span>Missing: {{ missing_docs|join:", " }}</span>
+        </div>
+        {% endif %}
+        {% if documents %}
+        <div class="overflow-x-auto mb-4">
+          <table class="table table-sm">
+            <thead><tr><th>Type</th><th>File</th><th>Uploaded</th><th></th></tr></thead>
+            <tbody>
+              {% for doc in documents %}
+              <tr>
+                <td>{{ doc.get_kind_display }}</td>
+                <td>{{ doc.original_name }}</td>
+                <td>{{ doc.created_at|date:"M d, Y" }}</td>
+                <td><a href="{% url 'document_download' doc.pk %}" class="link link-primary">Download</a></td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <p class="text-sm opacity-60 mb-4">No documents uploaded yet.</p>
+        {% endif %}
+
+        {% if travel_request.state == 'accepted' or profile.is_tsp or profile.is_finance %}
+        <form method="post" action="{% url 'request_document_upload' travel_request.pk %}" enctype="multipart/form-data" class="flex flex-wrap gap-3 items-end">
+          {% csrf_token %}
+          <div class="form-control">
+            <label class="label py-0"><span class="label-text text-xs">Type</span></label>
+            {{ doc_form.kind }}
+          </div>
+          <div class="form-control flex-1 min-w-[200px]">
+            <label class="label py-0"><span class="label-text text-xs">File</span></label>
+            {{ doc_form.file }}
+          </div>
+          <button type="submit" class="btn btn-sm btn-primary">Upload</button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Comments -->
+    <div class="card bg-base-100 shadow-sm">
+      <div class="card-body">
+        <h2 class="card-title text-lg">Comments</h2>
+        <div class="flex flex-col gap-3 mb-4">
+          {% for comment in comments %}
+          <div class="chat chat-start">
+            <div class="chat-header text-xs opacity-60">
+              {{ comment.user.get_full_name|default:comment.user.username }} · {{ comment.created_at|date:"M d, H:i" }}
+            </div>
+            <div class="chat-bubble chat-bubble-primary">{{ comment.body }}</div>
+          </div>
+          {% empty %}
+          <p class="text-sm opacity-60">No comments yet.</p>
+          {% endfor %}
+        </div>
+        <form method="post" action="{% url 'request_comment' travel_request.pk %}">
+          {% csrf_token %}
+          {{ comment_form.body }}
+          <button type="submit" class="btn btn-sm btn-primary mt-2">Add Comment</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sidebar: State History -->
+  <div class="card bg-base-100 shadow-sm h-fit">
+    <div class="card-body">
+      <h2 class="card-title text-lg">State History</h2>
+      <ul class="timeline timeline-vertical timeline-compact">
+        {% for entry in state_history %}
+        <li>
+          <div class="timeline-start text-xs opacity-60">{{ entry.created_at|date:"M d, H:i" }}</div>
+          <div class="timeline-middle">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4 text-primary"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clip-rule="evenodd" /></svg>
+          </div>
+          <div class="timeline-end timeline-box text-sm">
+            <span class="badge {{ entry.to_state|state_badge }} badge-xs">{{ entry.to_state }}</span>
+            <p class="text-xs opacity-60">{{ entry.user.username }}</p>
+            {% if entry.notes %}<p class="text-xs mt-1">{{ entry.notes }}</p>{% endif %}
+          </div>
+          <hr/>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% load tsp_tags %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<h1 class="text-2xl font-bold mb-6">TSP Committee Dashboard</h1>
+
+<div class="stats stats-vertical lg:stats-horizontal shadow w-full mb-6 bg-base-100">
+  <div class="stat">
+    <div class="stat-title">Pending Review</div>
+    <div class="stat-value text-info">{{ pending.count }}</div>
+    <div class="stat-desc">Awaiting committee decision</div>
+  </div>
+  <div class="stat">
+    <div class="stat-title">Approved Funds</div>
+    <div class="stat-value text-success">{{ approved_total|floatformat:0 }} €</div>
+    <div class="stat-desc">Total approved amounts</div>
+  </div>
+</div>
+
+<div class="grid gap-6 lg:grid-cols-3 mb-6">
+  {% for item in state_counts %}
+  <div class="stat bg-base-100 rounded-box shadow-sm">
+    <div class="stat-title">{{ item.state|title }}</div>
+    <div class="stat-value text-lg">{{ item.count }}</div>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="card bg-base-100 shadow-sm mb-6">
+  <div class="card-body">
+    <h2 class="card-title">Pending Review Queue</h2>
+    {% if pending %}
+    <div class="overflow-x-auto">
+      <table class="table table-zebra">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Requester</th>
+            <th>Event</th>
+            <th>Submitted</th>
+            <th>Estimated</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for req in pending %}
+          <tr>
+            <td>#{{ req.pk }}</td>
+            <td>{{ req.user.get_full_name|default:req.user.username }}</td>
+            <td>{{ req.event.name }}</td>
+            <td>{{ req.created_at|date:"M d, Y" }}</td>
+            <td>{{ req.total_estimated }} EUR</td>
+            <td><a href="{% url 'request_detail' req.pk %}" class="btn btn-primary btn-sm">Review</a></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="opacity-60">No pending requests.</p>
+    {% endif %}
+  </div>
+</div>
+
+{% if event_summaries %}
+<div class="card bg-base-100 shadow-sm">
+  <div class="card-body">
+    <h2 class="card-title">Event Summary (Last 90 Days)</h2>
+    <div class="grid gap-4 md:grid-cols-2">
+      {% for summary in event_summaries %}
+      <div class="border border-base-300 rounded-box p-4">
+        <h3 class="font-semibold">{{ summary.event.name }}</h3>
+        <p class="text-sm opacity-60">{{ summary.total }} request{{ summary.total|pluralize }}</p>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

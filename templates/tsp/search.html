@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% load django_tables2 %}
+
+{% block title %}Search{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+  <h1 class="text-2xl font-bold">Search</h1>
+  <p class="text-sm opacity-60">Find events{% if show_users %} and users{% endif %} across Marvin</p>
+</div>
+
+<form method="get" class="card bg-base-100 shadow-sm mb-6">
+  <div class="card-body">
+    <div class="flex flex-wrap gap-3 items-end">
+      <div class="form-control flex-1 min-w-[200px]">
+        <label class="label py-0" for="id_q"><span class="label-text">Search term</span></label>
+        {{ form.q }}
+      </div>
+      <button type="submit" class="btn btn-primary btn-sm">Search</button>
+      {% if query %}
+      <a href="{% url 'search' %}" class="btn btn-ghost btn-sm">Clear</a>
+      {% endif %}
+    </div>
+  </div>
+</form>
+
+{% if query %}
+  <div class="card bg-base-100 shadow-sm mb-6">
+    <div class="card-body">
+      <h2 class="card-title text-lg mb-2">Events</h2>
+      {% render_table event_table %}
+    </div>
+  </div>
+
+  {% if show_users and user_table %}
+  <div class="card bg-base-100 shadow-sm">
+    <div class="card-body">
+      <h2 class="card-title text-lg mb-2">Users</h2>
+      <p class="text-xs opacity-60 mb-4">Admin view — click a username to edit in Django admin.</p>
+      {% render_table user_table %}
+    </div>
+  </div>
+  {% endif %}
+{% elif request.GET %}
+  <div class="alert alert-info">
+    <span>Enter a search term to find matching events{% if show_users %} and users{% endif %}.</span>
+  </div>
+{% else %}
+  <div class="text-center py-12 opacity-60">
+    <p>Search event names and locations{% if show_users %}, or usernames, names, and email addresses{% endif %}.</p>
+  </div>
+{% endif %}
+{% endblock %}

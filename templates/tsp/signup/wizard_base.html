@@ -1,0 +1,37 @@
+{% extends "tsp/signup/layout.html" %}
+
+{% block body %}
+<div class="min-h-screen py-8 px-4">
+  <div class="max-w-2xl mx-auto">
+    <div class="text-center mb-8">
+      <a href="{% url 'login' %}" class="text-2xl font-bold text-primary">Marvin</a>
+      <p class="text-sm opacity-60 mt-1">Travel Support Program — Requestor Sign Up</p>
+    </div>
+
+    <ul class="steps steps-horizontal w-full mb-8">
+      <li class="step {% if wizard_step >= 1 %}step-primary{% endif %}">Account</li>
+      <li class="step {% if wizard_step >= 2 %}step-primary{% endif %}">Your details</li>
+      <li class="step {% if wizard_step >= 3 %}step-primary{% endif %}">Wise banking</li>
+    </ul>
+
+    {% if messages %}
+    <div class="mb-4">
+      {% for message in messages %}
+      <div class="alert alert-{% if message.tags == 'error' %}error{% elif message.tags == 'success' %}success{% else %}info{% endif %} mb-2">
+        <span>{{ message }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% block wizard_content %}{% endblock %}
+
+    {% if wizard_step == 1 %}
+    <p class="text-center text-sm opacity-60 mt-8">
+      Already have an account?
+      <a href="{% url 'login' %}" class="link link-primary">Sign in</a>
+    </p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

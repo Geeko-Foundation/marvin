@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% load tsp_tags %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+  <div>
+    <h1 class="text-2xl font-bold">My Requests</h1>
+    <p class="text-sm opacity-60">Track your travel support applications</p>
+  </div>
+  <a href="{% url 'request_create' %}" class="btn btn-primary">
+    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+    New Request
+  </a>
+</div>
+
+{% if action_needed %}
+<div class="alert alert-warning mb-6">
+  <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+  <div>
+    <h3 class="font-bold">Action needed on {{ action_needed.count }} request{{ action_needed.count|pluralize }}</h3>
+    <div class="text-sm">Review approved requests or upload documents for accepted requests.</div>
+  </div>
+</div>
+{% endif %}
+
+{% if my_requests %}
+<div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+  {% for req in my_requests %}
+  <div class="card bg-base-100 shadow-sm hover:shadow-md transition-shadow">
+    <div class="card-body">
+      <div class="flex justify-between items-start">
+        <h2 class="card-title text-base">{{ req.event.name }}</h2>
+        <span class="badge {{ req.state|state_badge }} badge-sm">{{ req.get_state_display }}</span>
+      </div>
+      <p class="text-sm opacity-60">{{ req.event.location }}</p>
+      <p class="text-sm">{{ req.event.start_date }} — {{ req.event.end_date }}</p>
+      <div class="flex justify-between items-center mt-2">
+        <span class="text-sm font-medium">Est. {{ req.total_estimated }} EUR</span>
+        {% if req.state == 'approved' %}
+        <a href="{% url 'request_accept_page' req.pk %}" class="btn btn-warning btn-sm">Accept</a>
+        {% elif req.state == 'accepted' %}
+        <a href="{% url 'request_detail' req.pk %}" class="btn btn-primary btn-sm">Upload Docs</a>
+        {% else %}
+        <a href="{% url 'request_detail' req.pk %}" class="btn btn-ghost btn-sm">View</a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="hero bg-base-100 rounded-box py-16">
+  <div class="hero-content text-center">
+    <div>
+      <h2 class="text-xl font-semibold">No requests yet</h2>
+      <p class="py-2 opacity-60">Create your first travel support request to get started.</p>
+      <a href="{% url 'request_create' %}" class="btn btn-primary">Create Request</a>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

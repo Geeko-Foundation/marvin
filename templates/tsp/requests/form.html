@@ -1,0 +1,301 @@
+{% extends "base.html" %}
+
+{% block title %}{% if is_edit %}Edit{% else %}New{% endif %} Request{% endblock %}
+
+{% block content %}
+<h1 class="text-2xl font-bold mb-6">{% if is_edit %}Edit Request #{{ travel_request.pk }}{% else %}New Travel Support Request{% endif %}</h1>
+
+{% if show_account_check %}
+<div class="card bg-base-100 shadow-sm mb-6">
+  <div class="card-body">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div>
+        <h2 class="card-title text-lg">Payment Account</h2>
+        <p class="text-sm opacity-60">
+          Reimbursements are sent to your Wise recipient account.
+          Bank details are held by Wise — Marvin stores only the recipient ID.
+        </p>
+      </div>
+      <button type="button" id="check-account-btn" class="btn btn-outline btn-primary">
+        Check Account
+      </button>
+    </div>
+    <div id="account-check-result" class="hidden mt-4">
+      <div id="account-check-alert" class="alert">
+        <span id="account-check-message"></span>
+      </div>
+      <p id="account-check-summary" class="text-sm opacity-70 mt-2 hidden"></p>
+    </div>
+
+    <div id="recreate-account-panel" class="hidden mt-6 border-t border-base-300 pt-6">
+      <h3 class="font-semibold mb-2">Recreate Wise Account</h3>
+      <p class="text-sm opacity-60 mb-4">
+        Your previous Wise recipient was not found. Enter bank details below to rerun verification,
+        or you will be redirected to the full banking setup wizard.
+      </p>
+      {% if banking_form %}
+      <div class="grid gap-4 md:grid-cols-2" id="recreate-banking-fields">
+        <div class="form-control md:col-span-2">
+          <label class="label"><span class="label-text">Banking Method</span></label>
+          {{ banking_form.banking_method }}
+        </div>
+        <div class="form-control">
+          <label class="label"><span class="label-text">Currency</span></label>
+          {{ banking_form.banking_currency }}
+        </div>
+        <div class="form-control recreate-iban">
+          <label class="label"><span class="label-text">IBAN</span></label>
+          {{ banking_form.bank_iban }}
+        </div>
+        <div class="form-control recreate-iban">
+          <label class="label"><span class="label-text">SWIFT/BIC (optional)</span></label>
+          {{ banking_form.bank_swift }}
+        </div>
+        <div class="form-control recreate-us hidden">
+          <label class="label"><span class="label-text">Account Number</span></label>
+          <input type="text" name="bank_account_no" class="input input-bordered w-full recreate-acct-no" />
+        </div>
+        <div class="form-control recreate-us hidden">
+          <label class="label"><span class="label-text">Routing Number</span></label>
+          {{ banking_form.bank_routing_no }}
+        </div>
+        <div class="form-control recreate-india hidden">
+          <label class="label"><span class="label-text">Account Number</span></label>
+          <input type="text" name="bank_account_no" class="input input-bordered w-full recreate-acct-no" disabled />
+        </div>
+        <div class="form-control recreate-india hidden">
+          <label class="label"><span class="label-text">IFSC</span></label>
+          {{ banking_form.bank_ifsc }}
+        </div>
+      </div>
+      <div class="flex flex-wrap gap-2 mt-4">
+        <button type="button" id="recreate-account-btn" class="btn btn-primary btn-sm">
+          Recreate Account
+        </button>
+        <a id="recreate-wizard-link" href="{% url 'signup_banking' %}?recreate=1&amp;return_to={% url 'request_create' %}" class="btn btn-outline btn-sm">
+          Open Banking Wizard
+        </a>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<form method="post" id="request-form">
+  {% csrf_token %}
+  {{ formset.management_form }}
+
+  <div class="card bg-base-100 shadow-sm mb-6">
+    <div class="card-body">
+      <h2 class="card-title text-lg">Event & Talk</h2>
+      <div class="grid gap-4">
+        <div class="form-control">
+          <label class="label"><span class="label-text">Event</span></label>
+          {{ form.event }}
+        </div>
+        <div class="form-control">
+          <label class="label"><span class="label-text">Talk Title</span></label>
+          {{ form.talk_title }}
+        </div>
+        <div class="form-control">
+          <label class="label"><span class="label-text">Talk URL</span></label>
+          {{ form.talk_url }}
+        </div>
+        <div class="form-control">
+          <label class="label"><span class="label-text">Description</span></label>
+          {{ form.description }}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card bg-base-100 shadow-sm mb-6">
+    <div class="card-body">
+      <div class="flex justify-between items-center mb-4">
+        <h2 class="card-title text-lg">Expenses</h2>
+        <button type="button" id="add-expense" class="btn btn-sm btn-outline">Add Row</button>
+      </div>
+      <div id="expense-rows" class="flex flex-col gap-4">
+        {% for expense_form in formset %}
+        <div class="expense-row grid gap-3 md:grid-cols-5 items-end border border-base-300 rounded-box p-4">
+          {% for hidden in expense_form.hidden_fields %}{{ hidden }}{% endfor %}
+          <div class="form-control">
+            <label class="label py-0"><span class="label-text text-xs">Category</span></label>
+            {{ expense_form.category }}
+          </div>
+          <div class="form-control md:col-span-2">
+            <label class="label py-0"><span class="label-text text-xs">Description</span></label>
+            {{ expense_form.description }}
+          </div>
+          <div class="form-control">
+            <label class="label py-0"><span class="label-text text-xs">Amount</span></label>
+            {{ expense_form.estimated_amount }}
+          </div>
+          <div class="form-control flex flex-row gap-2 items-end">
+            <div class="flex-1">
+              <label class="label py-0"><span class="label-text text-xs">Currency</span></label>
+              {{ expense_form.estimated_currency }}
+            </div>
+            {% if expense_form.DELETE %}
+            <label class="label cursor-pointer gap-1 pb-2">
+              {{ expense_form.DELETE }}
+              <span class="label-text text-xs">Del</span>
+            </label>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <div class="flex gap-3">
+    <button type="submit" class="btn btn-primary">Save Request</button>
+    <a href="{% url 'dashboard' %}" class="btn btn-ghost">Cancel</a>
+  </div>
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  document.getElementById('add-expense')?.addEventListener('click', function() {
+    const totalForms = document.querySelector('[name$="-TOTAL_FORMS"]');
+    const count = parseInt(totalForms.value);
+    const container = document.getElementById('expense-rows');
+    const firstRow = container.querySelector('.expense-row');
+    if (!firstRow) return;
+    const prefix = totalForms.name.replace('-TOTAL_FORMS', '');
+    const newRow = firstRow.cloneNode(true);
+    newRow.querySelectorAll('input, select').forEach(el => {
+      el.name = el.name.replace(new RegExp(`${prefix}-\\d+-`), `${prefix}-${count}-`);
+      el.id = el.id.replace(new RegExp(`${prefix}-\\d+-`), `${prefix}-${count}-`);
+      if (el.type === 'checkbox') el.checked = false;
+      else if (el.tagName === 'SELECT') el.selectedIndex = 0;
+      else el.value = '';
+    });
+    container.appendChild(newRow);
+    totalForms.value = count + 1;
+  });
+
+  // Pre-select event from query param
+  const params = new URLSearchParams(window.location.search);
+  const eventId = params.get('event');
+  if (eventId) {
+    const eventSelect = document.querySelector('[name="event"]');
+    if (eventSelect) eventSelect.value = eventId;
+  }
+
+  const checkBtn = document.getElementById('check-account-btn');
+  const recreatePanel = document.getElementById('recreate-account-panel');
+  const recreateBtn = document.getElementById('recreate-account-btn');
+  const methodSelect = document.querySelector('#recreate-banking-fields [name="banking_method"]');
+
+  function toggleRecreateFields() {
+    if (!methodSelect) return;
+    const method = methodSelect.value;
+    document.querySelectorAll('.recreate-iban').forEach(el => el.classList.toggle('hidden', method !== 'iban'));
+    document.querySelectorAll('.recreate-us').forEach(el => el.classList.toggle('hidden', method !== 'us_bank'));
+    document.querySelectorAll('.recreate-india').forEach(el => el.classList.toggle('hidden', method !== 'india_ifsc'));
+    document.querySelectorAll('.recreate-acct-no').forEach(el => {
+      el.disabled = method !== 'us_bank' && method !== 'india_ifsc';
+    });
+  }
+
+  if (methodSelect) {
+    methodSelect.addEventListener('change', toggleRecreateFields);
+    toggleRecreateFields();
+  }
+
+  function showCheckResult(data) {
+    const resultBox = document.getElementById('account-check-result');
+    const alertBox = document.getElementById('account-check-alert');
+    const messageEl = document.getElementById('account-check-message');
+    const summaryEl = document.getElementById('account-check-summary');
+
+    resultBox.classList.remove('hidden');
+    alertBox.classList.remove('alert-success', 'alert-error', 'alert-warning');
+    alertBox.classList.add(data.ready ? 'alert-success' : 'alert-warning');
+    messageEl.textContent = data.message || (data.ready ? 'Account ready' : 'Account not ready');
+
+    if (data.summary) {
+      summaryEl.textContent = data.summary;
+      summaryEl.classList.remove('hidden');
+    } else {
+      summaryEl.classList.add('hidden');
+    }
+
+    if (data.needs_recreate) {
+      recreatePanel?.classList.remove('hidden');
+      if (data.auto_redirect && data.redirect) {
+        messageEl.textContent += ' Redirecting to banking setup…';
+        setTimeout(() => { window.location.href = data.redirect; }, 1500);
+      }
+    } else {
+      recreatePanel?.classList.add('hidden');
+    }
+  }
+
+  async function postAccountCheck(extraFields = {}) {
+    const csrf = document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
+    const body = new URLSearchParams(extraFields);
+    const response = await fetch('{% url "check_wise_account" %}', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'X-CSRFToken': csrf,
+      },
+      body: body.toString(),
+    });
+    const data = await response.json();
+    if (!response.ok && !data.needs_recreate) {
+      throw new Error(data.message || data.error || 'Check failed');
+    }
+    return data;
+  }
+
+  if (checkBtn) {
+    checkBtn.addEventListener('click', async function () {
+      checkBtn.classList.add('loading');
+      checkBtn.disabled = true;
+      try {
+        showCheckResult(await postAccountCheck());
+      } catch (err) {
+        const resultBox = document.getElementById('account-check-result');
+        const alertBox = document.getElementById('account-check-alert');
+        const messageEl = document.getElementById('account-check-message');
+        resultBox.classList.remove('hidden');
+        alertBox.classList.remove('alert-success');
+        alertBox.classList.add('alert-error');
+        messageEl.textContent = err.message;
+      } finally {
+        checkBtn.classList.remove('loading');
+        checkBtn.disabled = false;
+      }
+    });
+  }
+
+  if (recreateBtn) {
+    recreateBtn.addEventListener('click', async function () {
+      const fields = document.getElementById('recreate-banking-fields');
+      if (!fields) return;
+
+      const params = { recreate: '1' };
+      fields.querySelectorAll('input:not([disabled]), select').forEach(el => {
+        if (el.name) params[el.name] = el.value;
+      });
+
+      recreateBtn.classList.add('loading');
+      recreateBtn.disabled = true;
+      try {
+        showCheckResult(await postAccountCheck(params));
+      } catch (err) {
+        showCheckResult({ ready: false, needs_recreate: true, message: err.message });
+      } finally {
+        recreateBtn.classList.remove('loading');
+        recreateBtn.disabled = false;
+      }
+    });
+  }
+</script>
+{% endblock %}

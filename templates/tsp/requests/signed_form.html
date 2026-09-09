@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+
+{% block title %}Reimbursement Agreement{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto bg-base-100 p-8 rounded-box shadow-sm print-only:block">
+  <div class="text-center mb-8 border-b pb-6">
+    <h1 class="text-2xl font-bold">Travel Support Program</h1>
+    <h2 class="text-lg opacity-70">Reimbursement Agreement</h2>
+  </div>
+
+  <div class="mb-6">
+    <p><strong>Request ID:</strong> #{{ travel_request.pk }}</p>
+    <p><strong>Requester:</strong> {{ travel_request.user.get_full_name|default:travel_request.user.username }}</p>
+    <p><strong>Event:</strong> {{ travel_request.event.name }}</p>
+    <p><strong>Location:</strong> {{ travel_request.event.location }}</p>
+    <p><strong>Dates:</strong> {{ travel_request.event.start_date }} — {{ travel_request.event.end_date }}</p>
+    {% if travel_request.approved_at %}
+    <p><strong>Approved:</strong> {{ travel_request.approved_at|date:"F d, Y" }}</p>
+    {% endif %}
+  </div>
+
+  <h3 class="font-semibold mb-3">Approved Expenses</h3>
+  <table class="table table-bordered w-full mb-6">
+    <thead>
+      <tr><th>Category</th><th>Description</th><th>Amount</th></tr>
+    </thead>
+    <tbody>
+      {% for expense in travel_request.expenses.all %}
+      <tr>
+        <td>{{ expense.get_category_display }}</td>
+        <td>{{ expense.description }}</td>
+        <td>{% if expense.approved_amount %}{{ expense.approved_amount }} {{ expense.approved_currency }}{% else %}—{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr class="font-bold">
+        <td colspan="2">Total Approved</td>
+        <td>{{ travel_request.total_approved }} EUR</td>
+      </tr>
+    </tfoot>
+  </table>
+
+  <p class="text-sm mb-8 opacity-70">
+    I confirm that the above expenses are accurate and that I will provide receipts and invoices
+    as required by the Travel Support Program. I agree to the program terms and conditions.
+  </p>
+
+  <div class="grid grid-cols-2 gap-8 mt-12 pt-8 border-t">
+    <div>
+      <div class="border-b border-base-content pb-1 mb-2 h-12"></div>
+      <p class="text-sm">Signature</p>
+    </div>
+    <div>
+      <div class="border-b border-base-content pb-1 mb-2">{{ travel_request.user.get_full_name|default:travel_request.user.username }}</div>
+      <p class="text-sm">Printed Name</p>
+    </div>
+    <div>
+      <div class="border-b border-base-content pb-1 mb-2">{{ travel_request.total_approved }} EUR</div>
+      <p class="text-sm">Total Amount</p>
+    </div>
+    <div>
+      <div class="border-b border-base-content pb-1 mb-2">{% now "F d, Y" %}</div>
+      <p class="text-sm">Date</p>
+    </div>
+  </div>
+</div>
+
+<div class="text-center mt-6 no-print">
+  <button onclick="window.print()" class="btn btn-primary">Print Agreement</button>
+  <a href="{% url 'request_detail' travel_request.pk %}" class="btn btn-ghost ml-2">Back</a>
+</div>
+{% endblock %}

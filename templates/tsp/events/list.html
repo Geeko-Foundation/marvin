@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+
+{% block title %}Events{% endblock %}
+
+{% block content %}
+<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+  <div>
+    <h1 class="text-2xl font-bold">Events</h1>
+    <p class="text-sm opacity-60">Conferences and events accepting travel support requests</p>
+  </div>
+  <a href="{% url 'event_create' %}" class="btn btn-primary btn-sm">New Event</a>
+</div>
+
+<form method="get" class="flex flex-wrap gap-3 mb-6">
+  <input type="date" name="from" value="{{ date_from }}" class="input input-bordered input-sm">
+  <input type="date" name="to" value="{{ date_to }}" class="input input-bordered input-sm">
+  <button type="submit" class="btn btn-sm btn-outline">Filter</button>
+  {% if date_from or date_to %}
+  <a href="{% url 'event_list' %}" class="btn btn-sm btn-ghost">Clear</a>
+  {% endif %}
+</form>
+
+<div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+  {% for event in events %}
+  <div class="card bg-base-100 shadow-sm {% if event.is_past %}opacity-60{% endif %}">
+    <div class="card-body">
+      <div class="flex justify-between items-start">
+        <h2 class="card-title text-base">{{ event.name }}</h2>
+        {% if event.is_past %}
+        <span class="badge badge-neutral">Past</span>
+        {% elif event.accepting_requests %}
+        <span class="badge badge-success">Open</span>
+        {% else %}
+        <span class="badge badge-warning">Closed</span>
+        {% endif %}
+      </div>
+      <p class="text-sm opacity-60">{{ event.location }}</p>
+      <p class="text-sm">{{ event.start_date }} — {{ event.end_date }}</p>
+      {% if event.accepting_requests and not event.is_past and profile.is_requester %}
+      <div class="card-actions justify-end mt-2">
+        <a href="{% url 'request_create' %}?event={{ event.pk }}" class="btn btn-primary btn-sm">Apply for Travel Support</a>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+  {% empty %}
+  <div class="col-span-full text-center py-12 opacity-60">No events found.</div>
+  {% endfor %}
+</div>
+{% endblock %}

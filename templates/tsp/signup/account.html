@@ -1,0 +1,56 @@
+{% extends "tsp/signup/wizard_base.html" %}
+
+{% block title %}Sign Up — Account{% endblock %}
+
+{% block wizard_content %}
+<div class="card bg-base-100 shadow-xl">
+  <div class="card-body">
+    <h2 class="card-title">Create your account</h2>
+    <p class="text-sm opacity-60 mb-4">
+      Register as a travel support requestor. You'll add your address and banking details in the next steps.
+    </p>
+
+    <form method="post" class="grid gap-4">
+      {% csrf_token %}
+      <div class="form-control">
+        <label class="label"><span class="label-text">Username *</span></label>
+        {{ form.username }}
+        {% if form.username.errors %}<label class="label"><span class="label-text-alt text-error">{{ form.username.errors.0 }}</span></label>{% endif %}
+      </div>
+      <div class="grid gap-4 md:grid-cols-2">
+        <div class="form-control">
+          <label class="label"><span class="label-text">First Name *</span></label>
+          {{ form.first_name }}
+        </div>
+        <div class="form-control">
+          <label class="label"><span class="label-text">Last Name</span></label>
+          {{ form.last_name }}
+        </div>
+      </div>
+      <div class="form-control">
+        <label class="label"><span class="label-text">Email *</span></label>
+        {{ form.email }}
+        {% if form.email.errors %}<label class="label"><span class="label-text-alt text-error">{{ form.email.errors.0 }}</span></label>{% endif %}
+      </div>
+      <div class="form-control">
+        <label class="label"><span class="label-text">Password *</span></label>
+        {{ form.password1 }}
+        {% if form.password1.errors %}<label class="label"><span class="label-text-alt text-error">{{ form.password1.errors.0 }}</span></label>{% endif %}
+      </div>
+      <div class="form-control">
+        <label class="label"><span class="label-text">Confirm Password *</span></label>
+        {{ form.password2 }}
+        {% if form.password2.errors %}<label class="label"><span class="label-text-alt text-error">{{ form.password2.errors.0 }}</span></label>{% endif %}
+      </div>
+
+      {% if form.non_field_errors %}
+      <div class="alert alert-error">
+        {% for error in form.non_field_errors %}<span>{{ error }}</span>{% endfor %}
+      </div>
+      {% endif %}
+
+      <button type="submit" class="btn btn-primary w-full">Continue — Your Details</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

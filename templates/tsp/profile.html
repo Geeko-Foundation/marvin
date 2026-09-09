@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+
+{% block title %}Profile{% endblock %}
+
+{% block content %}
+<h1 class="text-2xl font-bold mb-6">Profile</h1>
+
+<form method="post" class="max-w-2xl">
+  {% csrf_token %}
+
+  <div class="card bg-base-100 shadow-sm mb-6">
+    <div class="card-body">
+      <h2 class="card-title text-lg">Personal Information</h2>
+      <div class="grid gap-4 md:grid-cols-2">
+        <div class="form-control">
+          <label class="label"><span class="label-text">First Name</span></label>
+          {{ form.first_name }}
+        </div>
+        <div class="form-control">
+          <label class="label"><span class="label-text">Last Name</span></label>
+          {{ form.last_name }}
+        </div>
+        <div class="form-control md:col-span-2">
+          <label class="label"><span class="label-text">Email</span></label>
+          {{ form.email }}
+        </div>
+        <div class="form-control md:col-span-2">
+          <label class="label"><span class="label-text">Street Address</span></label>
+          {{ form.address_line }}
+        </div>
+        <div class="form-control">
+          <label class="label"><span class="label-text">City</span></label>
+          {{ form.city }}
+        </div>
+        <div class="form-control">
+          <label class="label"><span class="label-text">State/Province</span></label>
+          {{ form.state }}
+        </div>
+        <div class="form-control">
+          <label class="label"><span class="label-text">Postal Code</span></label>
+          {{ form.postal_code }}
+        </div>
+        <div class="form-control">
+          <label class="label"><span class="label-text">Country</span></label>
+          {{ form.country }}
+        </div>
+        <div class="form-control md:col-span-2">
+          <label class="label"><span class="label-text">Phone</span></label>
+          {{ form.phone }}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {% if profile.is_requester %}
+  <div class="card bg-base-100 shadow-sm mb-6">
+    <div class="card-body">
+      <h2 class="card-title text-lg">Wise Recipient Account</h2>
+      {% if profile.is_wise_recipient_ready %}
+      <div class="flex items-center gap-3">
+        <span class="badge badge-success">Verified</span>
+        <span class="text-sm">Account ID: {{ profile.wise_account_id }}</span>
+      </div>
+      <p class="text-sm opacity-60 mt-2">
+        Verified on {{ profile.wise_recipient_verified_at|date:"F d, Y" }}.
+        {{ profile.banking_summary }}
+      </p>
+      <p class="text-xs opacity-50 mt-1">Account numbers are stored with Wise, not in Marvin.</p>
+      {% else %}
+      <div class="alert alert-warning">
+        <span>Your Wise recipient account is not set up yet.</span>
+      </div>
+      <a href="{% url 'signup_banking' %}" class="btn btn-primary btn-sm mt-2">Set Up Wise Account</a>
+      {% endif %}
+    </div>
+  </div>
+  {% elif banking_form %}
+  <div class="card bg-base-100 shadow-sm mb-6">
+    <div class="card-body">
+      <h2 class="card-title text-lg">Banking Preferences</h2>
+      <p class="text-sm opacity-60 mb-4">Currency and method metadata only — no account numbers stored locally.</p>
+      <div class="grid gap-4 md:grid-cols-2">
+        <div class="form-control">
+          <label class="label"><span class="label-text">Banking Method</span></label>
+          {{ banking_form.banking_method }}
+        </div>
+        <div class="form-control">
+          <label class="label"><span class="label-text">Currency</span></label>
+          {{ banking_form.banking_currency }}
+        </div>
+      </div>
+      <button type="submit" name="banking_submit" value="1" class="btn btn-outline btn-sm mt-4">Save Banking</button>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if form.non_field_errors %}
+  <div class="alert alert-error mb-4">
+    {% for error in form.non_field_errors %}<span>{{ error }}</span>{% endfor %}
+  </div>
+  {% endif %}
+
+  <button type="submit" class="btn btn-primary">Save Profile</button>
+</form>
+{% endblock %}
+
+{% block extra_js %}
+{% endblock %}

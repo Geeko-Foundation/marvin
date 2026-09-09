@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block title %}New Event{% endblock %}
+
+{% block content %}
+<h1 class="text-2xl font-bold mb-6">Create Event</h1>
+
+<form method="post" class="max-w-xl">
+  {% csrf_token %}
+  <div class="card bg-base-100 shadow-sm">
+    <div class="card-body gap-4">
+      <div class="form-control">
+        <label class="label"><span class="label-text">Event Name</span></label>
+        {{ form.name }}
+      </div>
+      <div class="form-control">
+        <label class="label"><span class="label-text">Location</span></label>
+        {{ form.location }}
+      </div>
+      <div class="grid grid-cols-2 gap-4">
+        <div class="form-control">
+          <label class="label"><span class="label-text">Start Date</span></label>
+          {{ form.start_date }}
+        </div>
+        <div class="form-control">
+          <label class="label"><span class="label-text">End Date</span></label>
+          {{ form.end_date }}
+        </div>
+      </div>
+      <label class="label cursor-pointer justify-start gap-3">
+        {{ form.accepting_requests }}
+        <span class="label-text">Accepting travel support requests</span>
+      </label>
+      <div class="card-actions justify-end">
+        <a href="{% url 'event_list' %}" class="btn btn-ghost">Cancel</a>
+        <button type="submit" class="btn btn-primary">Create Event</button>
+      </div>
+    </div>
+  </div>
+</form>
+{% endblock %}

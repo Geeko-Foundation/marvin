@@ -1,0 +1,38 @@
+from django.urls import path
+
+from tsp import views
+
+urlpatterns = [
+    path('login/', views.login_view, name='login'),
+    path('logout/', views.logout_view, name='logout'),
+    path('signup/', views.signup_account, name='signup'),
+    path('signup/profile/', views.signup_profile, name='signup_profile'),
+    path('signup/banking/', views.signup_banking, name='signup_banking'),
+    path('signup/banking/progress/', views.signup_banking_progress, name='signup_banking_progress'),
+    path('signup/banking/step/', views.signup_banking_step, name='signup_banking_step'),
+    path('signup/banking/skip/', views.signup_skip_banking, name='signup_skip_banking'),
+    path('signup/complete/', views.signup_complete, name='signup_complete'),
+    path('', views.dashboard, name='dashboard'),
+    path('profile/', views.profile_view, name='profile'),
+    path('onboarding/profile/', views.onboarding_personal, name='onboarding_personal'),
+    path('onboarding/wise/', views.onboarding_wise, name='onboarding_wise'),
+    path('events/', views.event_list, name='event_list'),
+    path('events/new/', views.event_create, name='event_create'),
+    path('search/', views.search, name='search'),
+    path('requests/check-account/', views.check_wise_account, name='check_wise_account'),
+    path('requests/new/', views.request_create, name='request_create'),
+    path('requests/<int:pk>/', views.request_detail, name='request_detail'),
+    path('requests/<int:pk>/edit/', views.request_edit, name='request_edit'),
+    path('requests/<int:pk>/submit/', views.request_submit, name='request_submit'),
+    path('requests/<int:pk>/approve/', views.request_approve, name='request_approve'),
+    path('requests/<int:pk>/reject/', views.request_reject, name='request_reject'),
+    path('requests/<int:pk>/cancel/', views.request_cancel, name='request_cancel'),
+    path('requests/<int:pk>/accept/', views.request_accept_page, name='request_accept_page'),
+    path('requests/<int:pk>/accept/confirm/', views.request_accept, name='request_accept'),
+    path('requests/<int:pk>/submit-for-payment/', views.request_submit_for_payment, name='request_submit_for_payment'),
+    path('requests/<int:pk>/comments/', views.request_comment, name='request_comment'),
+    path('requests/<int:pk>/documents/', views.request_document_upload, name='request_document_upload'),
+    path('requests/<int:pk>/form/', views.request_form_printable, name='request_form'),
+    path('documents/<int:doc_id>/download/', views.document_download, name='document_download'),
+    path('reports/', views.reports, name='reports'),
+]

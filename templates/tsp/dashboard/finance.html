@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% load tsp_tags %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<h1 class="text-2xl font-bold mb-6">Finance Dashboard</h1>
+
+<div class="stats stats-vertical lg:stats-horizontal shadow w-full mb-6 bg-base-100">
+  <div class="stat">
+    <div class="stat-title">Awaiting Payment</div>
+    <div class="stat-value text-warning">{{ payment_queue.count }}</div>
+    <div class="stat-desc">Submitted for payment</div>
+  </div>
+  <div class="stat">
+    <div class="stat-title">Total Paid</div>
+    <div class="stat-value text-success">{{ paid_total|floatformat:0 }} €</div>
+    <div class="stat-desc">All processed payments</div>
+  </div>
+</div>
+
+<div class="flex gap-2 mb-6">
+  <a href="{% url 'payments:dashboard' %}" class="btn btn-primary">Payment Queue</a>
+  <form method="post" action="{% url 'payments:batch_export' %}">
+    {% csrf_token %}
+    <input type="hidden" name="gateway_id" value="wise-csv">
+    <button type="submit" class="btn btn-outline">Generate Wise CSV</button>
+  </form>
+</div>
+
+<div class="card bg-base-100 shadow-sm mb-6">
+  <div class="card-body">
+    <h2 class="card-title">Payment Queue</h2>
+    {% if payment_queue %}
+    <div class="grid gap-4 md:grid-cols-2">
+      {% for req in payment_queue %}
+      <div class="border border-base-300 rounded-box p-4">
+        <div class="flex justify-between items-start mb-2">
+          <div>
+            <h3 class="font-semibold">#{{ req.pk }} — {{ req.user.get_full_name|default:req.user.username }}</h3>
+            <p class="text-sm opacity-60">{{ req.event.name }}</p>
+          </div>
+          <span class="badge {{ req.state|state_badge }}">{{ req.get_state_display }}</span>
+        </div>
+        <p class="text-sm">Approved: <strong>{{ req.total_approved }} EUR</strong></p>
+        <p class="text-sm">Documents: {{ req.doc_count }}/3</p>
+        <a href="{% url 'request_detail' req.pk %}" class="btn btn-sm btn-ghost mt-2">View Details</a>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="opacity-60">No requests awaiting payment.</p>
+    {% endif %}
+  </div>
+</div>
+
+{% if recently_paid %}
+<div class="card bg-base-100 shadow-sm">
+  <div class="card-body">
+    <h2 class="card-title">Recently Paid</h2>
+    <div class="overflow-x-auto">
+      <table class="table table-zebra">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Recipient</th>
+            <th>Event</th>
+            <th>Amount</th>
+            <th>Method</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for req in recently_paid %}
+          <tr>
+            <td>#{{ req.pk }}</td>
+            <td>{{ req.user.get_full_name|default:req.user.username }}</td>
+            <td>{{ req.event.name }}</td>
+            <td>{% if req.payment %}{{ req.payment.amount }} {{ req.payment.currency }}{% else %}—{% endif %}</td>
+            <td>{% if req.payment %}{{ req.payment.method_label }}{% else %}—{% endif %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

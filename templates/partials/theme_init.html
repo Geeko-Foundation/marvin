@@ -1,0 +1,13 @@
+<script>
+(function () {
+  var STORAGE_KEY = 'marvin-theme';
+  var LIGHT = 'corporate';
+  var DARK = 'business';
+  var saved = localStorage.getItem(STORAGE_KEY);
+  if (saved === DARK || saved === LIGHT) {
+    document.documentElement.setAttribute('data-theme', saved);
+  } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+    document.documentElement.setAttribute('data-theme', DARK);
+  }
+})();
+</script>

@@ -1,0 +1,75 @@
+{% extends "tsp/signup/wizard_base.html" %}
+
+{% block title %}Sign Up — Your Details{% endblock %}
+
+{% block wizard_content %}
+<div class="card bg-base-100 shadow-xl">
+  <div class="card-body">
+    <h2 class="card-title">Your details</h2>
+    <p class="text-sm opacity-60 mb-4">
+      This information is stored locally in Marvin and used on your travel support requests.
+    </p>
+
+    <form method="post" class="grid gap-4">
+      {% csrf_token %}
+      <div class="grid gap-4 md:grid-cols-2">
+        <div class="form-control">
+          <label class="label"><span class="label-text">First Name *</span></label>
+          {{ form.first_name }}
+        </div>
+        <div class="form-control">
+          <label class="label"><span class="label-text">Last Name</span></label>
+          {{ form.last_name }}
+        </div>
+        <div class="form-control md:col-span-2">
+          <label class="label"><span class="label-text">Email *</span></label>
+          {{ form.email }}
+        </div>
+        <div class="form-control md:col-span-2">
+          <label class="label"><span class="label-text">Street Address *</span></label>
+          {{ form.address_line }}
+        </div>
+        <div class="form-control">
+          <label class="label"><span class="label-text">City *</span></label>
+          {{ form.city }}
+        </div>
+        <div class="form-control">
+          <label class="label"><span class="label-text">State/Province</span></label>
+          {{ form.state }}
+        </div>
+        <div class="form-control">
+          <label class="label"><span class="label-text">Postal Code</span></label>
+          {{ form.postal_code }}
+        </div>
+        <div class="form-control">
+          <label class="label"><span class="label-text">Country *</span></label>
+          {{ form.country }}
+        </div>
+        <div class="form-control md:col-span-2">
+          <label class="label"><span class="label-text">Phone</span></label>
+          {{ form.phone }}
+        </div>
+      </div>
+
+      {% if form.non_field_errors %}
+      <div class="alert alert-error">
+        {% for error in form.non_field_errors %}<span>{{ error }}</span>{% endfor %}
+      </div>
+      {% endif %}
+
+      {% if can_skip_banking %}
+      <div class="alert alert-info text-sm">
+        <span>Wise banking is optional for admin accounts. Continue to set it up now, or skip and add it later from your profile.</span>
+      </div>
+      {% endif %}
+
+      <div class="flex flex-wrap gap-3 justify-end">
+        {% if can_skip_banking %}
+        <button type="submit" name="action" value="skip" class="btn btn-ghost">Skip for now</button>
+        {% endif %}
+        <button type="submit" name="action" value="continue" class="btn btn-primary">Continue — Wise Banking</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

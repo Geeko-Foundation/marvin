@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+
+{% block title %}Payments{% endblock %}
+
+{% block content %}
+<h1 class="text-2xl font-bold mb-2">Payment Processing</h1>
+<p class="text-sm opacity-60 mb-6">{{ adapter.label }}</p>
+
+{% if batch_gateways %}
+<div class="flex flex-wrap gap-2 mb-6">
+  {% for gateway in batch_gateways %}
+  <form method="post" action="{% url 'payments:batch_export' %}">
+    {% csrf_token %}
+    <input type="hidden" name="gateway_id" value="{{ gateway.gateway_id }}">
+    <button type="submit" class="btn btn-outline btn-sm">Export {{ gateway.label }}</button>
+  </form>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if queue_items %}
+<div class="grid gap-4">
+  {% for item in queue_items %}
+  <div class="card bg-base-100 shadow-sm">
+    <div class="card-body">
+      <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div>
+          <h2 class="font-semibold">{{ item.title }}</h2>
+          {% if item.subtitle %}<p class="text-sm opacity-60">{{ item.subtitle }}</p>{% endif %}
+          {% if item.amount %}<p class="text-sm">Approved: <strong>{{ item.amount }} {{ item.currency|default:"EUR" }}</strong></p>{% endif %}
+          {% if item.banking %}<p class="text-sm opacity-60">Banking: {{ item.banking }}</p>{% endif %}
+          {% if item.wise_ready %}
+          <span class="badge badge-success badge-sm">Wise verified</span>
+          {% else %}
+          <span class="badge badge-error badge-sm">Wise not set up</span>
+          {% endif %}
+        </div>
+        <form method="post" action="{% url 'payments:process' %}" class="flex flex-wrap gap-2 items-end">
+          {% csrf_token %}
+          <input type="hidden" name="object_id" value="{{ item.object_id }}">
+          <select name="gateway_id" class="select select-bordered select-sm">
+            {% for gateway in gateways %}
+            <option value="{{ gateway.gateway_id }}">{{ gateway.label }}</option>
+            {% endfor %}
+          </select>
+          <button type="submit" class="btn btn-primary btn-sm" {% if not item.wise_ready %}disabled title="Requestor must complete Wise onboarding first"{% endif %}>Process Payment</button>
+          {% if item.detail_url %}
+          <a href="{{ item.detail_url }}" class="btn btn-ghost btn-sm">Details</a>
+          {% endif %}
+        </form>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="hero bg-base-100 rounded-box py-16">
+  <div class="hero-content text-center">
+    <p class="opacity-60">No items awaiting payment.</p>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

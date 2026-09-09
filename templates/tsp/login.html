@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block title %}Login{% endblock %}
+
+{% block auth_content %}
+<div class="hero min-h-screen bg-base-200">
+  <div class="hero-content flex-col lg:flex-row-reverse gap-12 max-w-5xl">
+    <div class="text-center lg:text-left">
+      <h1 class="text-5xl font-bold text-primary">Marvin</h1>
+      <h3 class="text-1xl font-normal text-primary">(The Paranoid Android)</h3>
+      <p class="py-4 text-lg opacity-70">
+        Travel Support Program — manage travel sponsorship requests,
+          approvals, and reimbursements for FOSS contributors.
+      </p>
+      <p class="text-sm opacity-60 mb-4">Provided by the Geeko Foundation.</p>
+      <div class="flex flex-wrap gap-2 justify-center lg:justify-start">
+        <div class="badge badge-primary badge-outline">Request Lifecycle</div>
+        <div class="badge badge-secondary badge-outline">Wise Payments</div>
+        <div class="badge badge-accent badge-outline">Audit Trail</div>
+      </div>
+    </div>
+    <div class="card bg-base-100 w-full max-w-lg shadow-xl">
+      <div class="card-body">
+        <h2 class="card-title">Sign in</h2>
+        <p class="text-sm opacity-60 mb-4">Enter your username and password to continue.</p>
+
+        <form method="post" action="{% url 'login' %}" class="grid gap-4">
+          {% csrf_token %}
+          {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+
+          <div class="form-control">
+            <label class="label" for="id_username"><span class="label-text">Username</span></label>
+            {{ form.username }}
+            {% if form.username.errors %}
+            <label class="label"><span class="label-text-alt text-error">{{ form.username.errors.0 }}</span></label>
+            {% endif %}
+          </div>
+
+          <div class="form-control">
+            <label class="label" for="id_password"><span class="label-text">Password</span></label>
+            {{ form.password }}
+            {% if form.password.errors %}
+            <label class="label"><span class="label-text-alt text-error">{{ form.password.errors.0 }}</span></label>
+            {% endif %}
+          </div>
+
+          {% if form.non_field_errors %}
+          <div class="alert alert-error">
+            {% for error in form.non_field_errors %}<span>{{ error }}</span>{% endfor %}
+          </div>
+          {% endif %}
+
+          <button type="submit" class="btn btn-primary w-full">Sign in</button>
+        </form>
+
+        <div class="divider">OR</div>
+
+        <a href="{% url 'signup' %}" class="btn btn-outline w-full">Create a Requestor Account</a>
+        <p class="text-xs text-center opacity-60 mt-2">
+          New contributors — sign up with our step-by-step wizard (account, profile, Wise banking)
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
