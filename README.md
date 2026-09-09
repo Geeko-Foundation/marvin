@@ -1,6 +1,6 @@
 # Marvin — Travel Support Program (TSP)
 
-Marvin is a Django web application for managing travel support requests: speakers apply for event reimbursement, committee members review and approve requests, and finance staff process payments. It includes a requestor signup wizard, Wise sandbox integration for banking verification, and a pluggable payments module.
+Marvin is a Django web application for managing travel support requests: speakers apply for event reimbursement, committee members review and approve requests, and finance staff process payments. It includes a requestor signup wizard, Wise sandbox integration for banking verification, a pluggable payments module, and optional browser push notifications.
 
 ## Tech stack
 
@@ -8,6 +8,7 @@ Marvin is a Django web application for managing travel support requests: speaker
 - **Django 6.x**
 - **SQLite** (default, development)
 - **django-tables2** — searchable data tables
+- **django-webpush** — browser push notifications (opt-in)
 - **DaisyUI / Tailwind** — UI styling (via templates)
 - **Wise API** — sandbox recipient verification and payment initiation
 
@@ -16,8 +17,8 @@ Marvin is a Django web application for managing travel support requests: speaker
 ```
 marvin/           Django project settings and shared utilities
   audit.py        Abstract AuditModel (created_at, updated_at, created_by, changed_by)
-tsp/              Travel requests, events, expenses, documents, reports
-profile/          User profiles, groups/permissions, Wise onboarding
+profile/          User profiles, groups/permissions, Wise onboarding, push notifications
+tsp/              Travel requests, events, expenses, documents, reports, search
 payments/         Payment gateway plugin (Wise API, Wise CSV, manual transfer)
 templates/        HTML templates
 static/           CSS, images
@@ -29,15 +30,18 @@ logs/             Application logs (e.g. Wise API)
 
 | App | Purpose |
 |-----|---------|
-| `tsp` | Events, travel requests, expenses, documents, state machine, dashboards |
-| `profile` | User profile data, role groups, signup/onboarding, Wise recipient setup |
+| `profile` | `UserProfile`, role groups/permissions, signup/onboarding, Wise recipient services, push notification preferences |
+| `tsp` | Events, travel requests, expenses, documents, state machine, dashboards, search |
 | `payments` | Gateway-agnostic payment records and finance processing UI |
+| `webpush` | Third-party app — browser subscription storage and service worker (via django-webpush) |
 
-All models in these apps inherit from `AuditModel`, which adds automatic timestamp and user tracking on every save:
+All domain models in `profile`, `tsp`, and `payments` inherit from `AuditModel`, which adds automatic timestamp and user tracking on every save:
 
 - `created_at` — set when the record is first saved
 - `updated_at` — updated on every save
-- `created_by` / `changed_by` — populated from the logged-in user via middleware
+- `created_by` / `changed_by` — populated from the logged-in user via `AuditUserMiddleware`
+
+These fields are defined once in `marvin/audit.py`; concrete models inherit them without re-declaring them in each `models.py`.
 
 ## Prerequisites
 
@@ -87,11 +91,11 @@ python manage.py createsuperuser
 python manage.py runserver
 ```
 
-Open [http://127.0.0.1:8000/](http://127.0.0.1:8000/) in your browser.
+Open [http://127.0.0.1:8000/login/](http://127.0.0.1:8000/login/) in your browser.
 
 ## Demo accounts
 
-After seeding, all users share the password **`demo`**.
+After seeding, all users share the password **`demo`**. Sign in with username and password at `/login/`.
 
 | Username | Role | Notes |
 |----------|------|-------|
@@ -106,15 +110,16 @@ Additional seeded users (`wizard1`, `ibanonly`, etc.) are available for testing 
 
 | URL | Description |
 |-----|-------------|
-| `/login/` | Application login |
+| `/login/` | Application login (username + password) |
 | `/signup/` | New requestor registration wizard |
 | `/` | Role-based dashboard |
-| `/profile/` | Edit personal profile and banking metadata |
+| `/profile/` | Personal profile, banking metadata, push notification settings |
 | `/events/` | Browse and manage events |
-| `/search/` | Search events (and users, for staff) |
+| `/search/` | Search events (all users); search users (staff only) |
 | `/requests/new/` | Create a travel request |
 | `/reports/` | TSP reports (committee/finance) |
 | `/payments/` | Finance payment queue |
+| `/webpush/` | Push subscription endpoints and service worker |
 | `/admin/` | Django admin (separate login at `/admin/login/`) |
 
 ## User roles
@@ -131,6 +136,8 @@ Groups are created automatically after migrations via `profile.groups.ensure_gro
 
 Wise runs in **sandbox mode** by default. Banking account numbers are sent to Wise only during verification — they are not stored in Marvin.
 
+Staff and superusers may **skip Wise banking** during signup and complete it later from their profile.
+
 Environment variables (all optional):
 
 ```bash
@@ -142,30 +149,14 @@ export WISE_SOURCE_CURRENCY=GBP
 
 Wise API activity is logged to the console and `logs/wise.log`.
 
-## Common management commands
-
-```bash
-python manage.py migrate              # Apply database migrations
-python manage.py seed_data            # Load demo fixture (empty DB only)
-python manage.py set_demo_passwords   # Reset all passwords to "demo"
-python manage.py check                # Validate project configuration
-python manage.py runserver            # Start dev server
-```
-
-## Development notes
-
-- **Database:** SQLite file at `db.sqlite3` in the project root.
-- **Uploaded files:** stored under `uploads/` (served in development when `DEBUG=True`).
-- **Static files:** served from `static/` during development.
-- **Audit fields:** defined once in `marvin/audit.py` on the abstract `AuditModel` base class; every concrete model inherits them without re-declaring the fields.
-- **Login URLs:** the app uses `/login/` for users; Django admin uses `/admin/login/` separately.
-
 ## Push notifications
 
 Marvin uses [django-webpush](https://github.com/safwanrahman/django-webpush) for browser push notifications. Users opt in from **Profile → Push Notifications**.
 
 1. Check **Enable push notifications** and save.
 2. Click **Subscribe to Push Messaging** and allow browser permission.
+
+Notifications are only sent to users who have opted in and subscribed a browser. Disabling push in the profile removes stored subscriptions.
 
 Dev VAPID keys are included in settings. For production, generate your own and set:
 
@@ -189,8 +180,27 @@ export WEBPUSH_APP_BASE_URL=https://yourdomain.com
 | Request cancelled | Other party (committee or requester) |
 | New comment on a request | Other party |
 
-Additional events worth adding later: missing documents reminder before payment, Wise verification failures, and new events opened for applications.
+Planned: missing-documents reminders, Wise verification failures, new events opened for applications.
+
+## Common management commands
+
+```bash
+python manage.py migrate              # Apply database migrations
+python manage.py seed_data            # Load demo fixture (empty DB only)
+python manage.py set_demo_passwords   # Reset all passwords to "demo"
+python manage.py check                # Validate project configuration
+python manage.py runserver            # Start dev server
+```
+
+## Development notes
+
+- **Database:** SQLite file at `db.sqlite3` in the project root.
+- **Uploaded files:** stored under `uploads/` (served in development when `DEBUG=True`).
+- **Static files:** served from `static/` during development.
+- **Audit fields:** defined on abstract `AuditModel` in `marvin/audit.py`.
+- **Login URLs:** the app uses `/login/` (username/password); Django admin uses `/admin/login/` separately.
+- **UserProfile:** lives in the `profile` app (`profile.UserProfile`); database table remains `tsp_userprofile` for migration compatibility.
 
 ## Further reading
 
-See `PRD.md` for the full product requirements and architecture documentation.
+See [PRD.md](PRD.md) for the full product requirements and architecture documentation.
