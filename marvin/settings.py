@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'django_tables2',
+    'webpush',
     'payments',
     'profile',
     'tsp',
@@ -146,6 +147,23 @@ PAYMENTS_ADAPTERS = [
 ]
 PAYMENTS_DEFAULT_ADAPTER = 'tsp.travelrequest'
 PAYMENTS_PERMISSION_CHECK = 'profile.permissions.finance_can_process_payments'
+
+# Web Push (django-webpush) — generate your own keys for production:
+#   python -c "from py_vapid import Vapid02; ..."  or use web-push-codelab.glitch.me
+WEBPUSH_APP_BASE_URL = os.environ.get('WEBPUSH_APP_BASE_URL', 'http://127.0.0.1:8000')
+WEBPUSH_SETTINGS = {
+    'VAPID_PUBLIC_KEY': os.environ.get(
+        'VAPID_PUBLIC_KEY',
+        'BF8UddgDIQ_Y5lfOLbOqFLyb5inEudxst2ynx6tM5G7VyPMZwBn0JjpmOfbAdfKcvpVqYZXm5D1wRP-qZVPubu4',
+    ),
+    'VAPID_PRIVATE_KEY': os.environ.get(
+        'VAPID_PRIVATE_KEY',
+        '-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQg0D5XI7xtdhp0G5SH\n'
+        '7AqGGj0USFWgre8aQWVSHfnGmxihRANCAARfFHXYAyEP2OZXzi2zqhS8m+YpxLnc\n'
+        'bLdsp8erTORu1cjzGcAZ9CY6Zjn2wHXynL6VamGV5uQ9cET/qmVT7m7u\n-----END PRIVATE KEY-----\n',
+    ),
+    'VAPID_ADMIN_EMAIL': os.environ.get('VAPID_ADMIN_EMAIL', 'admin@marvin.local'),
+}
 
 # Wise API — sandbox by default (see api_tests3.py)
 WISE_API_TOKEN = os.environ.get(

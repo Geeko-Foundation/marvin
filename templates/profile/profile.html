@@ -94,6 +94,30 @@
   </div>
   {% endif %}
 
+  <div class="card bg-base-100 shadow-sm mb-6">
+    <div class="card-body">
+      <h2 class="card-title text-lg">Push Notifications</h2>
+      <p class="text-sm opacity-60 mb-4">
+        Get browser alerts for travel request updates, comments, and payment status.
+        You can turn this off at any time.
+      </p>
+      <label class="label cursor-pointer justify-start gap-3">
+        {{ form.push_notifications_enabled }}
+        <span class="label-text">Enable push notifications</span>
+      </label>
+      {% if profile.push_notifications_enabled %}
+      <div class="mt-4 p-4 bg-base-200 rounded-lg">
+        <p class="text-sm mb-3">Save your profile first, then subscribe this browser:</p>
+        {% load webpush_notifications %}
+        {% webpush_button with_class="btn btn-primary btn-sm" %}
+        <p class="text-xs opacity-50 mt-2">Your browser will ask for permission. Each device must subscribe separately.</p>
+      </div>
+      {% else %}
+      <p class="text-xs opacity-50 mt-2">Enable the checkbox above and save to activate push notifications.</p>
+      {% endif %}
+    </div>
+  </div>
+
   {% if form.non_field_errors %}
   <div class="alert alert-error mb-4">
     {% for error in form.non_field_errors %}<span>{{ error }}</span>{% endfor %}

@@ -696,6 +696,8 @@ def request_comment(request, pk, travel_request, profile):
         comment.request = travel_request
         comment.user = request.user
         comment.save()
+        from profile.services.push_notifications import notify_request_comment
+        notify_request_comment(travel_request, request.user)
         messages.success(request, 'Comment added.')
     return redirect('request_detail', pk=pk)
 

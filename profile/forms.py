@@ -21,7 +21,15 @@ class ProfileForm(forms.ModelForm):
 
     class Meta:
         model = UserProfile
-        fields = ['phone', 'address_line', 'city', 'state', 'country', 'postal_code']
+        fields = [
+            'phone',
+            'address_line',
+            'city',
+            'state',
+            'country',
+            'postal_code',
+            'push_notifications_enabled',
+        ]
         widgets = {
             'phone': forms.TextInput(attrs={'class': INPUT_CLASS}),
             'address_line': forms.TextInput(attrs={'class': INPUT_CLASS}),
@@ -29,6 +37,7 @@ class ProfileForm(forms.ModelForm):
             'state': forms.TextInput(attrs={'class': INPUT_CLASS}),
             'country': forms.TextInput(attrs={'class': INPUT_CLASS}),
             'postal_code': forms.TextInput(attrs={'class': INPUT_CLASS}),
+            'push_notifications_enabled': forms.CheckboxInput(attrs={'class': 'checkbox'}),
         }
 
     def __init__(self, *args, **kwargs):

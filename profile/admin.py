@@ -14,7 +14,7 @@ class UserProfileInline(admin.StackedInline):
 
 @admin.register(UserProfile)
 class UserProfileAdmin(admin.ModelAdmin):
-    list_display = ('user', 'country', 'wise_account_id', 'updated_at')
+    list_display = ('user', 'country', 'push_notifications_enabled', 'wise_account_id', 'updated_at')
     search_fields = ('user__username', 'user__email', 'country')
     readonly_fields = ('created_at', 'created_by', 'updated_at', 'changed_by')
 

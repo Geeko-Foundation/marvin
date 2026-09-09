@@ -1,0 +1,195 @@
+"""Browser push notifications via django-webpush.
+
+Suggested events (implemented below):
+- Request submitted          → TSP Committee
+- Request approved / rejected → Requester
+- Request accepted           → Requester (upload documents reminder)
+- Submitted for payment      → Finance
+- Request paid               → Requester
+- Request cancelled            → other party (requester or committee)
+- New comment on request     → other party
+"""
+
+from __future__ import annotations
+
+import logging
+
+from django.conf import settings
+from django.contrib.auth.models import User
+from django.urls import reverse
+
+from profile.groups import GROUP_FINANCE, GROUP_TSP
+from tsp.models import RequestState, TravelRequest
+
+logger = logging.getLogger('marvin.webpush')
+
+
+def absolute_url(path: str) -> str:
+    base = getattr(settings, 'WEBPUSH_APP_BASE_URL', '').rstrip('/')
+    if not path.startswith('/'):
+        path = f'/{path}'
+    return f'{base}{path}'
+
+
+def clear_push_subscriptions(user: User) -> None:
+    from webpush.models import PushInformation
+
+    PushInformation.objects.filter(user=user).delete()
+
+
+def send_push_to_user(
+    user: User,
+    *,
+    head: str,
+    body: str,
+    url: str | None = None,
+    ttl: int = 86400,
+) -> None:
+    if not user or not user.is_active:
+        return
+    try:
+        profile = user.profile
+    except Exception:
+        return
+    if not profile.push_notifications_enabled:
+        return
+    if not user.webpush_info.exists():
+        return
+
+    from webpush import send_user_notification
+
+    payload = {'head': head, 'body': body}
+    if url:
+        payload['url'] = url
+    try:
+        send_user_notification(user=user, payload=payload, ttl=ttl)
+    except Exception:
+        logger.exception('Push notification failed for user %s', user.pk)
+
+
+def send_push_to_group(
+    group_name: str,
+    *,
+    head: str,
+    body: str,
+    url: str | None = None,
+    exclude_user: User | None = None,
+    ttl: int = 86400,
+) -> None:
+    from django.contrib.auth.models import Group
+
+    try:
+        group = Group.objects.get(name=group_name)
+    except Group.DoesNotExist:
+        return
+
+    users = group.user_set.select_related('profile')
+    if exclude_user is not None:
+        users = users.exclude(pk=exclude_user.pk)
+
+    for user in users:
+        send_push_to_user(user, head=head, body=body, url=url, ttl=ttl)
+
+
+def _request_label(travel_request: TravelRequest) -> str:
+    return f'#{travel_request.pk} — {travel_request.event.name}'
+
+
+def _request_url(travel_request: TravelRequest) -> str:
+    path = reverse('request_detail', kwargs={'pk': travel_request.pk})
+    return absolute_url(path)
+
+
+def notify_request_state_change(
+    travel_request: TravelRequest,
+    from_state: str | None,
+    to_state: str,
+    actor: User,
+    notes: str = '',
+) -> None:
+    label = _request_label(travel_request)
+    url = _request_url(travel_request)
+    requester = travel_request.user
+
+    if to_state == RequestState.SUBMITTED:
+        send_push_to_group(
+            GROUP_TSP,
+            head='New travel request',
+            body=f'{label} was submitted for review.',
+            url=url,
+            exclude_user=actor,
+        )
+    elif to_state == RequestState.APPROVED:
+        send_push_to_user(
+            requester,
+            head='Request approved',
+            body=f'{label} was approved by the committee.',
+            url=url,
+        )
+    elif to_state == RequestState.REJECTED:
+        detail = f' Notes: {notes}' if notes else ''
+        send_push_to_user(
+            requester,
+            head='Request rejected',
+            body=f'{label} was rejected.{detail}',
+            url=url,
+        )
+    elif to_state == RequestState.ACCEPTED:
+        send_push_to_user(
+            requester,
+            head='Request accepted',
+            body=f'{label} is accepted — upload receipts and required documents.',
+            url=url,
+        )
+    elif to_state == RequestState.SUBMITTED_FOR_PAYMENT:
+        send_push_to_group(
+            GROUP_FINANCE,
+            head='Ready for payment',
+            body=f'{label} was submitted for reimbursement.',
+            url=url,
+            exclude_user=actor,
+        )
+    elif to_state == RequestState.PAID:
+        send_push_to_user(
+            requester,
+            head='Payment processed',
+            body=f'Reimbursement for {label} has been processed.',
+            url=url,
+        )
+    elif to_state == RequestState.CANCELLED:
+        if actor.pk == requester.pk:
+            send_push_to_group(
+                GROUP_TSP,
+                head='Request cancelled',
+                body=f'{label} was cancelled by the requester.',
+                url=url,
+                exclude_user=actor,
+            )
+        else:
+            send_push_to_user(
+                requester,
+                head='Request cancelled',
+                body=f'{label} was cancelled by the committee.',
+                url=url,
+            )
+
+
+def notify_request_comment(travel_request: TravelRequest, actor: User) -> None:
+    label = _request_label(travel_request)
+    url = _request_url(travel_request)
+
+    if actor.pk == travel_request.user_id:
+        send_push_to_group(
+            GROUP_TSP,
+            head='New comment',
+            body=f'{actor.get_full_name() or actor.username} commented on {label}.',
+            url=url,
+            exclude_user=actor,
+        )
+    else:
+        send_push_to_user(
+            travel_request.user,
+            head='New comment',
+            body=f'{actor.get_full_name() or actor.username} commented on {label}.',
+            url=url,
+        )
