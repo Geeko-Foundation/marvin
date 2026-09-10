@@ -7,6 +7,8 @@ from marvin.audit import AuditModel
 
 
 class RequestState(models.TextChoices):
+    """Travel request workflow states."""
+
     DRAFT = 'draft', 'Draft'
     SUBMITTED = 'submitted', 'Submitted'
     APPROVED = 'approved', 'Approved'
@@ -18,6 +20,8 @@ class RequestState(models.TextChoices):
 
 
 class ExpenseCategory(models.TextChoices):
+    """Expense line-item categories on a travel request."""
+
     TRANSPORTATION = 'transportation', 'Transportation'
     LODGING = 'lodging', 'Lodging'
     MEALS = 'meals', 'Meals'
@@ -27,12 +31,16 @@ class ExpenseCategory(models.TextChoices):
 
 
 class DocumentKind(models.TextChoices):
+    """Required and optional document types attached to a request."""
+
     RECEIPT = 'receipt', 'Receipt'
     INVOICE = 'invoice', 'Invoice'
     SIGNED_FORM = 'signed_form', 'Signed Form'
 
 
 class Event(AuditModel):
+    """Conference or event that requestors may apply for travel support."""
+
     name = models.CharField(max_length=200)
     location = models.CharField(max_length=200)
     start_date = models.DateField()
@@ -47,10 +55,13 @@ class Event(AuditModel):
 
     @property
     def is_past(self):
+        """True when the event end date is before today."""
         return self.end_date < timezone.now().date()
 
 
 class TravelRequest(AuditModel):
+    """A requestor's application for travel support to a specific event."""
+
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -88,20 +99,25 @@ class TravelRequest(AuditModel):
 
     @property
     def is_editable_by_requester(self):
+        """True while the request is still in draft or submitted (pre-review edit)."""
         return self.state in (RequestState.DRAFT, RequestState.SUBMITTED)
 
     def total_estimated(self):
+        """Sum of all line-item estimated amounts."""
         return sum(e.estimated_amount for e in self.expenses.all())
 
     def total_approved(self):
+        """Sum of committee-approved amounts (used for payment)."""
         return sum(e.approved_amount or 0 for e in self.expenses.all())
 
     def has_all_required_documents(self):
+        """True when receipt, invoice, and signed form are all uploaded."""
         kinds = set(self.documents.values_list('kind', flat=True))
         required = {DocumentKind.RECEIPT, DocumentKind.INVOICE, DocumentKind.SIGNED_FORM}
         return required.issubset(kinds)
 
     def missing_document_kinds(self):
+        """Return human-readable labels for required documents not yet uploaded."""
         kinds = set(self.documents.values_list('kind', flat=True))
         required = [
             (DocumentKind.RECEIPT, 'Receipt'),
@@ -117,6 +133,8 @@ class TravelRequest(AuditModel):
 
 
 class Expense(AuditModel):
+    """One estimated (and optionally approved) expense line on a travel request."""
+
     request = models.ForeignKey(TravelRequest, on_delete=models.CASCADE, related_name='expenses')
     category = models.CharField(max_length=20, choices=ExpenseCategory.choices)
     description = models.TextField()
@@ -133,6 +151,8 @@ class Expense(AuditModel):
 
 
 class StateHistory(AuditModel):
+    """Audit log entry for each travel request state transition."""
+
     request = models.ForeignKey(
         TravelRequest,
         on_delete=models.CASCADE,
@@ -152,6 +172,8 @@ class StateHistory(AuditModel):
 
 
 class Comment(AuditModel):
+    """Discussion comment on a travel request visible to owner and committee."""
+
     request = models.ForeignKey(TravelRequest, on_delete=models.CASCADE, related_name='comments')
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     body = models.TextField()
@@ -164,10 +186,13 @@ class Comment(AuditModel):
 
 
 def document_upload_path(instance, filename):
+    """Storage path for uploaded request documents: ``uploads/{request_id}/{filename}``."""
     return f'uploads/{instance.request_id}/{filename}'
 
 
 class Document(AuditModel):
+    """File attachment (receipt, invoice, or signed form) on a travel request."""
+
     request = models.ForeignKey(TravelRequest, on_delete=models.CASCADE, related_name='documents')
     kind = models.CharField(max_length=20, choices=DocumentKind.choices)
     file = models.FileField(upload_to=document_upload_path)

@@ -5,6 +5,8 @@ from payments.models import PaymentRecord
 
 @admin.register(PaymentRecord)
 class PaymentRecordAdmin(admin.ModelAdmin):
+    """Read-only audit fields; filter and search payment history in Django admin."""
+
     list_display = (
         'reference', 'gateway_id', 'amount', 'currency',
         'status', 'recipient_name', 'created_by', 'changed_by', 'created_at',

@@ -6,6 +6,7 @@ LOGGER_NAME = 'marvin.wise'
 
 
 def get_wise_logger() -> logging.Logger:
+    """Return the shared logger used for Wise API request and step logging."""
     return logging.getLogger(LOGGER_NAME)
 
 
@@ -20,6 +21,7 @@ def log_wise_step(step: str, message: str, **context) -> None:
 
 
 def log_wise_request(method: str, path: str, status_code: int, *, mode: str = 'live') -> None:
+    """Log one HTTP round-trip to the Wise API (method, path, status, sandbox/live)."""
     get_wise_logger().info(
         'HTTP %s %s -> %s (%s)',
         method,
@@ -30,6 +32,7 @@ def log_wise_request(method: str, path: str, status_code: int, *, mode: str = 'l
 
 
 def log_wise_error(step: str, message: str, **context) -> None:
+    """Log a Wise verification or API failure at ERROR level."""
     logger = get_wise_logger()
     if context:
         ctx = ' '.join(f'{key}={value}' for key, value in context.items())

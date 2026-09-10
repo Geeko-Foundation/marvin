@@ -13,12 +13,17 @@ from payments.registry import (
     check_payment_permission,
     get_all_gateways,
     get_gateway,
-    get_default_adapter,
 )
 from payments.services import PaymentService
 
 
 def _require_payment_permission(view_func):
+    """
+    Decorator: require login plus ``settings.PAYMENTS_PERMISSION_CHECK``.
+
+    Unauthenticated users are redirected to the app login. Authenticated users
+    without payment permission receive HTTP 403.
+    """
     def wrapper(request, *args, **kwargs):
         if not request.user.is_authenticated:
             from django.contrib.auth.views import redirect_to_login
@@ -31,6 +36,12 @@ def _require_payment_permission(view_func):
 
 @_require_payment_permission
 def dashboard(request):
+    """
+    Finance payment queue dashboard.
+
+    Lists payable objects from the default adapter, available gateways, and
+    gateways that support batch CSV export.
+    """
     service = PaymentService()
     adapter = service.adapter
     queue = service.get_queue()
@@ -57,6 +68,12 @@ def dashboard(request):
 @_require_payment_permission
 @require_POST
 def process_payment(request):
+    """
+    Process a single payment for one queue item via the selected gateway.
+
+    Expects ``object_id`` and ``gateway_id`` in POST data. Redirects back to
+    the dashboard with a success or error message.
+    """
     form = ProcessPaymentForm(request.POST)
     if not form.is_valid():
         messages.error(request, 'Invalid payment data.')
@@ -81,6 +98,12 @@ def process_payment(request):
 @_require_payment_permission
 @require_POST
 def batch_export(request):
+    """
+    Download a batch payment file (e.g. Wise Send-by-email CSV) for the full queue.
+
+    Expects ``gateway_id`` in POST. Returns a file download or redirects with
+    an error message on failure.
+    """
     gateway_id = request.POST.get('gateway_id')
     if not gateway_id:
         messages.error(request, 'No gateway specified for batch export.')
@@ -99,6 +122,11 @@ def batch_export(request):
 
 @_require_payment_permission
 def payment_status(request, pk):
+    """
+    JSON endpoint to refresh and return status for one ``PaymentRecord``.
+
+    Used by the dashboard to poll async gateway transfers (e.g. Wise API).
+    """
     record = get_object_or_404(PaymentRecord, pk=pk)
     service = PaymentService()
     record = service.refresh_status(record)
@@ -111,6 +139,11 @@ def payment_status(request, pk):
 
 @login_required
 def gateway_currencies(request, gateway_id):
+    """
+    JSON endpoint listing ISO currency codes supported by a gateway.
+
+    Returns an empty list when the gateway is unknown.
+    """
     gateway = get_gateway(gateway_id)
     if gateway is None:
         return JsonResponse({'currencies': []})

@@ -14,14 +14,17 @@ _adapters: dict[str, PayableAdapter] = {}
 
 
 def _load_class(path: str):
+    """Instantiate a plugin class from its dotted import path."""
     return import_string(path)()
 
 
 def register_gateway(gateway: PaymentGateway) -> None:
+    """Add a gateway instance to the in-memory registry keyed by ``gateway_id``."""
     _gateways[gateway.gateway_id] = gateway
 
 
 def register_adapter(adapter: PayableAdapter) -> None:
+    """Add a payable adapter instance to the in-memory registry keyed by ``adapter_id``."""
     _adapters[adapter.adapter_id] = adapter
 
 
@@ -46,26 +49,37 @@ def load_plugins() -> None:
 
 
 def get_gateway(gateway_id: str) -> PaymentGateway | None:
+    """Return the registered gateway for ``gateway_id``, or ``None`` if unknown."""
     load_plugins()
     return _gateways.get(gateway_id)
 
 
 def get_all_gateways() -> list[PaymentGateway]:
+    """Return every gateway loaded from ``settings.PAYMENTS_GATEWAYS``."""
     load_plugins()
     return list(_gateways.values())
 
 
 def get_adapter(adapter_id: str) -> PayableAdapter | None:
+    """Return the registered adapter for ``adapter_id``, or ``None`` if unknown."""
     load_plugins()
     return _adapters.get(adapter_id)
 
 
 def get_all_adapters() -> list[PayableAdapter]:
+    """Return every adapter loaded from ``settings.PAYMENTS_ADAPTERS``."""
     load_plugins()
     return list(_adapters.values())
 
 
 def get_default_adapter() -> PayableAdapter:
+    """
+    Return the adapter named by ``settings.PAYMENTS_DEFAULT_ADAPTER``.
+
+    If only one adapter is registered, that adapter is returned. Raises
+    ``RuntimeError`` when no adapters exist or when multiple are registered
+    without an explicit default.
+    """
     load_plugins()
     adapter_id = getattr(settings, 'PAYMENTS_DEFAULT_ADAPTER', None)
     if adapter_id and adapter_id in _adapters:
@@ -80,7 +94,11 @@ def get_default_adapter() -> PayableAdapter:
 
 
 def check_payment_permission(user) -> bool:
-    """Check if user can process payments via configured callback."""
+    """
+    Return whether ``user`` may access payment views and process reimbursements.
+
+    Delegates to the callable at ``settings.PAYMENTS_PERMISSION_CHECK``.
+    """
     callback_path = getattr(
         settings,
         'PAYMENTS_PERMISSION_CHECK',

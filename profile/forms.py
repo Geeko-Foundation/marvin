@@ -41,6 +41,7 @@ class ProfileForm(forms.ModelForm):
         }
 
     def __init__(self, *args, **kwargs):
+        """Pre-fill name and email from the linked ``User``; apply Tailwind input classes."""
         user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
         if user:
@@ -51,6 +52,7 @@ class ProfileForm(forms.ModelForm):
             self.fields[name].widget.attrs.update({'class': INPUT_CLASS})
 
     def save(self, user, commit=True):
+        """Persist profile fields and sync ``User`` first name, last name, and email."""
         profile = super().save(commit=False)
         user.first_name = self.cleaned_data['first_name']
         user.last_name = self.cleaned_data['last_name']
@@ -65,12 +67,14 @@ class OnboardingPersonalForm(ProfileForm):
     """First-time requestor profile — all address fields required."""
 
     def __init__(self, *args, **kwargs):
+        """Require address fields that are optional on the standard profile form."""
         super().__init__(*args, **kwargs)
         self.fields['address_line'].required = True
         self.fields['city'].required = True
         self.fields['country'].required = True
 
     def save(self, user, commit=True):
+        """Save personal details and record onboarding completion timestamp."""
         from django.utils import timezone
 
         profile = super().save(user, commit=False)
@@ -116,6 +120,7 @@ class WiseRecipientForm(forms.Form):
     )
 
     def __init__(self, *args, profile=None, **kwargs):
+        """Pre-select banking method and currency from an existing profile when present."""
         super().__init__(*args, **kwargs)
         if profile:
             if profile.banking_method:
@@ -127,6 +132,7 @@ class WiseRecipientForm(forms.Form):
         )
 
     def clean(self):
+        """Validate that required bank fields are present for the selected method."""
         cleaned = super().clean()
         method = cleaned.get('banking_method')
         if method == BankingMethod.IBAN:

@@ -1,3 +1,5 @@
+"""TSP views: auth, onboarding, events, travel requests, reports, and search."""
+
 import csv
 
 from django.conf import settings
@@ -63,6 +65,7 @@ from payments.models import PaymentRecord
 
 
 def _state_badge_class(state):
+    """Return a DaisyUI badge CSS class for a travel request state string."""
     mapping = {
         'draft': 'badge-ghost',
         'submitted': 'badge-info',
@@ -77,6 +80,7 @@ def _state_badge_class(state):
 
 
 def login_view(request):
+    """Authenticate with username/password; honor ``next`` redirect when present."""
     if request.user.is_authenticated:
         return redirect('dashboard')
 
@@ -96,17 +100,20 @@ def login_view(request):
 
 @login_required
 def logout_view(request):
+    """End the session and redirect to the login page."""
     logout(request)
     return redirect('login')
 
 
 def _mark_profile_completed(profile):
+    """Stamp ``profile_completed_at`` when required fields are first satisfied."""
     if profile.is_profile_complete() and not profile.profile_completed_at:
         profile.profile_completed_at = timezone.now()
         profile.save(update_fields=['profile_completed_at'])
 
 
 def _signup_redirect_for_user(user):
+    """Send an authenticated user to the correct signup wizard step or dashboard."""
     profile = get_profile(user)
     if not profile.is_requester:
         return redirect('dashboard')
@@ -118,6 +125,7 @@ def _signup_redirect_for_user(user):
 
 
 def signup_account(request):
+    """Sign-up wizard step 1: create a requestor account and log in."""
     if request.user.is_authenticated:
         return _signup_redirect_for_user(request.user)
 
@@ -140,6 +148,7 @@ def signup_account(request):
 @login_required
 @group_required(GROUP_REQUESTER)
 def signup_profile(request):
+    """Sign-up wizard step 2: collect required personal and address details."""
     profile = get_profile(request.user)
     if profile.is_wise_recipient_ready():
         return redirect('signup_complete')
@@ -174,6 +183,7 @@ def signup_profile(request):
 @login_required
 @group_required(GROUP_REQUESTER)
 def signup_banking(request):
+    """Sign-up wizard step 3: collect Wise banking details (session-only, not stored)."""
     profile = get_profile(request.user)
     recreate = request.GET.get('recreate') == '1' or request.POST.get('recreate') == '1'
     return_to = request.GET.get('return_to') or request.POST.get('return_to')
@@ -210,6 +220,7 @@ def signup_banking(request):
 @group_required(GROUP_REQUESTER)
 @require_POST
 def signup_skip_banking(request):
+    """Allow staff/superuser requestors to bypass Wise onboarding."""
     profile = get_profile(request.user)
     if not profile.can_skip_banking:
         raise PermissionDenied
@@ -224,6 +235,7 @@ def signup_skip_banking(request):
 @login_required
 @group_required(GROUP_REQUESTER)
 def signup_banking_progress(request):
+    """Render the step-by-step Wise verification progress UI."""
     profile = get_profile(request.user)
 
     if not profile.is_profile_complete():
@@ -245,6 +257,7 @@ def signup_banking_progress(request):
 @login_required
 @group_required(GROUP_REQUESTER)
 def signup_banking_step(request):
+    """JSON endpoint: run one Wise verification step in order via AJAX."""
     if request.method != 'POST':
         return JsonResponse({'error': 'POST required'}, status=405)
 
@@ -298,6 +311,7 @@ def signup_banking_step(request):
 @login_required
 @group_required(GROUP_REQUESTER)
 def signup_complete(request):
+    """Sign-up wizard step 4: confirmation when profile and banking are ready."""
     profile = get_profile(request.user)
     if profile.requires_wise_banking and not profile.is_wise_recipient_ready():
         if not profile.is_profile_complete():
@@ -309,6 +323,7 @@ def signup_complete(request):
 
 @login_required
 def dashboard(request):
+    """Role-specific home page for requestors, TSP committee, or finance."""
     profile = get_profile(request.user)
     context = {'profile': profile, 'state_badge': _state_badge_class}
 
@@ -389,17 +404,20 @@ def dashboard(request):
 @login_required
 @group_required(GROUP_REQUESTER)
 def onboarding_personal(request):
+    """Legacy URL alias for the profile onboarding step."""
     return redirect('signup_profile')
 
 
 @login_required
 @group_required(GROUP_REQUESTER)
 def onboarding_wise(request):
+    """Legacy URL alias for the Wise banking onboarding step."""
     return redirect('signup_banking')
 
 
 @login_required
 def event_list(request):
+    """List TSP events, optionally filtered by start/end date query params."""
     profile = get_profile(request.user)
     date_from = request.GET.get('from')
     date_to = request.GET.get('to')
@@ -420,6 +438,7 @@ def event_list(request):
 
 @login_required
 def event_create(request):
+    """Create a new TSP event."""
     profile = get_profile(request.user)
     if request.method == 'POST':
         form = EventForm(request.POST)
@@ -471,6 +490,7 @@ def check_wise_account(request):
 @login_required
 @group_required(GROUP_REQUESTER, GROUP_TSP)
 def request_create(request):
+    """Create a new travel request as draft with expense line items."""
     profile = get_profile(request.user)
     if request.method == 'POST':
         form = TravelRequestForm(request.POST)
@@ -502,6 +522,7 @@ def request_create(request):
 @login_required
 @staff_or_owner
 def request_detail(request, pk, travel_request, profile):
+    """Display request details, comments, documents, and state history."""
     comment_form = CommentForm()
     doc_form = DocumentUploadForm()
     return render(request, 'tsp/requests/detail.html', {
@@ -519,6 +540,7 @@ def request_detail(request, pk, travel_request, profile):
 
 @login_required
 def request_edit(request, pk):
+    """Edit a draft or submitted request owned by the current user."""
     travel_request = get_object_or_404(TravelRequest, pk=pk)
     profile = get_profile(request.user)
 
@@ -552,6 +574,7 @@ def request_edit(request, pk):
 @login_required
 @require_POST
 def request_submit(request, pk):
+    """Submit a draft request for TSP committee review."""
     travel_request = get_object_or_404(TravelRequest, pk=pk)
     if travel_request.user_id != request.user.id:
         raise PermissionDenied
@@ -567,6 +590,7 @@ def request_submit(request, pk):
 @group_required(GROUP_TSP)
 @require_POST
 def request_approve(request, pk):
+    """Approve a submitted request and set per-expense approved amounts."""
     travel_request = get_object_or_404(TravelRequest, pk=pk)
     form = ApprovalForm(request.POST)
 
@@ -593,6 +617,7 @@ def request_approve(request, pk):
 @group_required(GROUP_TSP)
 @require_POST
 def request_reject(request, pk):
+    """Reject a submitted request with required notes."""
     travel_request = get_object_or_404(TravelRequest, pk=pk)
     form = RejectForm(request.POST)
     if form.is_valid():
@@ -611,6 +636,7 @@ def request_reject(request, pk):
 @login_required
 @require_POST
 def request_cancel(request, pk):
+    """Cancel a request as the owner or TSP committee member."""
     travel_request = get_object_or_404(TravelRequest, pk=pk)
     profile = get_profile(request.user)
     is_owner = travel_request.user_id == request.user.id
@@ -629,6 +655,7 @@ def request_cancel(request, pk):
 
 @login_required
 def request_accept_page(request, pk):
+    """Show acceptance confirmation checkboxes for an approved request."""
     travel_request = get_object_or_404(TravelRequest, pk=pk)
     profile = get_profile(request.user)
 
@@ -649,6 +676,7 @@ def request_accept_page(request, pk):
 @login_required
 @require_POST
 def request_accept(request, pk):
+    """Accept an approved request after all confirmations are checked."""
     travel_request = get_object_or_404(TravelRequest, pk=pk)
     if travel_request.user_id != request.user.id:
         raise PermissionDenied
@@ -669,6 +697,7 @@ def request_accept(request, pk):
 @login_required
 @require_POST
 def request_submit_for_payment(request, pk):
+    """Move an accepted request to finance queue when all documents are uploaded."""
     travel_request = get_object_or_404(TravelRequest, pk=pk)
     if travel_request.user_id != request.user.id:
         raise PermissionDenied
@@ -690,6 +719,7 @@ def request_submit_for_payment(request, pk):
 @staff_or_owner
 @require_POST
 def request_comment(request, pk, travel_request, profile):
+    """Add a comment and notify the other party via push notification."""
     form = CommentForm(request.POST)
     if form.is_valid():
         comment = form.save(commit=False)
@@ -706,6 +736,7 @@ def request_comment(request, pk, travel_request, profile):
 @staff_or_owner
 @require_POST
 def request_document_upload(request, pk, travel_request, profile):
+    """Upload a receipt, invoice, or signed form to a travel request."""
     form = DocumentUploadForm(request.POST, request.FILES)
     if form.is_valid() and request.FILES.get('file'):
         uploaded = request.FILES['file']
@@ -725,6 +756,7 @@ def request_document_upload(request, pk, travel_request, profile):
 @login_required
 @staff_or_owner
 def request_form_printable(request, pk, travel_request, profile):
+    """Render a printable signed-form view for the request."""
     return render(request, 'tsp/requests/signed_form.html', {
         'travel_request': travel_request,
         'profile': profile,
@@ -733,6 +765,7 @@ def request_form_printable(request, pk, travel_request, profile):
 
 @login_required
 def document_download(request, doc_id):
+    """Download an attached document if the user owns the request or is committee."""
     doc = get_object_or_404(Document, pk=doc_id)
     travel_request = doc.request
     profile = get_profile(request.user)
@@ -751,6 +784,7 @@ def document_download(request, doc_id):
 @login_required
 @group_required(GROUP_TSP, GROUP_FINANCE)
 def reports(request):
+    """Filterable TSP report with optional CSV export."""
     profile = get_profile(request.user)
     form = ReportFilterForm(request.GET or None)
     qs = TravelRequest.objects.select_related('user', 'event').prefetch_related('expenses', 'payments')
@@ -813,6 +847,7 @@ def reports(request):
 
 @login_required
 def search(request):
+    """Search events by name/location; staff may also search users."""
     form = SearchForm(request.GET or None)
     query = ''
     event_table = None

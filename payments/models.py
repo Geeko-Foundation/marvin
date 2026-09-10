@@ -40,19 +40,23 @@ class PaymentRecord(AuditModel):
         ]
 
     def __str__(self):
+        """Short label for admin lists and debugging."""
         return f'Payment {self.reference} via {self.gateway_id}'
 
     @property
     def method_label(self):
+        """Human-readable gateway name for templates (falls back to ``gateway_id``)."""
         from payments.registry import get_gateway
 
         gateway = get_gateway(self.gateway_id)
         return gateway.label if gateway else self.gateway_id
 
     def get_status_display(self):
+        """Format ``status`` for display (underscores to spaces, title case)."""
         return self.status.replace('_', ' ').title()
 
     def save(self, *args, **kwargs):
+        """Default ``created_by`` from ``processed_by`` when not already set."""
         if self.processed_by_id and not self.created_by_id:
             self.created_by = self.processed_by
         super().save(*args, **kwargs)

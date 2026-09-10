@@ -34,6 +34,7 @@ GROUP_PERMISSIONS = {
 
 
 def _profile_permissions() -> dict[str, Permission]:
+    """Load ``UserProfile`` permission objects keyed by codename."""
     from profile.models import UserProfile
 
     ct = ContentType.objects.get_for_model(UserProfile)
@@ -58,10 +59,12 @@ def ensure_groups() -> None:
 
 
 def user_in_group(user, group_name: str) -> bool:
+    """Return True when ``user`` belongs to the named Marvin group."""
     return user.is_authenticated and user.groups.filter(name=group_name).exists()
 
 
 def user_in_any_group(user, *group_names: str) -> bool:
+    """Return True when ``user`` belongs to at least one of the given groups."""
     if not user.is_authenticated:
         return False
     return user.groups.filter(name__in=group_names).exists()

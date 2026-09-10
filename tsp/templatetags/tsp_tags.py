@@ -1,3 +1,5 @@
+"""Template filters for TSP UI styling."""
+
 from django import template
 
 register = template.Library()
@@ -16,4 +18,5 @@ BADGE_MAP = {
 
 @register.filter
 def state_badge(state):
+    """Return a DaisyUI badge CSS class for a travel request ``state`` value."""
     return BADGE_MAP.get(state, 'badge-ghost')

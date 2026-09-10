@@ -1,3 +1,5 @@
+"""django-tables2 tables for the global search page."""
+
 from django.contrib.auth.models import User
 from django.urls import reverse
 from django.utils.html import format_html, mark_safe
@@ -7,6 +9,8 @@ from tsp.models import Event
 
 
 class EventTable(tables.Table):
+    """Search results table for events with status badges and apply links."""
+
     name = tables.Column(verbose_name='Event')
     location = tables.Column()
     start_date = tables.DateColumn(format='Y-m-d')
@@ -26,6 +30,7 @@ class EventTable(tables.Table):
         order_by = '-start_date'
 
     def render_status(self, record):
+        """Render Past / Open / Closed badge based on dates and ``accepting_requests``."""
         if record.is_past:
             return mark_safe('<span class="badge badge-neutral badge-sm">Past</span>')
         if record.accepting_requests:
@@ -33,6 +38,7 @@ class EventTable(tables.Table):
         return mark_safe('<span class="badge badge-warning badge-sm">Closed</span>')
 
     def render_actions(self, record):
+        """Link to create a travel request pre-filled with this event, when open."""
         if record.is_past or not record.accepting_requests:
             return '—'
         url = reverse('request_create') + f'?event={record.pk}'
@@ -40,6 +46,8 @@ class EventTable(tables.Table):
 
 
 class UserTable(tables.Table):
+    """Staff-only search results table for Django users and profiles."""
+
     username = tables.Column(linkify={
         'viewname': 'admin:auth_user_change',
         'args': [tables.A('pk')],
@@ -60,17 +68,21 @@ class UserTable(tables.Table):
         order_by = 'username'
 
     def render_full_name(self, record):
+        """Display ``User.get_full_name()`` or a dash when empty."""
         return record.get_full_name() or '—'
 
     def render_groups(self, record):
+        """Comma-separated Marvin group names."""
         names = [g.name for g in record.groups.all()]
         return ', '.join(names) if names else '—'
 
     def render_country(self, record):
+        """Country from the linked ``UserProfile``, if set."""
         profile = getattr(record, 'profile', None)
         return profile.country if profile and profile.country else '—'
 
     def render_staff(self, record):
+        """Badge for superuser or staff status."""
         if record.is_superuser:
             return mark_safe('<span class="badge badge-primary badge-sm">Superuser</span>')
         if record.is_staff:

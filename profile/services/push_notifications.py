@@ -25,6 +25,7 @@ logger = logging.getLogger('marvin.webpush')
 
 
 def absolute_url(path: str) -> str:
+    """Build a full URL from a path using ``settings.WEBPUSH_APP_BASE_URL``."""
     base = getattr(settings, 'WEBPUSH_APP_BASE_URL', '').rstrip('/')
     if not path.startswith('/'):
         path = f'/{path}'
@@ -32,6 +33,7 @@ def absolute_url(path: str) -> str:
 
 
 def clear_push_subscriptions(user: User) -> None:
+    """Remove all browser push endpoints for ``user`` (e.g. when they opt out)."""
     from webpush.models import PushInformation
 
     PushInformation.objects.filter(user=user).delete()
@@ -45,6 +47,11 @@ def send_push_to_user(
     url: str | None = None,
     ttl: int = 86400,
 ) -> None:
+    """
+    Send one web push to ``user`` when notifications are enabled and subscribed.
+
+    No-op for inactive users, disabled preferences, or missing subscriptions.
+    """
     if not user or not user.is_active:
         return
     try:
@@ -76,6 +83,7 @@ def send_push_to_group(
     exclude_user: User | None = None,
     ttl: int = 86400,
 ) -> None:
+    """Send the same push payload to every member of a Django auth group."""
     from django.contrib.auth.models import Group
 
     try:
@@ -92,10 +100,12 @@ def send_push_to_group(
 
 
 def _request_label(travel_request: TravelRequest) -> str:
+    """Short human-readable label for push notification body text."""
     return f'#{travel_request.pk} — {travel_request.event.name}'
 
 
 def _request_url(travel_request: TravelRequest) -> str:
+    """Absolute URL to the travel request detail page for click-through."""
     path = reverse('request_detail', kwargs={'pk': travel_request.pk})
     return absolute_url(path)
 
@@ -107,6 +117,12 @@ def notify_request_state_change(
     actor: User,
     notes: str = '',
 ) -> None:
+    """
+    Notify the appropriate party when a travel request changes state.
+
+    Called from the TSP state machine; routes to requester or committee/finance
+    groups depending on ``to_state``.
+    """
     label = _request_label(travel_request)
     url = _request_url(travel_request)
     requester = travel_request.user
@@ -175,6 +191,7 @@ def notify_request_state_change(
 
 
 def notify_request_comment(travel_request: TravelRequest, actor: User) -> None:
+    """Notify the other party when a comment is added to a travel request."""
     label = _request_label(travel_request)
     url = _request_url(travel_request)
 

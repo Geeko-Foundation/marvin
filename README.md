@@ -94,10 +94,9 @@ uv run python manage.py migrate
 
 ```bash
 uv run python manage.py seed_data
-uv run python manage.py set_demo_passwords
 ```
 
-`seed_data` loads users, groups, profiles, and events from `tsp/fixtures/initial.json`. It only runs on an empty database. `set_demo_passwords` sets every user's password to **`demo`**.
+`seed_data` loads users, groups, profiles, and events from `tsp/fixtures/initial.json` and sets every user's password to **`demo`**. On a non-empty database it only resets passwords; pass **`--force`** to flush and reload demo data from scratch.
 
 Alternatively, create a superuser manually:
 
@@ -206,8 +205,8 @@ Planned: missing-documents reminders, Wise verification failures, new events ope
 
 ```bash
 python manage.py migrate              # Apply database migrations
-python manage.py seed_data            # Load demo fixture (empty DB only)
-python manage.py set_demo_passwords   # Reset all passwords to "demo"
+python manage.py seed_data            # Load demo fixture + set password "demo"
+python manage.py seed_data --force    # Flush DB and reload demo data
 python manage.py check                # Validate project configuration
 python manage.py runserver            # Start dev server
 ```

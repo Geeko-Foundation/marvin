@@ -204,8 +204,7 @@ tsp/                             # Travel Support Program core app
 ├── services/
 │   └── state_machine.py         # Request state transitions + push hooks
 ├── management/commands/
-│   ├── seed_data.py             # Load fixture + ensure groups
-│   └── set_demo_passwords.py    # Reset all passwords to "demo"
+│   └── seed_data.py             # Load fixture, ensure groups, set password "demo"
 └── migrations/
 payments/                        # Pluggable payments app
 ├── models.py                    # PaymentRecord (GenericForeignKey)
@@ -234,8 +233,7 @@ Development:
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 python manage.py migrate
-python manage.py seed_data        # first run only
-python manage.py set_demo_passwords
+python manage.py seed_data        # load demo data; use --force to re-init
 python manage.py runserver
 ```
 
@@ -338,7 +336,6 @@ Run once on an empty database:
 
 ```bash
 python manage.py seed_data
-python manage.py set_demo_passwords
 ```
 
 Fixture: `tsp/fixtures/initial.json` (users reference `profile.userprofile`).
@@ -402,7 +399,7 @@ Implemented in `tsp/services/state_machine.py`. Each transition creates a `State
 **App login (`/login/`):**
 - Standard username/password form (`LoginForm`)
 - Session-based via Django auth
-- Demo users use password `demo` after `set_demo_passwords`
+- Demo users use password `demo` after `seed_data`
 
 **Self-service sign-up (`/signup/`):**
 - Step 1: Account (username, email, password)
@@ -860,8 +857,7 @@ Dev keys are included in settings; production must use environment variables.
 | Command | Description |
 |---|---|
 | `python manage.py migrate` | Apply database migrations |
-| `python manage.py seed_data` | Load demo users, groups, profiles, and events from fixture |
-| `python manage.py set_demo_passwords` | Set all user passwords to `demo` |
+| `python manage.py seed_data` | Load demo fixture and set all user passwords to `demo` (`--force` to flush and reload) |
 | `python manage.py createsuperuser` | Create additional admin users |
 | `python manage.py check` | Validate project configuration |
 

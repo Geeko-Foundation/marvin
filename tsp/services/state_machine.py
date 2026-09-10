@@ -1,3 +1,5 @@
+"""Travel request lifecycle transitions and audit history."""
+
 from django.utils import timezone
 
 from tsp.models import RequestState, StateHistory, TravelRequest
@@ -19,16 +21,23 @@ TRANSITIONS = {
 
 
 class StateTransitionError(Exception):
-    pass
+    """Raised when a requested state change is not allowed by ``TRANSITIONS``."""
 
 
 def can_transition(from_state, to_state):
+    """Return True when ``to_state`` is a valid next state from ``from_state``."""
     if from_state in TERMINAL_STATES:
         return False
     return to_state in TRANSITIONS.get(from_state, set())
 
 
 def transition_request(travel_request, to_state, user, notes=''):
+    """
+    Move a travel request to ``to_state``, record history, and notify via push.
+
+    Sets ``approved_at`` / ``accepted_at`` timestamps when entering approved or
+    accepted states. Raises ``StateTransitionError`` on invalid transitions.
+    """
     from_state = travel_request.state
     if not can_transition(from_state, to_state):
         raise StateTransitionError(
@@ -61,6 +70,7 @@ def transition_request(travel_request, to_state, user, notes=''):
 
 
 def create_request_with_history(travel_request, user):
+    """Record the initial draft state when a new travel request is created."""
     StateHistory.objects.create(
         request=travel_request,
         from_state=None,

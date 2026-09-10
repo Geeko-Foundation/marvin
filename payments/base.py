@@ -68,6 +68,7 @@ class PaymentGateway(ABC):
 
     @property
     def supports_batch_export(self) -> bool:
+        """True when ``export_batch`` is implemented for file-based payouts."""
         return False
 
 

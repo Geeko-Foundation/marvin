@@ -24,6 +24,12 @@ ONBOARDING_URL_NAMES = {
 
 
 def _is_exempt(request) -> bool:
+    """
+    Return True when onboarding enforcement should not run for this request.
+
+    Exempt paths include admin, static, auth, signup wizard, payments, and
+    unauthenticated requests.
+    """
     if request.path_info.startswith('/admin/'):
         return True
 
@@ -51,10 +57,13 @@ def _is_exempt(request) -> bool:
 
 
 class RequesterOnboardingMiddleware:
+    """Redirect incomplete requestors to their current onboarding step."""
+
     def __init__(self, get_response):
         self.get_response = get_response
 
     def __call__(self, request):
+        """Enforce onboarding before passing the request to downstream views."""
         if not _is_exempt(request):
             profile = get_profile(request.user)
             if profile.is_requester:

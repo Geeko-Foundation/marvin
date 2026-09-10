@@ -1,3 +1,5 @@
+"""View decorators for TSP authentication and authorization."""
+
 from functools import partial, wraps
 
 from django.conf import settings
@@ -13,6 +15,11 @@ login_required = partial(django_login_required, login_url=settings.APP_LOGIN_URL
 
 
 def group_required(*group_names):
+    """
+    Require login and membership in at least one of the given Marvin groups.
+
+    Usage: ``@group_required(GROUP_TSP, GROUP_FINANCE)``
+    """
     def decorator(view_func):
         @login_required
         @wraps(view_func)
@@ -25,6 +32,11 @@ def group_required(*group_names):
 
 
 def staff_or_owner(view_func):
+    """
+    Require login and ownership of the travel request or committee membership.
+
+    Injects ``travel_request`` and ``profile`` into the wrapped view kwargs.
+    """
     @login_required
     @wraps(view_func)
     def wrapper(request, pk, *args, **kwargs):

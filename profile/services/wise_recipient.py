@@ -10,6 +10,7 @@ RETURN_TO_SESSION_KEY = 'signup_return_to'
 
 
 def recipient_type_for_method(method: str | None) -> str:
+    """Map a ``BankingMethod`` value to the Wise account ``type`` string."""
     if method == BankingMethod.US_BANK:
         return 'aba'
     if method == BankingMethod.INDIA_IFSC:
@@ -18,6 +19,11 @@ def recipient_type_for_method(method: str | None) -> str:
 
 
 def bank_details_kwargs_from_banking(banking: dict) -> dict:
+    """
+    Extract Wise API keyword arguments from onboarding form data.
+
+    Only the fields required for the selected banking method are included.
+    """
     method = banking.get('banking_method')
     if method == BankingMethod.IBAN:
         details = {}
@@ -40,6 +46,11 @@ def bank_details_kwargs_from_banking(banking: dict) -> dict:
 
 
 def resolve_country(profile: UserProfile, banking: dict) -> str | None:
+    """
+    Determine ISO country code for Wise payee creation.
+
+    Prefers a two-letter ``profile.country``, then the IBAN prefix.
+    """
     country = (profile.country or '').strip()
     if len(country) == 2:
         return country.upper()
@@ -50,6 +61,7 @@ def resolve_country(profile: UserProfile, banking: dict) -> str | None:
 
 
 def banking_session_payload(cleaned_data: dict) -> dict:
+    """Serialize validated ``WiseRecipientForm`` data for session storage."""
     return {
         'banking_method': cleaned_data.get('banking_method'),
         'banking_currency': cleaned_data.get('banking_currency'),
@@ -62,6 +74,7 @@ def banking_session_payload(cleaned_data: dict) -> dict:
 
 
 def mask_account_value(value: str) -> str:
+    """Mask an account or IBAN for safe display (first/last four digits visible)."""
     cleaned = (value or '').replace(' ', '')
     if len(cleaned) <= 8:
         return cleaned or '—'
@@ -69,6 +82,7 @@ def mask_account_value(value: str) -> str:
 
 
 def format_payee_summary(payee: dict, profile: UserProfile) -> str:
+    """Build a masked, human-readable summary from a Wise payee API response."""
     currency = payee.get('currency') or profile.banking_currency or 'EUR'
     method = profile.banking_method or payee.get('type', 'iban')
     details = payee.get('details') or {}
@@ -88,16 +102,23 @@ def format_payee_summary(payee: dict, profile: UserProfile) -> str:
 
 
 def clear_stale_wise_recipient(profile: UserProfile) -> None:
+    """Remove Wise account linkage when the remote recipient no longer exists."""
     profile.wise_account_id = None
     profile.wise_recipient_verified_at = None
     profile.save(update_fields=['wise_account_id', 'wise_recipient_verified_at'])
 
 
 def _account_missing_error(exc: WiseApiError) -> bool:
+    """True when Wise indicates the stored account ID is gone or inaccessible."""
     return exc.status_code in (403, 404)
 
 
 def recreate_wise_recipient(profile: UserProfile, banking: dict) -> dict:
+    """
+    Re-run full Wise verification and return a status dict from ``check_wise_recipient``.
+
+    On failure, returns ``ready=False`` with an error message instead of raising.
+    """
     from profile.services.wise_verification import WiseVerificationError, setup_wise_recipient
 
     try:
@@ -126,6 +147,13 @@ def check_wise_recipient(
     banking: dict | None = None,
     auto_recreate: bool = False,
 ) -> dict:
+    """
+    Assess whether the profile's Wise recipient is ready for payouts.
+
+    Returns a dict with ``ready``, ``message``, and optional ``summary``,
+    ``account_id``, and ``needs_recreate`` keys. When ``auto_recreate`` is
+    True and ``banking`` is supplied, attempts to rebuild a missing account.
+    """
     if not profile.wise_account_id:
         if auto_recreate and banking:
             return recreate_wise_recipient(profile, banking)

@@ -23,6 +23,8 @@ INPUT_CLASS = 'input input-bordered w-full'
 
 
 class LoginForm(AuthenticationForm):
+    """Username/password login with Tailwind-styled fields."""
+
     username = forms.CharField(
         widget=forms.TextInput(attrs={
             'class': INPUT_CLASS,
@@ -67,18 +69,21 @@ class SignupAccountForm(forms.Form):
     )
 
     def clean_username(self):
+        """Reject usernames that already exist (case-insensitive)."""
         username = self.cleaned_data['username']
         if User.objects.filter(username__iexact=username).exists():
             raise forms.ValidationError('This username is already taken.')
         return username
 
     def clean_email(self):
+        """Reject emails already registered to another account."""
         email = self.cleaned_data['email']
         if User.objects.filter(email__iexact=email).exists():
             raise forms.ValidationError('An account with this email already exists.')
         return email
 
     def clean(self):
+        """Ensure password confirmation matches."""
         cleaned = super().clean()
         p1 = cleaned.get('password1')
         p2 = cleaned.get('password2')
@@ -87,6 +92,7 @@ class SignupAccountForm(forms.Form):
         return cleaned
 
     def save(self):
+        """Create ``User``, ``UserProfile``, and assign the Requester group."""
         from profile.groups import GROUP_REQUESTER, assign_user_to_group
 
         user = User.objects.create_user(
@@ -102,6 +108,8 @@ class SignupAccountForm(forms.Form):
 
 
 class EventForm(forms.ModelForm):
+    """Create or edit a TSP event."""
+
     class Meta:
         model = Event
         fields = ['name', 'location', 'start_date', 'end_date', 'accepting_requests']
@@ -115,6 +123,8 @@ class EventForm(forms.ModelForm):
 
 
 class TravelRequestForm(forms.ModelForm):
+    """Core travel request fields (event, talk info, description)."""
+
     class Meta:
         model = TravelRequest
         fields = ['event', 'talk_title', 'talk_url', 'description']
@@ -127,6 +137,8 @@ class TravelRequestForm(forms.ModelForm):
 
 
 class ExpenseForm(forms.ModelForm):
+    """Single expense line item on a travel request."""
+
     class Meta:
         model = Expense
         fields = ['category', 'description', 'estimated_amount', 'estimated_currency']
@@ -153,6 +165,8 @@ ExpenseFormSet = forms.inlineformset_factory(
 
 
 class ApprovalForm(forms.Form):
+    """Optional committee notes when approving a request."""
+
     notes = forms.CharField(
         required=False,
         widget=forms.Textarea(attrs={'class': 'textarea textarea-bordered w-full', 'rows': 3}),
@@ -160,6 +174,8 @@ class ApprovalForm(forms.Form):
 
 
 class RejectForm(forms.Form):
+    """Required rejection notes from the TSP committee."""
+
     notes = forms.CharField(
         required=True,
         widget=forms.Textarea(attrs={'class': 'textarea textarea-bordered w-full', 'rows': 3}),
@@ -167,6 +183,8 @@ class RejectForm(forms.Form):
 
 
 class AcceptForm(forms.Form):
+    """Required confirmations before a requestor accepts an approved request."""
+
     _checkbox_attrs = {'class': 'checkbox checkbox-warning'}
 
     confirm_attendance = forms.BooleanField(
@@ -192,6 +210,8 @@ class AcceptForm(forms.Form):
 
 
 class CommentForm(forms.ModelForm):
+    """Add a comment to a travel request thread."""
+
     class Meta:
         model = Comment
         fields = ['body']
@@ -205,6 +225,8 @@ class CommentForm(forms.ModelForm):
 
 
 class DocumentUploadForm(forms.ModelForm):
+    """Upload a receipt, invoice, or signed form attachment."""
+
     class Meta:
         model = Document
         fields = ['kind', 'file']
@@ -215,6 +237,8 @@ class DocumentUploadForm(forms.ModelForm):
 
 
 class ReportFilterForm(forms.Form):
+    """Filter TSP reports by event date range and request status."""
+
     date_from = forms.DateField(
         required=False,
         widget=forms.DateInput(attrs={'class': 'input input-bordered', 'type': 'date'}),
@@ -238,6 +262,8 @@ class ReportFilterForm(forms.Form):
 
 
 class SearchForm(forms.Form):
+    """Global search query for events and (staff-only) users."""
+
     q = forms.CharField(
         required=False,
         max_length=200,

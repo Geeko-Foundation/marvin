@@ -31,12 +31,20 @@ SESSION_KEY = 'wise_verification_state'
 
 
 class WiseVerificationError(Exception):
+    """Raised when a single verification step fails; carries the failing step id."""
+
     def __init__(self, step: str, message: str):
         super().__init__(message)
         self.step = step
 
 
 def init_verification_state(banking: dict | None = None) -> dict:
+    """
+    Build empty session state for a multi-step Wise onboarding flow.
+
+    ``banking`` holds form data (IBAN, etc.) only until ``finalize``; it is
+    never written to the database as raw account numbers.
+    """
     return {
         'account_id': None,
         'quote_id': None,
@@ -47,6 +55,12 @@ def init_verification_state(banking: dict | None = None) -> dict:
 
 
 def run_verification_step(profile: UserProfile, state: dict, step_id: str) -> dict:
+    """
+    Execute one Wise verification step and mutate ``state`` in place.
+
+    Returns step-specific result metadata. Raises ``WiseVerificationError``
+    on API or validation failure. Appends ``step_id`` to ``state['steps_done']``.
+    """
     if step_id not in [s[0] for s in VERIFICATION_STEPS]:
         raise WiseVerificationError(step_id, f'Unknown step: {step_id}')
 
@@ -177,6 +191,11 @@ def run_verification_step(profile: UserProfile, state: dict, step_id: str) -> di
 
 
 def setup_wise_recipient(profile: UserProfile, banking: dict) -> dict:
+    """
+    Run all verification steps sequentially (non-interactive onboarding).
+
+    Used when the full flow can complete in one request rather than step-by-step UI.
+    """
     state = init_verification_state(banking)
     last_result = {}
     for step_id, _label in VERIFICATION_STEPS:

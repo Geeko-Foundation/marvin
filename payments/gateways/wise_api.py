@@ -45,6 +45,7 @@ class WiseApiError(Exception):
     """Raised when the Wise API returns a non-success response."""
 
     def __init__(self, message: str, status_code: int = 0, payload: dict | None = None):
+        """Attach HTTP status and parsed JSON body for callers and logging."""
         super().__init__(message)
         self.status_code = status_code
         self.payload = payload or {}
@@ -89,9 +90,11 @@ class WiseApiClient:
 
     @property
     def mode_label(self) -> str:
+        """Human-readable ``sandbox`` or ``live`` for log messages."""
         return 'sandbox' if self.sandbox else 'live'
 
     def _url(self, path: str) -> str:
+        """Join the configured base URL with an API path."""
         return f'{self.base_url}{path}'
 
     def _request(
@@ -103,6 +106,12 @@ class WiseApiClient:
         extra_headers: dict[str, str] | None = None,
         allow_error: bool = False,
     ) -> dict | list:
+        """
+        Issue a JSON request and parse the response.
+
+        Raises ``WiseApiError`` on HTTP 4xx/5xx unless ``allow_error`` is True.
+        Logs every request via ``log_wise_request``.
+        """
         headers = dict(extra_headers or {})
         response = self._session.request(
             method,
@@ -159,7 +168,11 @@ class WiseApiClient:
         return self._resolved_profile_id
 
     def list_balances(self, types: str = 'STANDARD') -> list[dict]:
-        """GET /v4/profiles/{profileId}/balances"""
+        """
+        GET /v4/profiles/{profileId}/balances — list balance accounts for the profile.
+
+        ``types`` filters balance kinds (default ``STANDARD``).
+        """
         profile_id = self.resolve_profile_id()
         response = self._session.get(
             self._url(f'/v4/profiles/{profile_id}/balances'),
@@ -252,6 +265,7 @@ class WiseApiClient:
 
     @staticmethod
     def _country_from_iban(iban: str | None) -> str | None:
+        """Extract ISO country code from the first two IBAN characters."""
         if not iban or len(iban.replace(' ', '')) < 2:
             return None
         return iban.replace(' ', '')[:2].upper()

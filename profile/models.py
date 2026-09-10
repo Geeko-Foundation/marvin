@@ -5,12 +5,16 @@ from marvin.audit import AuditModel
 
 
 class BankingMethod(models.TextChoices):
+    """Supported payout rail identifiers stored on ``UserProfile``."""
+
     IBAN = 'iban', 'International (IBAN)'
     US_BANK = 'us_bank', 'United States'
     INDIA_IFSC = 'india_ifsc', 'India (IFSC)'
 
 
 class UserProfile(AuditModel):
+    """Extended user record: contact info, role flags, Wise recipient, and push prefs."""
+
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -49,15 +53,18 @@ class UserProfile(AuditModel):
         ]
 
     def __str__(self):
+        """Short label for admin lists and debugging."""
         return f'{self.user.get_full_name() or self.user.username} ({self.role_label})'
 
     @property
     def role_label(self):
+        """Comma-separated Django group names, or ``User`` when unassigned."""
         names = list(self.user.groups.order_by('name').values_list('name', flat=True))
         return ', '.join(names) if names else 'User'
 
     @property
     def group_badge_class(self):
+        """Tailwind/DaisyUI badge CSS class for the user's primary committee role."""
         if self.is_tsp:
             return 'badge-primary'
         if self.is_finance:
@@ -66,34 +73,41 @@ class UserProfile(AuditModel):
 
     @property
     def is_requester(self) -> bool:
+        """True when the user belongs to the Requester group."""
         from profile.groups import GROUP_REQUESTER, user_in_group
         return user_in_group(self.user, GROUP_REQUESTER)
 
     @property
     def is_tsp(self) -> bool:
+        """True when the user belongs to the TSP Committee group."""
         from profile.groups import GROUP_TSP, user_in_group
         return user_in_group(self.user, GROUP_TSP)
 
     @property
     def is_finance(self) -> bool:
+        """True when the user belongs to the Finance group."""
         from profile.groups import GROUP_FINANCE, user_in_group
         return user_in_group(self.user, GROUP_FINANCE)
 
     @property
     def is_committee(self) -> bool:
+        """True when the user is TSP or Finance staff (not a plain requester)."""
         return self.is_tsp or self.is_finance
 
     @property
     def requires_wise_banking(self) -> bool:
+        """Requestors (except staff/superuser) must complete Wise recipient verification."""
         if not self.is_requester:
             return False
         return not (self.user.is_staff or self.user.is_superuser)
 
     @property
     def can_skip_banking(self) -> bool:
+        """Staff and superuser requestors may bypass Wise onboarding."""
         return self.is_requester and (self.user.is_staff or self.user.is_superuser)
 
     def is_profile_complete(self) -> bool:
+        """True when required personal and address fields are filled."""
         user = self.user
         required = [
             user.first_name,
@@ -105,9 +119,11 @@ class UserProfile(AuditModel):
         return all(required)
 
     def is_wise_recipient_ready(self) -> bool:
+        """True when a verified Wise account ID is linked on the profile."""
         return bool(self.wise_account_id and self.wise_recipient_verified_at)
 
     def needs_onboarding(self) -> bool:
+        """True when a requestor still owes profile or Wise banking setup."""
         if not self.is_requester:
             return False
         if not self.is_profile_complete():
@@ -117,6 +133,11 @@ class UserProfile(AuditModel):
         return False
 
     def onboarding_step(self) -> str | None:
+        """
+        Return the next onboarding step key, or ``None`` when complete.
+
+        Steps: ``signup_profile`` → ``signup_banking``.
+        """
         if not self.is_requester:
             return None
         if not self.is_profile_complete():
@@ -126,6 +147,7 @@ class UserProfile(AuditModel):
         return None
 
     def banking_summary(self) -> str:
+        """Human-readable Wise recipient summary for templates and status checks."""
         if not self.wise_account_id:
             return 'Not configured'
         method_label = self.get_banking_method_display() if self.banking_method else 'Bank'

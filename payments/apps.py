@@ -7,5 +7,6 @@ class PaymentsConfig(AppConfig):
     verbose_name = 'Payments'
 
     def ready(self):
+        """Eager-load gateway and adapter plugins from Django settings."""
         from payments.registry import load_plugins
         load_plugins()

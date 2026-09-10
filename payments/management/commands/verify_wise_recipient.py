@@ -9,6 +9,7 @@ class Command(BaseCommand):
     help = 'Run the Wise recipient verification flow (create payee → bank details → test → reverse)'
 
     def add_arguments(self, parser):
+        """Define CLI flags for recipient identity, bank details, and test amount."""
         parser.add_argument('--name', default='Douglas DeMaio', help='Recipient full name')
         parser.add_argument('--email', default='douglas@example.com', help='Recipient email')
         parser.add_argument('--currency', default='EUR', help='Target currency')
@@ -20,6 +21,11 @@ class Command(BaseCommand):
         parser.add_argument('--post-code', default='10115', help='Recipient post code')
 
     def handle(self, *args, **options):
+        """
+        Run create payee → test transfer → reverse against the Wise sandbox or live API.
+
+        Prints account ID, verification status, and transfer/reversal outcomes.
+        """
         client = get_wise_client()
 
         self.stdout.write(
