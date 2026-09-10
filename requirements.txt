@@ -1,4 +1,5 @@
 django>=6.0,<7.0
 django-tables2>=2.7,<3.0
 django-webpush>=0.3.6,<0.4
+python-dotenv>=1.0,<2.0
 requests>=2.31,<3.0

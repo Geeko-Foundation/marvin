@@ -50,31 +50,51 @@ These fields are defined once in `marvin/audit.py`; concrete models inherit them
 
 ## Quick start
 
-### 1. Clone and create a virtual environment
+### 1. Clone the repository
 
 ```bash
 cd marvin
-python3 -m venv .venv
-source .venv/bin/activate   # Windows: .venv\Scripts\activate
 ```
 
 ### 2. Install dependencies
 
+**Recommended — [uv](https://github.com/astral-sh/uv):**
+
 ```bash
+uv sync
+```
+
+This reads `pyproject.toml` and installs the exact versions pinned in `uv.lock` (Django, django-tables2, django-webpush, python-dotenv, requests, and their transitive deps).
+
+**Alternative — pip:**
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-### 3. Run migrations
+Install **all** dependencies before running the server. Missing packages such as `django-tables2` or `django-webpush` cause startup failures.
+
+### 3. Configure environment (optional)
 
 ```bash
-python manage.py migrate
+cp .env.example .env
+# edit .env for production; dev defaults in settings.py work without this
 ```
 
-### 4. Load demo data
+### 4. Run migrations
 
 ```bash
-python manage.py seed_data
-python manage.py set_demo_passwords
+uv run python manage.py migrate
+# or, with an activated venv: python manage.py migrate
+```
+
+### 5. Load demo data
+
+```bash
+uv run python manage.py seed_data
+uv run python manage.py set_demo_passwords
 ```
 
 `seed_data` loads users, groups, profiles, and events from `tsp/fixtures/initial.json`. It only runs on an empty database. `set_demo_passwords` sets every user's password to **`demo`**.
@@ -85,10 +105,10 @@ Alternatively, create a superuser manually:
 python manage.py createsuperuser
 ```
 
-### 5. Start the development server
+### 6. Start the development server
 
 ```bash
-python manage.py runserver
+uv run python manage.py runserver
 ```
 
 Open [http://127.0.0.1:8000/login/](http://127.0.0.1:8000/login/) in your browser.
@@ -192,9 +212,30 @@ python manage.py check                # Validate project configuration
 python manage.py runserver            # Start dev server
 ```
 
+## Environment variables
+
+Configuration uses [python-dotenv](https://github.com/theskumar/python-dotenv). Sensitive values belong in a `.env` file at the project root (gitignored):
+
+```bash
+cp .env.example .env
+# edit .env with production secrets
+```
+
+If `.env` is missing, `marvin/settings.py` falls back to **dev/test defaults** (insecure `SECRET_KEY`, Wise sandbox token, dev VAPID keys). Never deploy without a proper `.env`.
+
+| Variable | Purpose |
+|----------|---------|
+| `DJANGO_SECRET_KEY` | Django signing key |
+| `DEBUG` | `true` / `false` |
+| `ALLOWED_HOSTS` | Comma-separated hostnames |
+| `WISE_API_TOKEN` | Wise API bearer token |
+| `WISE_API_SANDBOX` | `true` for sandbox, `false` for live |
+| `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` | Web push keys |
+| `WEBPUSH_APP_BASE_URL` | Public site URL for notification links |
+
 ## Development notes
 
-- **Database:** SQLite file at `db.sqlite3` in the project root.
+- **Database:** SQLite file at `db.sqlite3` in the project root (override with `DATABASE_ENGINE` / `DATABASE_NAME` in `.env`).
 - **Uploaded files:** stored under `uploads/` (served in development when `DEBUG=True`).
 - **Static files:** served from `static/` during development.
 - **Audit fields:** defined on abstract `AuditModel` in `marvin/audit.py`.
