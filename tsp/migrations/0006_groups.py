@@ -28,7 +28,10 @@ def migrate_roles_to_groups(apps, schema_editor):
         ),
     }
 
-    ct = ContentType.objects.get(app_label='tsp', model='userprofile')
+    ct = ContentType.objects.filter(app_label='tsp', model='userprofile').first()
+    if not ct:
+        # Fresh database: no profiles to move, and ensure_groups() builds the groups after migrate.
+        return
     perm_by_codename = {
         p.codename: p
         for p in Permission.objects.filter(content_type=ct)
