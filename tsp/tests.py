@@ -1,13 +1,15 @@
 from datetime import date
 
 from django.contrib.auth.models import User
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
 from profile.groups import GROUP_TSP, assign_user_to_group
 from profile.models import UserProfile
-from tsp.models import Event, Expense, RequestState, StateHistory, TravelRequest
+from tsp.forms import MAX_DOCUMENT_BYTES, DocumentUploadForm
+from tsp.models import Document, Event, Expense, RequestState, StateHistory, TravelRequest
 from tsp.services.state_machine import (
     StateTransitionError,
     can_transition,
@@ -149,3 +151,41 @@ class RequestAccessTests(TestCase):
         expense.refresh_from_db()
         self.assertEqual(self.request.state, RequestState.APPROVED)
         self.assertEqual(expense.approved_amount, 400)
+
+
+class DocumentUploadFormTests(TestCase):
+    def _form(self, name, content):
+        return DocumentUploadForm(
+            data={'kind': 'receipt'},
+            files={'file': SimpleUploadedFile(name, content)},
+        )
+
+    def test_accepts_pdfs_and_photos(self):
+        for name, content in (
+            ('receipt.pdf', b'%PDF-1.7 receipt'),
+            ('photo.png', b'\x89PNG\r\n\x1a\n data'),
+            ('photo.JPG', b'\xff\xd8\xff\xe0 data'),
+        ):
+            self.assertTrue(self._form(name, content).is_valid(), name)
+
+    def test_rejects_other_file_types(self):
+        self.assertFalse(self._form('notes.docx', b'PK\x03\x04').is_valid())
+
+    def test_rejects_a_script_renamed_as_pdf(self):
+        self.assertFalse(self._form('receipt.pdf', b'#!/bin/sh\necho hello').is_valid())
+
+    def test_rejects_files_over_the_limit(self):
+        oversized = b'%PDF-' + b'0' * MAX_DOCUMENT_BYTES
+        self.assertFalse(self._form('big.pdf', oversized).is_valid())
+
+    def test_rejected_upload_is_not_saved(self):
+        owner = make_requester('uploader')
+        travel_request = TravelRequest.objects.create(
+            user=owner, event=make_event(), description='Talk',
+        )
+        self.client.force_login(owner)
+        self.client.post(
+            reverse('request_document_upload', args=[travel_request.pk]),
+            {'kind': 'receipt', 'file': SimpleUploadedFile('receipt.pdf', b'#!/bin/sh\necho hello')},
+        )
+        self.assertEqual(Document.objects.count(), 0)

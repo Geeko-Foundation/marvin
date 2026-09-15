@@ -749,7 +749,8 @@ def request_document_upload(request, pk, travel_request, profile):
         doc.save()
         messages.success(request, 'Document uploaded.')
     else:
-        messages.error(request, 'Please select a valid file.')
+        file_errors = form.errors.get('file')
+        messages.error(request, file_errors[0] if file_errors else 'Please select a valid file.')
     return redirect('request_detail', pk=pk)
 
 
