@@ -327,84 +327,89 @@ def _paginate(request, queryset, per_page, param='page'):
     return Paginator(queryset, per_page).get_page(request.GET.get(param))
 
 
-@login_required
-def dashboard(request):
-    """Role-specific home page for requestors, TSP committee, or finance."""
-    profile = get_profile(request.user)
-    context = {'profile': profile, 'state_badge': _state_badge_class}
-
-    if profile.is_requester:
-        my_requests = TravelRequest.objects.filter(user=request.user).select_related('event')
-        action_needed = my_requests.filter(state__in=[
+def _requester_sections(request):
+    """Dashboard data for someone who submits requests."""
+    my_requests = TravelRequest.objects.filter(user=request.user).select_related('event')
+    return {
+        'my_requests': _paginate(request, my_requests, 20),
+        'action_needed': my_requests.filter(state__in=[
             RequestState.APPROVED, RequestState.ACCEPTED,
-        ])
-        context.update({
-            'my_requests': _paginate(request, my_requests, 20),
-            'action_needed': action_needed,
+        ]),
+    }
+
+
+def _committee_sections(request):
+    """Dashboard data for the TSP committee."""
+    pending = TravelRequest.objects.filter(
+        state=RequestState.SUBMITTED,
+    ).select_related('user', 'event').order_by('created_at')
+
+    ninety_days_ago = timezone.now().date() - timezone.timedelta(days=90)
+    event_summaries = []
+    for event in Event.objects.filter(start_date__gte=ninety_days_ago):
+        reqs = event.requests.all()
+        event_summaries.append({
+            'event': event,
+            'total': reqs.count(),
+            'by_state': reqs.values('state').annotate(c=Count('id')),
         })
-        return render(request, 'tsp/dashboard/requester.html', context)
 
-    if profile.is_tsp:
-        pending = TravelRequest.objects.filter(
-            state=RequestState.SUBMITTED,
-        ).select_related('user', 'event').order_by('created_at')
+    approved_total = Expense.objects.filter(
+        request__state__in=[
+            RequestState.APPROVED, RequestState.ACCEPTED,
+            RequestState.SUBMITTED_FOR_PAYMENT, RequestState.PAID,
+        ],
+        approved_amount__isnull=False,
+    ).aggregate(total=Sum('approved_amount'))['total'] or 0
 
-        ninety_days_ago = timezone.now().date() - timezone.timedelta(days=90)
-        recent_events = Event.objects.filter(start_date__gte=ninety_days_ago)
-
-        state_counts = (
+    return {
+        'pending': _paginate(request, pending, 20, 'pending_page'),
+        'state_counts': (
             TravelRequest.objects.values('state')
             .annotate(count=Count('id'))
             .order_by('state')
-        )
-        approved_total = Expense.objects.filter(
-            request__state__in=[
-                RequestState.APPROVED, RequestState.ACCEPTED,
-                RequestState.SUBMITTED_FOR_PAYMENT, RequestState.PAID,
-            ],
-            approved_amount__isnull=False,
-        ).aggregate(total=Sum('approved_amount'))['total'] or 0
+        ),
+        'approved_total': approved_total,
+        'event_summaries': event_summaries,
+    }
 
-        event_summaries = []
-        for event in recent_events:
-            reqs = event.requests.all()
-            event_summaries.append({
-                'event': event,
-                'total': reqs.count(),
-                'by_state': reqs.values('state').annotate(c=Count('id')),
-            })
 
-        context.update({
-            'pending': _paginate(request, pending, 20),
-            'state_counts': state_counts,
-            'approved_total': approved_total,
-            'event_summaries': event_summaries,
-        })
-        return render(request, 'tsp/dashboard/tsp.html', context)
+def _finance_sections(request):
+    """Dashboard data for the finance team."""
+    recently_paid = TravelRequest.objects.filter(
+        state=RequestState.PAID,
+    ).select_related('user', 'event').prefetch_related('payments').order_by('-updated_at')
 
-    if profile.is_finance:
-        payment_queue = TravelRequest.objects.filter(
+    travel_request_ct = ContentType.objects.get_for_model(TravelRequest)
+    paid_total = PaymentRecord.objects.filter(
+        content_type=travel_request_ct,
+    ).aggregate(total=Sum('amount'))['total'] or 0
+
+    return {
+        'payment_queue': TravelRequest.objects.filter(
             state=RequestState.SUBMITTED_FOR_PAYMENT,
-        ).select_related('user', 'event').annotate(
-            doc_count=Count('documents'),
-        )
-        recently_paid = TravelRequest.objects.filter(
-            state=RequestState.PAID,
-        ).select_related('user', 'event').prefetch_related('payments').order_by('-updated_at')
+        ).select_related('user', 'event').annotate(doc_count=Count('documents')),
+        'recently_paid': _paginate(request, recently_paid, 10, 'paid_page'),
+        'paid_total': paid_total,
+    }
 
-        travel_request_ct = ContentType.objects.get_for_model(TravelRequest)
-        paid_total = PaymentRecord.objects.filter(
-            content_type=travel_request_ct,
-        ).aggregate(total=Sum('amount'))['total'] or 0
 
-        context.update({
-            'payment_queue': payment_queue,
-            'recently_paid': _paginate(request, recently_paid, 10, 'paid_page'),
-            'paid_total': paid_total,
-        })
-        return render(request, 'tsp/dashboard/finance.html', context)
+@login_required
+def dashboard(request):
+    """Home page, with a section for each group the user belongs to."""
+    profile = get_profile(request.user)
+    if not (profile.is_requester or profile.is_tsp or profile.is_finance):
+        raise PermissionDenied
 
-    raise PermissionDenied
+    context = {'profile': profile, 'state_badge': _state_badge_class}
+    if profile.is_requester:
+        context.update(_requester_sections(request))
+    if profile.is_tsp:
+        context.update(_committee_sections(request))
+    if profile.is_finance:
+        context.update(_finance_sections(request))
+
+    return render(request, 'tsp/dashboard/index.html', context)
 
 
 @login_required
@@ -498,6 +503,9 @@ def check_wise_account(request):
 def request_create(request):
     """Create a new travel request as draft with expense line items."""
     profile = get_profile(request.user)
+    onboarding = profile.onboarding_step()
+    if onboarding:
+        return redirect(onboarding)
     if request.method == 'POST':
         form = TravelRequestForm(request.POST)
         formset = ExpenseFormSet(request.POST)
@@ -584,6 +592,12 @@ def request_submit(request, pk):
     travel_request = get_object_or_404(TravelRequest, pk=pk)
     if travel_request.user_id != request.user.id:
         raise PermissionDenied
+
+    onboarding = get_profile(request.user).onboarding_step()
+    if onboarding:
+        messages.error(request, 'Finish setting up your payout account before submitting.')
+        return redirect(onboarding)
+
     try:
         transition_request(travel_request, RequestState.SUBMITTED, request.user)
         messages.success(request, 'Request submitted for review.')

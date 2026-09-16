@@ -1,10 +1,5 @@
-{% extends "base.html" %}
 {% load tsp_tags %}
-
-{% block title %}Dashboard{% endblock %}
-
-{% block content %}
-<h1 class="text-2xl font-bold mb-6">TSP Committee Dashboard</h1>
+<h2 class="text-2xl font-bold mb-6">TSP Committee</h2>
 
 <div class="stats stats-vertical lg:stats-horizontal shadow w-full mb-6 bg-base-100">
   <div class="stat">
@@ -58,7 +53,7 @@
         </tbody>
       </table>
     </div>
-    {% include 'partials/pagination.html' with page_obj=pending param='page' %}
+    {% include 'partials/pagination.html' with page_obj=pending param='pending_page' %}
     {% else %}
     <p class="opacity-60">No pending requests.</p>
     {% endif %}
@@ -80,4 +75,3 @@
   </div>
 </div>
 {% endif %}
-{% endblock %}
