@@ -208,6 +208,20 @@ class PaginationTests(TestCase):
         self.assertContains(second, 'join-item')
         self.assertContains(second, 'Page 2 of 2')
 
+    def test_committee_stat_counts_every_pending_request(self):
+        owner = make_requester('statowner')
+        event = make_event()
+        for i in range(25):
+            TravelRequest.objects.create(
+                user=owner, event=event, description=f'request {i}',
+                state=RequestState.SUBMITTED,
+            )
+
+        self.client.force_login(make_committee('statcommittee'))
+        response = self.client.get(reverse('dashboard'))
+        self.assertEqual(len(response.context['pending']), 20)
+        self.assertContains(response, '>25<')
+
     def test_csv_export_is_not_limited_to_one_page(self):
         owner = make_requester('csvowner')
         event = make_event()
