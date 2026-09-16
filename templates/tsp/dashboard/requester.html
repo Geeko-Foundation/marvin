@@ -50,6 +50,7 @@
   </div>
   {% endfor %}
 </div>
+{% include 'partials/pagination.html' with page_obj=my_requests param='page' %}
 {% else %}
 <div class="hero bg-base-100 rounded-box py-16">
   <div class="hero-content text-center">

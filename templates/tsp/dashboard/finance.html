@@ -82,6 +82,7 @@
         </tbody>
       </table>
     </div>
+    {% include 'partials/pagination.html' with page_obj=recently_paid param='paid_page' %}
   </div>
 </div>
 {% endif %}

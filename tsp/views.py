@@ -8,6 +8,7 @@ from django.contrib.auth import login, logout
 from django.contrib.auth.models import User
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import PermissionDenied
+from django.core.paginator import Paginator
 from django.db.models import Count, Sum
 from django.db.models import Q
 from django.http import FileResponse, HttpResponse, JsonResponse
@@ -321,6 +322,11 @@ def signup_complete(request):
     return render(request, 'tsp/signup/complete.html', {'wizard_step': 4})
 
 
+def _paginate(request, queryset, per_page, param='page'):
+    """One page of queryset, read from ?<param>= in the query string."""
+    return Paginator(queryset, per_page).get_page(request.GET.get(param))
+
+
 @login_required
 def dashboard(request):
     """Role-specific home page for requestors, TSP committee, or finance."""
@@ -333,7 +339,7 @@ def dashboard(request):
             RequestState.APPROVED, RequestState.ACCEPTED,
         ])
         context.update({
-            'my_requests': my_requests[:20],
+            'my_requests': _paginate(request, my_requests, 20),
             'action_needed': action_needed,
         })
         return render(request, 'tsp/dashboard/requester.html', context)
@@ -341,7 +347,7 @@ def dashboard(request):
     if profile.is_tsp:
         pending = TravelRequest.objects.filter(
             state=RequestState.SUBMITTED,
-        ).select_related('user', 'event').order_by('created_at')[:20]
+        ).select_related('user', 'event').order_by('created_at')
 
         ninety_days_ago = timezone.now().date() - timezone.timedelta(days=90)
         recent_events = Event.objects.filter(start_date__gte=ninety_days_ago)
@@ -369,7 +375,7 @@ def dashboard(request):
             })
 
         context.update({
-            'pending': pending,
+            'pending': _paginate(request, pending, 20),
             'state_counts': state_counts,
             'approved_total': approved_total,
             'event_summaries': event_summaries,
@@ -384,7 +390,7 @@ def dashboard(request):
         )
         recently_paid = TravelRequest.objects.filter(
             state=RequestState.PAID,
-        ).select_related('user', 'event').prefetch_related('payments').order_by('-updated_at')[:10]
+        ).select_related('user', 'event').prefetch_related('payments').order_by('-updated_at')
 
         travel_request_ct = ContentType.objects.get_for_model(TravelRequest)
         paid_total = PaymentRecord.objects.filter(
@@ -393,7 +399,7 @@ def dashboard(request):
 
         context.update({
             'payment_queue': payment_queue,
-            'recently_paid': recently_paid,
+            'recently_paid': _paginate(request, recently_paid, 10, 'paid_page'),
             'paid_total': paid_total,
         })
         return render(request, 'tsp/dashboard/finance.html', context)
@@ -798,7 +804,7 @@ def reports(request):
         if form.cleaned_data.get('status'):
             qs = qs.filter(state=form.cleaned_data['status'])
 
-    requests_list = qs.order_by('-updated_at')[:100]
+    requests_list = qs.order_by('-updated_at')
 
     total_requests = qs.count()
     total_approved = Expense.objects.filter(
@@ -837,7 +843,7 @@ def reports(request):
 
     return render(request, 'tsp/reports.html', {
         'form': form,
-        'requests_list': requests_list,
+        'requests_list': _paginate(request, requests_list, 100),
         'profile': profile,
         'total_requests': total_requests,
         'total_approved': total_approved,

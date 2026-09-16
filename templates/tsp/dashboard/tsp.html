@@ -58,6 +58,7 @@
         </tbody>
       </table>
     </div>
+    {% include 'partials/pagination.html' with page_obj=pending param='page' %}
     {% else %}
     <p class="opacity-60">No pending requests.</p>
     {% endif %}

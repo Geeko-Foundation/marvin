@@ -2,7 +2,7 @@ from datetime import date
 
 from django.contrib.auth.models import User
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase
+from django.test import RequestFactory, TestCase
 from django.urls import reverse
 from django.utils import timezone
 
@@ -15,6 +15,7 @@ from tsp.services.state_machine import (
     can_transition,
     transition_request,
 )
+from tsp.templatetags.tsp_tags import page_url
 
 
 def make_event():
@@ -189,3 +190,38 @@ class DocumentUploadFormTests(TestCase):
             {'kind': 'receipt', 'file': SimpleUploadedFile('receipt.pdf', b'#!/bin/sh\necho hello')},
         )
         self.assertEqual(Document.objects.count(), 0)
+
+
+class PaginationTests(TestCase):
+    def test_requester_dashboard_pages_through_requests(self):
+        user = make_requester('pager')
+        event = make_event()
+        for i in range(25):
+            TravelRequest.objects.create(user=user, event=event, description=f'request {i}')
+
+        self.client.force_login(user)
+        first = self.client.get(reverse('dashboard'))
+        self.assertEqual(len(first.context['my_requests']), 20)
+
+        second = self.client.get(reverse('dashboard'), {'page': 2})
+        self.assertEqual(len(second.context['my_requests']), 5)
+        self.assertContains(second, 'join-item')
+        self.assertContains(second, 'Page 2 of 2')
+
+    def test_csv_export_is_not_limited_to_one_page(self):
+        owner = make_requester('csvowner')
+        event = make_event()
+        for i in range(105):
+            TravelRequest.objects.create(user=owner, event=event, description=f'request {i}')
+
+        self.client.force_login(make_committee('csvcommittee'))
+        response = self.client.get(reverse('reports'), {'format': 'csv'})
+        rows = response.content.decode().splitlines()
+        self.assertEqual(len(rows), 106)  # header + every matching request
+
+    def test_page_links_keep_the_current_filters(self):
+        request = RequestFactory().get('/reports/', {'status': 'paid', 'page': '1'})
+        url = page_url({'request': request}, 'page', 2)
+        self.assertIn('status=paid', url)
+        self.assertIn('page=2', url)
+        self.assertNotIn('page=1', url)
