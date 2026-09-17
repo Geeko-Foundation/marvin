@@ -1,0 +1,31 @@
+name: Tests
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Django checks
+        run: uv run python manage.py check
+
+      # Only our own apps: a bare makemigrations --check also reports third-party
+      # apps, which would want a migration written inside site-packages.
+      - name: Models match their migrations
+        run: uv run python manage.py makemigrations tsp profile payments --check --dry-run
+
+      - name: Tests
+        run: uv run python manage.py test --verbosity 2
