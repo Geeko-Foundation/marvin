@@ -1,3 +1,5 @@
+import os
+
 from django import forms
 from django.contrib.auth.forms import AuthenticationForm
 from django.contrib.auth.models import User
@@ -224,6 +226,18 @@ class CommentForm(forms.ModelForm):
         }
 
 
+MAX_DOCUMENT_BYTES = 10 * 1024 * 1024
+
+# Receipts, invoices and signed forms are PDFs or photos. The browser chooses
+# the content type, so check the opening bytes against the extension too.
+DOCUMENT_SIGNATURES = {
+    '.pdf': (b'%PDF-',),
+    '.png': (b'\x89PNG\r\n\x1a\n',),
+    '.jpg': (b'\xff\xd8\xff',),
+    '.jpeg': (b'\xff\xd8\xff',),
+}
+
+
 class DocumentUploadForm(forms.ModelForm):
     """Upload a receipt, invoice, or signed form attachment."""
 
@@ -232,8 +246,31 @@ class DocumentUploadForm(forms.ModelForm):
         fields = ['kind', 'file']
         widgets = {
             'kind': forms.Select(attrs={'class': 'select select-bordered w-full'}),
-            'file': forms.FileInput(attrs={'class': 'file-input file-input-bordered w-full'}),
+            'file': forms.FileInput(attrs={
+                'class': 'file-input file-input-bordered w-full',
+                'accept': '.pdf,.png,.jpg,.jpeg',
+            }),
         }
+
+    def clean_file(self):
+        uploaded = self.cleaned_data.get('file')
+        if not uploaded:
+            return uploaded
+
+        if uploaded.size > MAX_DOCUMENT_BYTES:
+            raise forms.ValidationError('Files must be 10 MB or smaller.')
+
+        extension = os.path.splitext(uploaded.name)[1].lower()
+        signatures = DOCUMENT_SIGNATURES.get(extension)
+        if not signatures:
+            raise forms.ValidationError('Upload a PDF, PNG or JPEG.')
+
+        head = uploaded.read(8)
+        uploaded.seek(0)
+        if not head.startswith(signatures):
+            raise forms.ValidationError("That file's contents don't match its extension.")
+
+        return uploaded
 
 
 class ReportFilterForm(forms.Form):
