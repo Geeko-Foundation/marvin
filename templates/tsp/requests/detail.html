@@ -184,8 +184,9 @@
           <div class="chat chat-start">
             <div class="chat-header text-xs opacity-60">
               {{ comment.user.get_full_name|default:comment.user.username }} · {{ comment.created_at|date:"M d, H:i" }}
+              {% if comment.internal %}<span class="badge badge-warning badge-sm ml-1">Internal</span>{% endif %}
             </div>
-            <div class="chat-bubble chat-bubble-primary">{{ comment.body }}</div>
+            <div class="chat-bubble {% if comment.internal %}chat-bubble-warning{% else %}chat-bubble-primary{% endif %}">{{ comment.body }}</div>
           </div>
           {% empty %}
           <p class="text-sm opacity-60">No comments yet.</p>
@@ -194,6 +195,12 @@
         <form method="post" action="{% url 'request_comment' travel_request.pk %}">
           {% csrf_token %}
           {{ comment_form.body }}
+          {% if sees_internal_notes %}
+          <label class="label cursor-pointer justify-start gap-2 mt-2">
+            {{ comment_form.internal }}
+            <span class="label-text text-sm">Internal note, visible only to the committee and finance</span>
+          </label>
+          {% endif %}
           <button type="submit" class="btn btn-sm btn-primary mt-2">Add Comment</button>
         </form>
       </div>

@@ -49,7 +49,8 @@ class TravelRequestAdmin(admin.ModelAdmin):
 class CommentAdmin(admin.ModelAdmin):
     """Browse request comments."""
 
-    list_display = ('request', 'user', 'created_at', 'updated_at')
+    list_display = ('request', 'user', 'internal', 'created_at', 'updated_at')
+    list_filter = ('internal',)
     readonly_fields = ('created_at', 'created_by', 'updated_at', 'changed_by')
 
 
