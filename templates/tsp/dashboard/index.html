@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+{% if profile.is_requester %}
+{% include "tsp/dashboard/_requester.html" %}
+{% endif %}
+
+{% if profile.is_tsp %}
+{% if profile.is_requester %}<div class="divider my-8"></div>{% endif %}
+{% include "tsp/dashboard/_tsp.html" %}
+{% endif %}
+
+{% if profile.is_finance %}
+{% if profile.is_requester or profile.is_tsp %}<div class="divider my-8"></div>{% endif %}
+{% include "tsp/dashboard/_finance.html" %}
+{% endif %}
+{% endblock %}

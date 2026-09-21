@@ -66,7 +66,10 @@ class RequesterOnboardingMiddleware:
         """Enforce onboarding before passing the request to downstream views."""
         if not _is_exempt(request):
             profile = get_profile(request.user)
-            if profile.is_requester:
+            # Committee and finance users often hold Requester too. Sending them
+            # through the payout wizard would block their review work, so the
+            # requirement is enforced when they create or submit a request.
+            if profile.is_requester and not profile.is_committee:
                 step = profile.onboarding_step()
                 if step:
                     try:

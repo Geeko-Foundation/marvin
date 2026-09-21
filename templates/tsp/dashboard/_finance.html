@@ -1,10 +1,5 @@
-{% extends "base.html" %}
 {% load tsp_tags %}
-
-{% block title %}Dashboard{% endblock %}
-
-{% block content %}
-<h1 class="text-2xl font-bold mb-6">Finance Dashboard</h1>
+<h2 class="text-2xl font-bold mb-6">Finance</h2>
 
 <div class="stats stats-vertical lg:stats-horizontal shadow w-full mb-6 bg-base-100">
   <div class="stat">
@@ -82,7 +77,7 @@
         </tbody>
       </table>
     </div>
+    {% include 'partials/pagination.html' with page_obj=recently_paid param='paid_page' %}
   </div>
 </div>
 {% endif %}
-{% endblock %}

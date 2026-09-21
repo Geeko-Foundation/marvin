@@ -1,12 +1,7 @@
-{% extends "base.html" %}
 {% load tsp_tags %}
-
-{% block title %}Dashboard{% endblock %}
-
-{% block content %}
 <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
   <div>
-    <h1 class="text-2xl font-bold">My Requests</h1>
+    <h2 class="text-2xl font-bold">My Requests</h2>
     <p class="text-sm opacity-60">Track your travel support applications</p>
   </div>
   <a href="{% url 'request_create' %}" class="btn btn-primary">
@@ -50,6 +45,7 @@
   </div>
   {% endfor %}
 </div>
+{% include 'partials/pagination.html' with page_obj=my_requests param='page' %}
 {% else %}
 <div class="hero bg-base-100 rounded-box py-16">
   <div class="hero-content text-center">
@@ -61,4 +57,3 @@
   </div>
 </div>
 {% endif %}
-{% endblock %}
