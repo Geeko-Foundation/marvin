@@ -321,3 +321,59 @@ class OnboardingGateTests(TestCase):
         self.assertEqual(response.status_code, 302)
         travel_request.refresh_from_db()
         self.assertEqual(travel_request.state, RequestState.DRAFT)
+
+
+class EventManagementTests(TestCase):
+    def setUp(self):
+        self.committee = make_committee('eventcommittee')
+        self.requester = make_requester('eventrequester')
+        self.event = make_event()
+
+    def test_committee_can_edit_an_event(self):
+        self.client.force_login(self.committee)
+        self.client.post(reverse('event_edit', args=[self.event.pk]), {
+            'name': 'Renamed', 'location': 'Prague',
+            'start_date': '2027-06-14', 'end_date': '2027-06-16',
+        })
+        self.event.refresh_from_db()
+        self.assertEqual(self.event.name, 'Renamed')
+        self.assertFalse(self.event.accepting_requests)
+
+    def test_requester_cannot_edit_an_event(self):
+        self.client.force_login(self.requester)
+        response = self.client.get(reverse('event_edit', args=[self.event.pk]))
+        self.assertEqual(response.status_code, 403)
+
+    def test_committee_can_delete_an_event_nobody_has_applied_to(self):
+        self.client.force_login(self.committee)
+        self.client.post(reverse('event_delete', args=[self.event.pk]))
+        self.assertFalse(Event.objects.filter(pk=self.event.pk).exists())
+
+    def test_an_event_with_requests_is_not_deleted(self):
+        travel_request = TravelRequest.objects.create(
+            user=self.requester, event=self.event, description='Talk',
+        )
+        self.client.force_login(self.committee)
+        self.client.post(reverse('event_delete', args=[self.event.pk]))
+        self.assertTrue(Event.objects.filter(pk=self.event.pk).exists())
+        self.assertTrue(TravelRequest.objects.filter(pk=travel_request.pk).exists())
+
+    def test_requester_cannot_delete_an_event(self):
+        self.client.force_login(self.requester)
+        response = self.client.post(reverse('event_delete', args=[self.event.pk]))
+        self.assertEqual(response.status_code, 403)
+        self.assertTrue(Event.objects.filter(pk=self.event.pk).exists())
+
+    def test_delete_needs_a_post(self):
+        self.client.force_login(self.committee)
+        response = self.client.get(reverse('event_delete', args=[self.event.pk]))
+        self.assertEqual(response.status_code, 405)
+        self.assertTrue(Event.objects.filter(pk=self.event.pk).exists())
+
+    def test_delete_button_only_shows_for_empty_events(self):
+        busy = make_event()
+        TravelRequest.objects.create(user=self.requester, event=busy, description='Talk')
+        self.client.force_login(self.committee)
+        response = self.client.get(reverse('event_list'))
+        self.assertContains(response, reverse('event_delete', args=[self.event.pk]))
+        self.assertNotContains(response, reverse('event_delete', args=[busy.pk]))

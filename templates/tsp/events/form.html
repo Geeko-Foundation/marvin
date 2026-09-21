@@ -1,9 +1,9 @@
 {% extends "base.html" %}
 
-{% block title %}New Event{% endblock %}
+{% block title %}{% if event %}Edit Event{% else %}New Event{% endif %}{% endblock %}
 
 {% block content %}
-<h1 class="text-2xl font-bold mb-6">Create Event</h1>
+<h1 class="text-2xl font-bold mb-6">{% if event %}Edit {{ event.name }}{% else %}Create Event{% endif %}</h1>
 
 <form method="post" class="max-w-xl">
   {% csrf_token %}
@@ -33,7 +33,7 @@
       </label>
       <div class="card-actions justify-end">
         <a href="{% url 'event_list' %}" class="btn btn-ghost">Cancel</a>
-        <button type="submit" class="btn btn-primary">Create Event</button>
+        <button type="submit" class="btn btn-primary">{% if event %}Save Changes{% else %}Create Event{% endif %}</button>
       </div>
     </div>
   </div>
