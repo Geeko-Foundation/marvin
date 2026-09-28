@@ -1,4 +1,5 @@
 from datetime import date
+from unittest import mock
 
 from django.contrib.auth.models import User
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -9,7 +10,7 @@ from django.utils import timezone
 from profile.groups import GROUP_FINANCE, GROUP_REQUESTER, GROUP_TSP, assign_user_to_group
 from profile.models import UserProfile
 from tsp.forms import MAX_DOCUMENT_BYTES, DocumentUploadForm
-from tsp.models import Document, Event, Expense, RequestState, StateHistory, TravelRequest
+from tsp.models import Comment, Document, Event, Expense, RequestState, StateHistory, TravelRequest
 from tsp.services.state_machine import (
     StateTransitionError,
     can_transition,
@@ -377,3 +378,67 @@ class EventManagementTests(TestCase):
         response = self.client.get(reverse('event_list'))
         self.assertContains(response, reverse('event_delete', args=[self.event.pk]))
         self.assertNotContains(response, reverse('event_delete', args=[busy.pk]))
+class InternalNotesTests(TestCase):
+    PUBLIC = 'Looks fine to me'
+    INTERNAL = 'Hotel estimate is well above our usual cap'
+
+    def setUp(self):
+        self.owner = make_requester('noteowner')
+        self.committee = make_committee('notecommittee')
+        self.finance = make_user('notefinance', [GROUP_FINANCE])
+        self.request = TravelRequest.objects.create(
+            user=self.owner, event=make_event(), description='Talk',
+        )
+        Comment.objects.create(request=self.request, user=self.committee, body=self.PUBLIC)
+        Comment.objects.create(request=self.request, user=self.committee, body=self.INTERNAL, internal=True)
+
+    def detail_as(self, user, travel_request=None):
+        self.client.force_login(user)
+        return self.client.get(reverse('request_detail', args=[(travel_request or self.request).pk]))
+
+    def test_committee_sees_internal_notes(self):
+        response = self.detail_as(self.committee)
+        self.assertContains(response, self.INTERNAL)
+        self.assertContains(response, self.PUBLIC)
+
+    def test_finance_sees_internal_notes(self):
+        self.assertContains(self.detail_as(self.finance), self.INTERNAL)
+
+    def test_requester_does_not_see_internal_notes(self):
+        response = self.detail_as(self.owner)
+        self.assertContains(response, self.PUBLIC)
+        self.assertNotContains(response, self.INTERNAL)
+        self.assertNotContains(response, 'Internal note, visible only')
+
+    def test_committee_member_does_not_see_notes_on_their_own_request(self):
+        member = make_user('ownsone', [GROUP_REQUESTER, GROUP_TSP])
+        own = TravelRequest.objects.create(user=member, event=make_event(), description='Mine')
+        Comment.objects.create(request=own, user=self.committee, body=self.INTERNAL, internal=True)
+        self.assertNotContains(self.detail_as(member, own), self.INTERNAL)
+
+    def test_requester_cannot_post_an_internal_note(self):
+        self.client.force_login(self.owner)
+        self.client.post(reverse('request_comment', args=[self.request.pk]),
+                         {'body': 'sneaky', 'internal': 'on'})
+        self.assertFalse(Comment.objects.get(body='sneaky').internal)
+
+    def test_committee_can_post_an_internal_note(self):
+        self.client.force_login(self.committee)
+        self.client.post(reverse('request_comment', args=[self.request.pk]),
+                         {'body': 'just us', 'internal': 'on'})
+        self.assertTrue(Comment.objects.get(body='just us').internal)
+
+    @mock.patch('profile.services.push_notifications.send_push_to_user')
+    def test_internal_note_never_notifies_the_requester(self, send):
+        self.client.force_login(self.committee)
+        self.client.post(reverse('request_comment', args=[self.request.pk]),
+                         {'body': 'just us', 'internal': 'on'})
+        notified = [call.args[0] for call in send.call_args_list]
+        self.assertNotIn(self.owner, notified)
+
+    @mock.patch('profile.services.push_notifications.send_push_to_user')
+    def test_ordinary_comment_still_notifies_the_requester(self, send):
+        self.client.force_login(self.committee)
+        self.client.post(reverse('request_comment', args=[self.request.pk]), {'body': 'hello'})
+        notified = [call.args[0] for call in send.call_args_list]
+        self.assertIn(self.owner, notified)

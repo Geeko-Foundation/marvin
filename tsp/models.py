@@ -172,11 +172,18 @@ class StateHistory(AuditModel):
 
 
 class Comment(AuditModel):
-    """Discussion comment on a travel request visible to owner and committee."""
+    """Discussion comment on a travel request.
+
+    Internal notes are for the committee and finance only, never the requester.
+    """
 
     request = models.ForeignKey(TravelRequest, on_delete=models.CASCADE, related_name='comments')
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     body = models.TextField()
+    internal = models.BooleanField(
+        default=False,
+        help_text='Only the committee and finance can see this.',
+    )
 
     class Meta:
         ordering = ['created_at']

@@ -573,16 +573,27 @@ def request_create(request):
     })
 
 
+def _sees_internal_notes(user, profile, travel_request):
+    """Committee and finance see internal notes, except on their own request."""
+    return profile.is_committee and travel_request.user_id != user.id
+
+
 @login_required
 @staff_or_owner
 def request_detail(request, pk, travel_request, profile):
     """Display request details, comments, documents, and state history."""
-    comment_form = CommentForm()
+    sees_internal = _sees_internal_notes(request.user, profile, travel_request)
+    comments = travel_request.comments.select_related('user')
+    if not sees_internal:
+        comments = comments.filter(internal=False)
+
+    comment_form = CommentForm(can_write_internal=sees_internal)
     doc_form = DocumentUploadForm()
     return render(request, 'tsp/requests/detail.html', {
         'travel_request': travel_request,
         'profile': profile,
-        'comments': travel_request.comments.select_related('user'),
+        'comments': comments,
+        'sees_internal_notes': sees_internal,
         'documents': travel_request.documents.select_related('uploaded_by'),
         'state_history': travel_request.state_history.select_related('user'),
         'comment_form': comment_form,
@@ -780,14 +791,17 @@ def request_submit_for_payment(request, pk):
 @require_POST
 def request_comment(request, pk, travel_request, profile):
     """Add a comment and notify the other party via push notification."""
-    form = CommentForm(request.POST)
+    form = CommentForm(
+        request.POST,
+        can_write_internal=_sees_internal_notes(request.user, profile, travel_request),
+    )
     if form.is_valid():
         comment = form.save(commit=False)
         comment.request = travel_request
         comment.user = request.user
         comment.save()
         from profile.services.push_notifications import notify_request_comment
-        notify_request_comment(travel_request, request.user)
+        notify_request_comment(travel_request, request.user, internal=comment.internal)
         messages.success(request, 'Comment added.')
     return redirect('request_detail', pk=pk)
 

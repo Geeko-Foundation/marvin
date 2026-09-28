@@ -216,14 +216,22 @@ class CommentForm(forms.ModelForm):
 
     class Meta:
         model = Comment
-        fields = ['body']
+        fields = ['body', 'internal']
         widgets = {
             'body': forms.Textarea(attrs={
                 'class': 'textarea textarea-bordered w-full',
                 'rows': 3,
                 'placeholder': 'Add a comment…',
             }),
+            'internal': forms.CheckboxInput(attrs={'class': 'checkbox checkbox-sm checkbox-warning'}),
         }
+
+    def __init__(self, *args, can_write_internal=False, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Dropping the field, rather than hiding it, means a posted value from
+        # someone who may not write internal notes is simply ignored.
+        if not can_write_internal:
+            del self.fields['internal']
 
 
 MAX_DOCUMENT_BYTES = 10 * 1024 * 1024

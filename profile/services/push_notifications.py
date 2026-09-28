@@ -190,10 +190,30 @@ def notify_request_state_change(
             )
 
 
-def notify_request_comment(travel_request: TravelRequest, actor: User) -> None:
+def notify_request_comment(travel_request: TravelRequest, actor: User, internal: bool = False) -> None:
     """Notify the other party when a comment is added to a travel request."""
     label = _request_label(travel_request)
     url = _request_url(travel_request)
+
+    if internal:
+        # Tell the committee only. The requester must not learn an internal note
+        # exists, and that holds even when the requester sits on the committee.
+        from django.contrib.auth.models import Group
+
+        try:
+            committee = Group.objects.get(name=GROUP_TSP).user_set.exclude(
+                pk__in=[actor.pk, travel_request.user_id],
+            )
+        except Group.DoesNotExist:
+            return
+        for user in committee:
+            send_push_to_user(
+                user,
+                head='New internal note',
+                body=f'{actor.get_full_name() or actor.username} added an internal note on {label}.',
+                url=url,
+            )
+        return
 
     if actor.pk == travel_request.user_id:
         send_push_to_group(
