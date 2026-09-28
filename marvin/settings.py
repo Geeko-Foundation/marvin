@@ -226,11 +226,22 @@ LOGGING = {
 
 # --- Email ---
 
-MAILERS = {
-    'default': {
-        'BACKEND': env(
-            'EMAIL_BACKEND',
-            'django.core.mail.backends.console.EmailBackend',
-        ),
-    },
-}
+DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', 'marvin@localhost')
+
+# Where links in notification emails point.
+SITE_BASE_URL = env('SITE_BASE_URL', env('WEBPUSH_APP_BASE_URL', 'http://127.0.0.1:8000'))
+
+_email_backend = env('EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend')
+_mailer = {'BACKEND': _email_backend}
+
+# Only the SMTP backend accepts these; the others reject unknown options.
+if _email_backend.endswith('smtp.EmailBackend'):
+    _mailer['OPTIONS'] = {
+        'host': env('EMAIL_HOST', 'localhost'),
+        'port': int(env('EMAIL_PORT', '587')),
+        'username': env('EMAIL_HOST_USER'),
+        'password': env('EMAIL_HOST_PASSWORD'),
+        'use_tls': env_bool('EMAIL_USE_TLS', True),
+    }
+
+MAILERS = {'default': _mailer}
