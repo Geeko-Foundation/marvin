@@ -433,7 +433,7 @@ def event_list(request):
     date_from = request.GET.get('from')
     date_to = request.GET.get('to')
 
-    events = Event.objects.all()
+    events = Event.objects.annotate(request_count=Count('requests'))
     if date_from:
         events = events.filter(start_date__gte=date_from)
     if date_to:
@@ -461,6 +461,46 @@ def event_create(request):
         form = EventForm()
 
     return render(request, 'tsp/events/form.html', {'form': form, 'profile': profile})
+
+
+@login_required
+@group_required(GROUP_TSP)
+def event_edit(request, pk):
+    """Edit an existing TSP event."""
+    event = get_object_or_404(Event, pk=pk)
+    profile = get_profile(request.user)
+    if request.method == 'POST':
+        form = EventForm(request.POST, instance=event)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Event updated.')
+            return redirect('event_list')
+    else:
+        form = EventForm(instance=event)
+
+    return render(request, 'tsp/events/form.html', {'form': form, 'profile': profile, 'event': event})
+
+
+@login_required
+@group_required(GROUP_TSP)
+@require_POST
+def event_delete(request, pk):
+    """Delete an event, as long as nobody has applied to it yet."""
+    event = get_object_or_404(Event, pk=pk)
+    # Deleting an event cascades to its requests and their payment records,
+    # so only an empty one can go. Closing it stops new requests instead.
+    if event.requests.exists():
+        messages.error(
+            request,
+            f'{event.name} already has travel requests, so it cannot be deleted. '
+            'Close it to stop new requests instead.',
+        )
+        return redirect('event_list')
+
+    name = event.name
+    event.delete()
+    messages.success(request, f'{name} deleted.')
+    return redirect('event_list')
 
 
 @login_required

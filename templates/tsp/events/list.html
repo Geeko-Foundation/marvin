@@ -41,6 +41,18 @@
         <a href="{% url 'request_create' %}?event={{ event.pk }}" class="btn btn-primary btn-sm">Apply for Travel Support</a>
       </div>
       {% endif %}
+      {% if profile.is_tsp %}
+      <div class="card-actions justify-end mt-2">
+        <a href="{% url 'event_edit' event.pk %}" class="btn btn-ghost btn-sm">Edit</a>
+        {% if not event.request_count %}
+        <form method="post" action="{% url 'event_delete' event.pk %}"
+              onsubmit="return confirm('Delete {{ event.name|escapejs }}? This cannot be undone.');">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-ghost btn-sm text-error">Delete</button>
+        </form>
+        {% endif %}
+      </div>
+      {% endif %}
     </div>
   </div>
   {% empty %}
