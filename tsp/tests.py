@@ -495,6 +495,15 @@ class EmailNotificationTests(TestCase):
         transition_request(self.request, RequestState.APPROVED, self.committee)
         self.assertEqual(mail.outbox, [])
 
+    def test_a_broken_template_does_not_block_the_transition(self):
+        transition_request(self.request, RequestState.SUBMITTED, self.owner)
+        with mock.patch('profile.services.email_notifications.render_to_string',
+                        side_effect=RuntimeError('template blew up')):
+            with self.assertLogs('marvin.email', level='ERROR'):
+                transition_request(self.request, RequestState.APPROVED, self.committee)
+        self.request.refresh_from_db()
+        self.assertEqual(self.request.state, RequestState.APPROVED)
+
     def test_a_broken_mail_server_does_not_block_the_transition(self):
         transition_request(self.request, RequestState.SUBMITTED, self.owner)
         with mock.patch('profile.services.email_notifications.EmailMessage.send',

@@ -37,12 +37,18 @@ def group_members(group_name: str, exclude: list[User] | None = None):
 
 def send_to(recipients, *, subject: str, headline: str, travel_request, notes: str = '') -> None:
     """One message per recipient, so nobody sees anyone else's address."""
-    body = render_to_string('email/request_state_change.txt', {
-        'headline': headline,
-        'travel_request': travel_request,
-        'notes': notes,
-        'url': request_url(travel_request),
-    })
+    try:
+        body = render_to_string('email/request_state_change.txt', {
+            'headline': headline,
+            'travel_request': travel_request,
+            'notes': notes,
+            'url': request_url(travel_request),
+        })
+    except Exception:
+        # Same reasoning as a send failure below: never break a transition.
+        logger.exception('Could not render the notification email for request %s', travel_request.pk)
+        return
+
     for user in recipients:
         if not user or not user.is_active or not user.email:
             continue
