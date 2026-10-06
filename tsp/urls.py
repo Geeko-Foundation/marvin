@@ -22,6 +22,7 @@ urlpatterns = [
     path('search/', views.search, name='search'),
     path('requests/check-account/', views.check_wise_account, name='check_wise_account'),
     path('requests/new/', views.request_create, name='request_create'),
+    path('requests/batch/', views.request_batch_review, name='request_batch_review'),
     path('requests/<int:pk>/', views.request_detail, name='request_detail'),
     path('requests/<int:pk>/edit/', views.request_edit, name='request_edit'),
     path('requests/<int:pk>/submit/', views.request_submit, name='request_submit'),

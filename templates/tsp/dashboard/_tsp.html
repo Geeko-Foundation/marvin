@@ -27,10 +27,13 @@
   <div class="card-body">
     <h2 class="card-title">Pending Review Queue</h2>
     {% if pending %}
+    <form method="post" action="{% url 'request_batch_review' %}">
+      {% csrf_token %}
     <div class="overflow-x-auto">
       <table class="table table-zebra">
         <thead>
           <tr>
+            <th><input type="checkbox" class="checkbox checkbox-sm" id="select-all-pending"></th>
             <th>ID</th>
             <th>Requester</th>
             <th>Event</th>
@@ -42,6 +45,7 @@
         <tbody>
           {% for req in pending %}
           <tr>
+            <td><input type="checkbox" class="checkbox checkbox-sm select-pending" name="request_ids" value="{{ req.pk }}"></td>
             <td>#{{ req.pk }}</td>
             <td>{{ req.user.get_full_name|default:req.user.username }}</td>
             <td>{{ req.event.name }}</td>
@@ -53,6 +57,16 @@
         </tbody>
       </table>
     </div>
+    <div class="flex flex-wrap items-center gap-2 mt-3">
+      <input type="text" name="notes" class="input input-bordered input-sm grow"
+             placeholder="Note for the requester (required to reject)">
+      <button type="submit" name="action" value="approve" class="btn btn-sm">Approve as requested</button>
+      <button type="submit" name="action" value="reject" class="btn btn-sm btn-outline btn-error">Reject selected</button>
+    </div>
+    <p class="text-xs opacity-60 mt-1">
+      Approving here approves the full amount requested. Open a request to approve a different amount.
+    </p>
+    </form>
     {% include 'partials/pagination.html' with page_obj=pending param='pending_page' %}
     {% else %}
     <p class="opacity-60">No pending requests.</p>
@@ -75,3 +89,9 @@
   </div>
 </div>
 {% endif %}
+
+<script>
+  document.getElementById('select-all-pending')?.addEventListener('change', function () {
+    document.querySelectorAll('.select-pending').forEach(box => { box.checked = this.checked; });
+  });
+</script>
