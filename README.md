@@ -211,6 +211,22 @@ python manage.py check                # Validate project configuration
 python manage.py runserver            # Start dev server
 ```
 
+## Rebranding for another organisation
+
+Nothing about the name or colours is baked into the templates. A fork sets these
+in `.env` and changes nothing else:
+
+```bash
+BRAND_APP_NAME=Wanderer
+BRAND_ORG_NAME=GNOME Foundation
+BRAND_TAGLINE=Conference Travel Subsidy
+BRAND_THEME_LIGHT=emerald
+BRAND_THEME_DARK=forest
+```
+
+The two theme values are [daisyUI theme names](https://daisyui.com/docs/themes/),
+and the light and dark toggle keeps working with whichever pair you choose.
+
 ## Environment variables
 
 Configuration uses [python-dotenv](https://github.com/theskumar/python-dotenv). Sensitive values belong in a `.env` file at the project root (gitignored):

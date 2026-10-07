@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Welcome to Marvin{% endblock %}
+{% block title %}Welcome to {{ app_name }}{% endblock %}
 
 {% block content %}
 <div class="max-w-2xl mx-auto">
@@ -13,7 +13,7 @@
   <h1 class="text-2xl font-bold mb-2">Tell us about yourself</h1>
   <p class="text-sm opacity-60 mb-6">
     Before you can submit travel support requests, we need your name, email, and address.
-    This information is stored locally in Marvin.
+    This information is stored locally in {{ app_name }}.
   </p>
 
   <form method="post" class="card bg-base-100 shadow-sm">

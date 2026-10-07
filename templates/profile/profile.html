@@ -65,7 +65,7 @@
         Verified on {{ profile.wise_recipient_verified_at|date:"F d, Y" }}.
         {{ profile.banking_summary }}
       </p>
-      <p class="text-xs opacity-50 mt-1">Account numbers are stored with Wise, not in Marvin.</p>
+      <p class="text-xs opacity-50 mt-1">Account numbers are stored with Wise, not in {{ app_name }}.</p>
       {% else %}
       <div class="alert alert-warning">
         <span>Your Wise recipient account is not set up yet.</span>

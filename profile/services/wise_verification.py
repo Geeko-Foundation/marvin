@@ -24,7 +24,7 @@ VERIFICATION_STEPS = [
     ('create_test_transfer', 'Create test transfer'),
     ('fund_transfer', 'Fund test transfer from Wise balance'),
     ('reverse_transfer', 'Cancel / reverse test transfer'),
-    ('finalize', 'Save verification to your Marvin profile'),
+    ('finalize', 'Save verification to your profile'),
 ]
 
 SESSION_KEY = 'wise_verification_state'
