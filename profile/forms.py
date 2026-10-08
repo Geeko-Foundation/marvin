@@ -118,6 +118,12 @@ class WiseRecipientForm(forms.Form):
         required=False,
         widget=forms.TextInput(attrs={'class': INPUT_CLASS}),
     )
+    # Wise requires this for US accounts and rejects the payee without it.
+    bank_account_type = forms.ChoiceField(
+        required=False,
+        choices=[('CHECKING', 'Checking'), ('SAVINGS', 'Savings')],
+        widget=forms.Select(attrs={'class': 'select select-bordered w-full'}),
+    )
 
     def __init__(self, *args, profile=None, **kwargs):
         """Pre-select banking method and currency from an existing profile when present."""
@@ -141,6 +147,8 @@ class WiseRecipientForm(forms.Form):
         elif method == BankingMethod.US_BANK:
             if not cleaned.get('bank_account_no') or not cleaned.get('bank_routing_no'):
                 raise forms.ValidationError('Account number and routing number are required for US banking.')
+            if not cleaned.get('bank_account_type'):
+                raise forms.ValidationError('Choose whether the US account is checking or savings.')
         elif method == BankingMethod.INDIA_IFSC:
             if not cleaned.get('bank_account_no') or not cleaned.get('bank_ifsc'):
                 raise forms.ValidationError('Account number and IFSC code are required for India banking.')

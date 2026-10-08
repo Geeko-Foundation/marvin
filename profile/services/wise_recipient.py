@@ -38,6 +38,7 @@ def bank_details_kwargs_from_banking(banking: dict) -> dict:
         return {
             'account_number': banking.get('bank_account_no'),
             'routing_number': banking.get('bank_routing_no'),
+            'us_account_type': banking.get('bank_account_type'),
         }
     if method == BankingMethod.INDIA_IFSC:
         return {
@@ -62,6 +63,39 @@ def resolve_country(profile: UserProfile, banking: dict) -> str | None:
     return country or None
 
 
+# Wise asks for US states as a two letter code and rejects anything else.
+US_STATE_CODES = {
+    'alabama': 'AL', 'alaska': 'AK', 'arizona': 'AZ', 'arkansas': 'AR',
+    'armed forces americas': 'AA', 'armed forces europe': 'AE',
+    'armed forces pacific': 'AP', 'california': 'CA', 'colorado': 'CO',
+    'connecticut': 'CT', 'delaware': 'DE', 'district of columbia': 'DC', 'florida': 'FL',
+    'georgia': 'GA', 'guam': 'GU', 'hawaii': 'HI', 'idaho': 'ID', 'illinois': 'IL',
+    'indiana': 'IN', 'iowa': 'IA', 'kansas': 'KS', 'kentucky': 'KY', 'louisiana': 'LA',
+    'maine': 'ME', 'maryland': 'MD', 'massachusetts': 'MA', 'michigan': 'MI',
+    'minnesota': 'MN', 'mississippi': 'MS', 'missouri': 'MO', 'montana': 'MT',
+    'nebraska': 'NE', 'nevada': 'NV', 'new hampshire': 'NH', 'new jersey': 'NJ',
+    'new mexico': 'NM', 'new york': 'NY', 'north carolina': 'NC', 'north dakota': 'ND',
+    'northern mariana islands': 'MP', 'ohio': 'OH', 'oklahoma': 'OK', 'oregon': 'OR',
+    'pennsylvania': 'PA', 'puerto rico': 'PR', 'rhode island': 'RI',
+    'south carolina': 'SC', 'south dakota': 'SD', 'tennessee': 'TN', 'texas': 'TX',
+    'utah': 'UT', 'vermont': 'VT', 'virgin islands': 'VI', 'virginia': 'VA',
+    'washington': 'WA', 'west virginia': 'WV', 'wisconsin': 'WI', 'wyoming': 'WY',
+}
+
+_US_STATE_CODE_SET = frozenset(US_STATE_CODES.values())
+
+
+def resolve_state(profile: UserProfile) -> str | None:
+    """
+    Determine the US state code for Wise payee creation.
+
+    ``profile.state`` is free text, so accept the code or the spelled out name.
+    """
+    state = (profile.state or '').strip()
+    code = US_STATE_CODES.get(state.lower(), state.upper())
+    return code if code in _US_STATE_CODE_SET else None
+
+
 def banking_session_payload(cleaned_data: dict) -> dict:
     """Serialize validated ``WiseRecipientForm`` data for session storage."""
     return {
@@ -72,6 +106,7 @@ def banking_session_payload(cleaned_data: dict) -> dict:
         'bank_account_no': cleaned_data.get('bank_account_no', ''),
         'bank_routing_no': cleaned_data.get('bank_routing_no', ''),
         'bank_ifsc': cleaned_data.get('bank_ifsc', ''),
+        'bank_account_type': cleaned_data.get('bank_account_type', ''),
     }
 
 
