@@ -14,7 +14,9 @@ def recipient_type_for_method(method: str | None) -> str:
     if method == BankingMethod.US_BANK:
         return 'aba'
     if method == BankingMethod.INDIA_IFSC:
-        return 'ifsc'
+        # Wise calls this one 'indian'. 'ifsc' is the code inside the details,
+        # not an account type, and Wise rejects it with "Account type is not valid".
+        return 'indian'
     return 'iban'
 
 
