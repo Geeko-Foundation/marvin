@@ -107,8 +107,25 @@ class TravelRequest(AuditModel):
         return sum(e.estimated_amount for e in self.expenses.all())
 
     def total_approved(self):
-        """Sum of committee-approved amounts (used for payment)."""
+        """Sum of committee-approved amounts."""
         return sum(e.approved_amount or 0 for e in self.expenses.all())
+
+    def total_actual(self):
+        """Sum of what the trip actually cost, as reported with the receipts."""
+        return sum(e.actual_amount or 0 for e in self.expenses.all())
+
+    def total_payable(self):
+        """What finance pays: the lesser of approved and actual, line by line."""
+        return sum(e.payable_amount() or 0 for e in self.expenses.all())
+
+    def has_all_actual_amounts(self):
+        """True when every approved line has its actual cost reported."""
+        lines = [e for e in self.expenses.all() if e.approved_amount is not None]
+        return bool(lines) and all(e.actual_amount is not None for e in lines)
+
+    def expenses_needing_a_decision(self):
+        """Lines whose receipt currency differs from the approved currency."""
+        return [e for e in self.expenses.all() if e.has_currency_mismatch()]
 
     def has_all_required_documents(self):
         """True when receipt, invoice, and signed form are all uploaded."""
@@ -142,12 +159,34 @@ class Expense(AuditModel):
     estimated_currency = models.CharField(max_length=3, default='EUR')
     approved_amount = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
     approved_currency = models.CharField(max_length=3, blank=True, null=True)
+    actual_amount = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
+    actual_currency = models.CharField(max_length=3, blank=True, null=True)
 
     class Meta:
         ordering = ['id']
 
     def __str__(self):
         return f'{self.get_category_display()}: {self.estimated_amount} {self.estimated_currency}'
+
+    def has_currency_mismatch(self):
+        """True when the receipt is in a different currency from the approval."""
+        if self.actual_amount is None or not self.actual_currency:
+            return False
+        return self.actual_currency != self.approved_currency
+
+    def payable_amount(self):
+        """
+        What this line is worth at payout: the lesser of approved and actual.
+
+        Someone who is approved 600 and spends 400 is paid 400. Comparing two
+        currencies needs a rate and a decision, so in that case the approved
+        amount stands and the line is flagged for finance instead.
+        """
+        if self.approved_amount is None:
+            return None
+        if self.actual_amount is None or self.has_currency_mismatch():
+            return self.approved_amount
+        return min(self.approved_amount, self.actual_amount)
 
 
 class StateHistory(AuditModel):

@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+
+{% block title %}Actual Costs for Request #{{ travel_request.pk }}{% endblock %}
+
+{% block content %}
+<h1 class="text-2xl font-bold mb-2">Report your actual costs</h1>
+<p class="opacity-60 mb-6">Request #{{ travel_request.pk }} — {{ travel_request.event.name }}</p>
+
+<div class="card bg-base-100 shadow-sm mb-6">
+  <div class="card-body">
+    <p class="text-sm opacity-80">
+      Enter what each expense actually came to, as shown on your receipts. You are
+      reimbursed the lower of the approved amount and the actual cost, so spending
+      less than approved means you are paid the lower figure.
+    </p>
+  </div>
+</div>
+
+<form method="post">
+  {% csrf_token %}
+  {{ formset.management_form }}
+
+  {% if formset.non_form_errors %}
+  <div class="alert alert-error mb-4">
+    {% for error in formset.non_form_errors %}<span>{{ error }}</span>{% endfor %}
+  </div>
+  {% endif %}
+
+  <div class="card bg-base-100 shadow-sm mb-6">
+    <div class="card-body">
+      <div class="overflow-x-auto">
+        <table class="table table-sm">
+          <thead>
+            <tr>
+              <th>Category</th>
+              <th>Description</th>
+              <th>Approved</th>
+              <th>Actual *</th>
+              <th>Currency</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for form in formset %}
+            <tr>
+              <td>{{ form.instance.get_category_display }}</td>
+              <td>{{ form.instance.description }}</td>
+              <td>{{ form.instance.approved_amount }} {{ form.instance.approved_currency }}</td>
+              <td>
+                {{ form.id }}
+                {{ form.actual_amount }}
+                {% for error in form.actual_amount.errors %}
+                <span class="label-text-alt text-error">{{ error }}</span>
+                {% endfor %}
+              </td>
+              <td>{{ form.actual_currency }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+          <tfoot>
+            <tr class="font-semibold">
+              <td colspan="2">Approved total</td>
+              <td>{{ travel_request.total_approved }} EUR</td>
+              <td colspan="2"></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <p class="text-sm opacity-60 mt-2">
+        If a receipt is in a different currency from the approved amount, finance
+        will settle that line by hand rather than guess at a rate.
+      </p>
+    </div>
+  </div>
+
+  <div class="flex gap-2">
+    <button type="submit" class="btn btn-primary">Save actual costs</button>
+    <a href="{% url 'request_detail' travel_request.pk %}" class="btn btn-ghost">Cancel</a>
+  </div>
+</form>
+{% endblock %}
