@@ -46,7 +46,7 @@
           {% for req in pending %}
           <tr>
             <td><input type="checkbox" class="checkbox checkbox-sm select-pending" name="request_ids" value="{{ req.pk }}"></td>
-            <td>#{{ req.pk }}</td>
+            <td>{{ req.reference }}</td>
             <td>{{ req.user.get_full_name|default:req.user.username }}</td>
             <td>{{ req.event.name }}</td>
             <td>{{ req.created_at|date:"M d, Y" }}</td>

@@ -101,7 +101,7 @@ def send_push_to_group(
 
 def _request_label(travel_request: TravelRequest) -> str:
     """Short human-readable label for push notification body text."""
-    return f'#{travel_request.pk} — {travel_request.event.name}'
+    return f'{travel_request.reference} — {travel_request.event.name}'
 
 
 def _request_url(travel_request: TravelRequest) -> str:

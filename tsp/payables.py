@@ -88,7 +88,7 @@ class TravelRequestPayableAdapter(PayableAdapter):
         profile = getattr(obj.user, 'profile', None)
         wise_ready = bool(profile and profile.is_wise_recipient_ready())
         return {
-            'title': f'#{obj.pk} — {obj.user.get_full_name() or obj.user.username}',
+            'title': f'{obj.reference} — {obj.user.get_full_name() or obj.user.username}',
             'subtitle': f'{obj.event.name} · {obj.user.email}',
             'totals': obj.totals_payable(),
             'mixed_currencies': obj.has_mixed_currencies(),
@@ -97,5 +97,5 @@ class TravelRequestPayableAdapter(PayableAdapter):
         }
 
     def payment_reference(self, obj) -> str:
-        """Gateway reference string for this travel request."""
-        return f'TSP-{obj.pk}'
+        """Gateway reference string, the same one shown on the request."""
+        return obj.reference

@@ -32,7 +32,7 @@
       <div class="border border-base-300 rounded-box p-4">
         <div class="flex justify-between items-start mb-2">
           <div>
-            <h3 class="font-semibold">#{{ req.pk }} — {{ req.user.get_full_name|default:req.user.username }}</h3>
+            <h3 class="font-semibold">{{ req.reference }} — {{ req.user.get_full_name|default:req.user.username }}</h3>
             <p class="text-sm opacity-60">{{ req.event.name }}</p>
           </div>
           <span class="badge {{ req.state|state_badge }}">{{ req.get_state_display }}</span>
@@ -67,7 +67,7 @@
         <tbody>
           {% for req in recently_paid %}
           <tr>
-            <td>#{{ req.pk }}</td>
+            <td>{{ req.reference }}</td>
             <td>{{ req.user.get_full_name|default:req.user.username }}</td>
             <td>{{ req.event.name }}</td>
             <td>{% if req.payment %}{{ req.payment.amount }} {{ req.payment.currency }}{% else %}—{% endif %}</td>

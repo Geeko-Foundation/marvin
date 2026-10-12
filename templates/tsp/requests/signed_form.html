@@ -10,7 +10,7 @@
   </div>
 
   <div class="mb-6">
-    <p><strong>Request ID:</strong> #{{ travel_request.pk }}</p>
+    <p><strong>Request ID:</strong> {{ travel_request.reference }}</p>
     <p><strong>Requester:</strong> {{ travel_request.user.get_full_name|default:travel_request.user.username }}</p>
     <p><strong>Event:</strong> {{ travel_request.event.name }}</p>
     <p><strong>Location:</strong> {{ travel_request.event.location }}</p>

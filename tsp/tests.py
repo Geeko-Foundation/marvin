@@ -547,3 +547,43 @@ class ActualCostTests(TestCase):
         self.client.force_login(make_user('someoneelse', [GROUP_REQUESTER]))
         response = self.client.get(reverse('request_actuals', args=[self.request.pk]))
         self.assertEqual(response.status_code, 403)
+
+
+class RequestReferenceTests(TestCase):
+    """One number names a request on screen, in notifications and at the bank."""
+
+    def setUp(self):
+        self.owner = make_user('refowner', [GROUP_REQUESTER])
+        self.event = Event.objects.create(
+            name='Conf', location='Berlin',
+            start_date=date(2026, 5, 1), end_date=date(2026, 5, 3),
+        )
+        self.request = TravelRequest.objects.create(
+            user=self.owner, event=self.event, state=RequestState.SUBMITTED_FOR_PAYMENT,
+            description='Trip',
+        )
+
+    def test_the_reference_reads_the_way_people_quote_it(self):
+        self.assertEqual(self.request.reference, f'TSP{self.request.pk}')
+
+    def test_the_page_shows_it(self):
+        self.client.force_login(self.owner)
+        html = self.client.get(reverse('request_detail', args=[self.request.pk])).content.decode()
+        self.assertIn(self.request.reference, html)
+
+    def test_the_bank_transfer_uses_the_same_one(self):
+        from tsp.payables import TravelRequestPayableAdapter
+
+        Expense.objects.create(
+            request=self.request, category='transportation', description='Flight',
+            estimated_amount=600, approved_amount=600, approved_currency='EUR',
+        )
+        adapter = TravelRequestPayableAdapter()
+        self.assertEqual(adapter.payment_reference(self.request), self.request.reference)
+        payment = adapter.build_payment_request(self.request)
+        self.assertEqual(payment.reference, self.request.reference)
+
+    def test_notifications_name_it_the_same_way(self):
+        from profile.services.push_notifications import _request_label
+
+        self.assertTrue(_request_label(self.request).startswith(self.request.reference))

@@ -1,13 +1,13 @@
 {% extends "base.html" %}
 {% load tsp_tags %}
 
-{% block title %}Request #{{ travel_request.pk }}{% endblock %}
+{% block title %}{{ travel_request.reference }}{% endblock %}
 
 {% block content %}
 <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 mb-6">
   <div>
     <div class="flex items-center gap-3 mb-1">
-      <h1 class="text-2xl font-bold">Request #{{ travel_request.pk }}</h1>
+      <h1 class="text-2xl font-bold">{{ travel_request.reference }}</h1>
       <span class="badge {{ travel_request.state|state_badge }}">{{ travel_request.get_state_display }}</span>
     </div>
     <p class="opacity-60">{{ travel_request.event.name }} · {{ travel_request.event.location }}</p>
