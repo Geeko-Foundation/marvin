@@ -13,12 +13,12 @@
     {% endif %}
     <p class="text-sm opacity-60 mb-4">
       Enter your bank details below. They are sent directly to Wise and are
-      <strong>not stored</strong> in Marvin — only your Wise recipient ID is kept.
+      <strong>not stored</strong> in {{ app_name }} — only your Wise recipient ID is kept.
     </p>
 
     <div class="alert alert-info mb-4 text-sm">
       <div>
-        <p class="font-semibold">When you submit, Marvin calls the Wise API to:</p>
+        <p class="font-semibold">When you submit, {{ app_name }} calls the Wise API to:</p>
         <ol class="list-decimal list-inside mt-1 opacity-80 space-y-1">
           <li>Create your payee (recipient) account</li>
           <li>Attach your bank details to that account</li>

@@ -1,8 +1,8 @@
 <script>
 (function () {
   var STORAGE_KEY = 'marvin-theme';
-  var LIGHT = 'corporate';
-  var DARK = 'business';
+  var LIGHT = '{{ theme_light }}';
+  var DARK = '{{ theme_dark }}';
   var saved = localStorage.getItem(STORAGE_KEY);
   if (saved === DARK || saved === LIGHT) {
     document.documentElement.setAttribute('data-theme', saved);
