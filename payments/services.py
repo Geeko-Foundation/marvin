@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from django.contrib.contenttypes.models import ContentType
+from django.db import transaction
 
 from payments.base import PaymentRequest
 from payments.models import PaymentRecord
@@ -35,6 +36,7 @@ class PaymentService:
         """Build a normalized payment instruction from a single payable object."""
         return self.adapter.build_payment_request(obj)
 
+    @transaction.atomic
     def process_payment(self, object_id: int, gateway_id: str, user) -> PaymentRecord:
         """
         Initiate payment for one queue item and persist the result.
@@ -49,6 +51,14 @@ class PaymentService:
             ValueError: Unknown ``gateway_id``.
         """
         obj = self.adapter.get_object(object_id)
+        obj = type(obj)._default_manager.select_for_update().get(pk=obj.pk)
+        if not self.adapter.get_queue().filter(pk=obj.pk).exists():
+            raise ValueError('This request is no longer awaiting payment.')
+        ct = ContentType.objects.get_for_model(obj)
+        if PaymentRecord.objects.filter(content_type=ct, object_id=obj.pk).exclude(
+            status__in=['failed', 'cancelled'],
+        ).exists():
+            raise ValueError('A payment already exists for this request. Check its status before retrying.')
         gateway = get_gateway(gateway_id)
         if gateway is None:
             raise ValueError(f'Unknown gateway: {gateway_id}')
@@ -74,7 +84,8 @@ class PaymentService:
             changed_by=user,
         )
 
-        self.adapter.on_payment_completed(obj, record, user)
+        if record.status in {'success', 'completed'}:
+            self.adapter.on_payment_completed(obj, record, user)
         return record
 
     def export_batch(self, gateway_id: str) -> tuple[str | bytes, str, str]:
@@ -113,7 +124,12 @@ class PaymentService:
         if gateway is None:
             return record
         result = gateway.get_status(record.external_id)
-        record.status = result.status
+        if result.status != 'unknown':
+            record.status = result.status
         record.metadata.update(result.metadata)
         record.save()
+        if record.status in {'success', 'completed'}:
+            obj = record.content_object
+            if obj is not None:
+                self.adapter.on_payment_completed(obj, record, record.processed_by)
         return record
