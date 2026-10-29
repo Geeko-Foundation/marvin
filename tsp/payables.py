@@ -32,7 +32,7 @@ class TravelRequestPayableAdapter(PayableAdapter):
 
     def build_payment_request(self, obj: TravelRequest) -> PaymentRequest:
         """
-        Build a payment instruction from approved expense totals and user profile.
+        Build a payment instruction from the payable total and user profile.
 
         Includes Wise ``wise_account_id`` in metadata when the requestor is verified.
         """
@@ -51,7 +51,7 @@ class TravelRequestPayableAdapter(PayableAdapter):
                 metadata['wise_account_id'] = profile.wise_account_id
 
         return PaymentRequest(
-            amount=Decimal(str(obj.total_approved())),
+            amount=Decimal(str(obj.total_payable())),
             currency=currency,
             recipient_name=user.get_full_name() or user.username,
             recipient_email=user.email,
@@ -83,7 +83,7 @@ class TravelRequestPayableAdapter(PayableAdapter):
         return {
             'title': f'#{obj.pk} — {obj.user.get_full_name() or obj.user.username}',
             'subtitle': f'{obj.event.name} · {obj.user.email}',
-            'amount': obj.total_approved(),
+            'amount': obj.total_payable(),
             'currency': obj.expenses.first().approved_currency if obj.expenses.exists() else 'EUR',
             'banking': profile.banking_summary() if profile else 'Not configured',
             'wise_ready': wise_ready,

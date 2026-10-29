@@ -166,6 +166,40 @@ ExpenseFormSet = forms.inlineformset_factory(
 )
 
 
+class ExpenseActualForm(forms.ModelForm):
+    """What a line actually cost, reported with the receipts."""
+
+    class Meta:
+        model = Expense
+        fields = ['actual_amount', 'actual_currency']
+        widgets = {
+            'actual_amount': forms.NumberInput(
+                attrs={'class': 'input input-bordered w-full', 'step': '0.01', 'min': '0'},
+            ),
+            'actual_currency': forms.Select(
+                choices=CURRENCY_CHOICES,
+                attrs={'class': 'select select-bordered w-full'},
+            ),
+        }
+
+    def __init__(self, *args, **kwargs):
+        """Default the currency to the one the line was approved in."""
+        super().__init__(*args, **kwargs)
+        self.fields['actual_amount'].required = True
+        approved = self.instance.approved_currency if self.instance else None
+        if approved and not self.instance.actual_currency:
+            self.fields['actual_currency'].initial = approved
+
+
+ExpenseActualFormSet = forms.inlineformset_factory(
+    TravelRequest,
+    Expense,
+    form=ExpenseActualForm,
+    extra=0,
+    can_delete=False,
+)
+
+
 class ApprovalForm(forms.Form):
     """Optional committee notes when approving a request."""
 
