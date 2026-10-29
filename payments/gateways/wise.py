@@ -103,7 +103,7 @@ class WiseApiGateway(PaymentGateway):
         """
         Poll Wise for the current transfer status by transfer ID.
 
-        On API failure, assumes ``success`` so stale records are not blocked.
+        On API failure, report an unknown result so the stored status is preserved.
         """
         try:
             transfer = self._client.get_transfer(int(external_id))
@@ -113,7 +113,7 @@ class WiseApiGateway(PaymentGateway):
                 metadata={'transfer_status': transfer['status']},
             )
         except WiseApiError:
-            return PaymentResult(status='success', external_id=external_id)
+            return PaymentResult(status='unknown', external_id=external_id)
 
     def supported_currencies(self) -> list[str]:
         """Return currencies from the Wise API, falling back to a static list."""
