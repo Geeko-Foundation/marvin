@@ -9,7 +9,8 @@ from django.contrib.auth.models import User
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
-from django.db.models import Count, Sum
+from django.db.models import Count, Sum, Value
+from django.db.models.functions import Coalesce, NullIf
 from django.db.models import Q
 from django.http import FileResponse, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -908,15 +909,27 @@ def reports(request):
     requests_list = qs.order_by('-updated_at')
 
     total_requests = qs.count()
-    total_approved = Expense.objects.filter(
-        request__in=qs,
-        approved_amount__isnull=False,
-    ).aggregate(total=Sum('approved_amount'))['total'] or 0
+    # Requests may be approved and paid in different currencies, so these are
+    # grouped rather than added together.
+    total_approved = sorted(
+        Expense.objects.filter(request__in=qs, approved_amount__isnull=False)
+        .annotate(report_currency=Coalesce(
+            NullIf('approved_currency', Value('')), 'estimated_currency',
+        ))
+        .values('report_currency')
+        .annotate(total=Sum('approved_amount'))
+        .values_list('report_currency', 'total')
+    )
     travel_request_ct = ContentType.objects.get_for_model(TravelRequest)
-    total_paid = PaymentRecord.objects.filter(
-        content_type=travel_request_ct,
-        object_id__in=qs.filter(state=RequestState.PAID).values_list('pk', flat=True),
-    ).aggregate(total=Sum('amount'))['total'] or 0
+    total_paid = sorted(
+        PaymentRecord.objects.filter(
+            content_type=travel_request_ct,
+            object_id__in=qs.filter(state=RequestState.PAID).values_list('pk', flat=True),
+        )
+        .values('currency')
+        .annotate(total=Sum('amount'))
+        .values_list('currency', 'total')
+    )
 
     if request.GET.get('format') == 'csv':
         response = HttpResponse(content_type='text/csv')
@@ -924,11 +937,16 @@ def reports(request):
         writer = csv.writer(response)
         writer.writerow([
             'Date', 'Event', 'Location', 'Recipient', 'Country',
-            'Status', 'Approved Amount', 'Paid Amount', 'Payment Method',
+            'Status', 'Approved Amount', 'Paid Amount', 'Paid Currency',
+            'Payment Method',
         ])
         for req in requests_list:
             paid = req.payment.amount if req.payment else ''
+            paid_currency = req.payment.currency if req.payment else ''
             method = req.payment.method_label if req.payment else ''
+            # An amount without its currency is not worth exporting.
+            approved = '; '.join(f'{amount} {currency}'
+                                 for currency, amount in req.totals_approved())
             writer.writerow([
                 req.updated_at.date(),
                 req.event.name,
@@ -936,8 +954,9 @@ def reports(request):
                 req.user.get_full_name() or req.user.username,
                 getattr(req.user.profile, 'country', ''),
                 req.get_state_display(),
-                req.total_approved(),
+                approved,
                 paid,
+                paid_currency,
                 method,
             ])
         return response

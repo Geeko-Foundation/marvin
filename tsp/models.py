@@ -102,8 +102,70 @@ class TravelRequest(AuditModel):
         """True while the request is still in draft or submitted (pre-review edit)."""
         return self.state in (RequestState.DRAFT, RequestState.SUBMITTED)
 
+    # Which amount and currency field each total reads.
+    AMOUNT_FIELDS = {
+        'estimated': ('estimated_amount', 'estimated_currency'),
+        'approved': ('approved_amount', 'approved_currency'),
+        'actual': ('actual_amount', 'actual_currency'),
+    }
+
+    def totals_by_currency(self, kind):
+        """
+        Sum one kind of amount per currency.
+
+        A request may mix currencies, so there is no single total. Returns a
+        list of ``(currency, amount)`` sorted by currency, which templates can
+        loop over.
+        """
+        amount_field, currency_field = self.AMOUNT_FIELDS[kind]
+        totals = {}
+        for expense in self.expenses.all():
+            amount = getattr(expense, amount_field)
+            if amount is None:
+                continue
+            currency = getattr(expense, currency_field) or expense.estimated_currency
+            totals[currency] = totals.get(currency, 0) + amount
+        return sorted(totals.items())
+
+    def totals_estimated(self):
+        """Estimated totals per currency."""
+        return self.totals_by_currency('estimated')
+
+    def totals_approved(self):
+        """Approved totals per currency."""
+        return self.totals_by_currency('approved')
+
+    def totals_actual(self):
+        """Reported actual totals per currency."""
+        return self.totals_by_currency('actual')
+
+    def totals_payable(self):
+        """What finance owes per currency, line by line."""
+        totals = {}
+        for expense in self.expenses.all():
+            amount = expense.payable_amount()
+            if amount is None:
+                continue
+            currency = expense.approved_currency or expense.estimated_currency
+            totals[currency] = totals.get(currency, 0) + amount
+        return sorted(totals.items())
+
+    def payment_currency(self):
+        """
+        The one currency this request can be paid in, or ``None`` if it mixes.
+
+        A transfer moves one currency, so a mixed request cannot be paid as a
+        single payment without someone deciding on a rate.
+        """
+        totals = self.totals_payable()
+        return totals[0][0] if len(totals) == 1 else None
+
+    def has_mixed_currencies(self):
+        """True when the approved lines are not all in the same currency."""
+        return len(self.totals_payable()) > 1
+
     def total_estimated(self):
-        """Sum of all line-item estimated amounts."""
+        """Sum of all line-item estimated amounts, ignoring currency."""
         return sum(e.estimated_amount for e in self.expenses.all())
 
     def total_approved(self):

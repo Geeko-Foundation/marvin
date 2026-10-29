@@ -37,7 +37,7 @@
           </div>
           <span class="badge {{ req.state|state_badge }}">{{ req.get_state_display }}</span>
         </div>
-        <p class="text-sm">To pay: <strong>{{ req.total_payable }} EUR</strong>{% if req.total_actual %} <span class="opacity-60">(approved {{ req.total_approved }}, actual {{ req.total_actual }})</span>{% endif %}</p>
+        <p class="text-sm">To pay: {% for currency, amount in req.totals_payable %}<strong>{{ amount }} {{ currency }}</strong>{% if not forloop.last %}, {% endif %}{% endfor %}{% if req.has_mixed_currencies %} <span class="text-warning">(mixed, pay separately)</span>{% endif %}</p>
         <p class="text-sm">Documents: {{ req.doc_count }}/3</p>
         <a href="{% url 'request_detail' req.pk %}" class="btn btn-sm btn-ghost mt-2">View Details</a>
       </div>

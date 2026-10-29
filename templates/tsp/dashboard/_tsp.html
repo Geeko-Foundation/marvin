@@ -46,7 +46,7 @@
             <td>{{ req.user.get_full_name|default:req.user.username }}</td>
             <td>{{ req.event.name }}</td>
             <td>{{ req.created_at|date:"M d, Y" }}</td>
-            <td>{{ req.total_estimated }} EUR</td>
+            <td>{% for currency, amount in req.totals_estimated %}{{ amount }} {{ currency }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
             <td><a href="{% url 'request_detail' req.pk %}" class="btn btn-primary btn-sm">Review</a></td>
           </tr>
           {% endfor %}

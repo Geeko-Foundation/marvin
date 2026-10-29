@@ -37,10 +37,17 @@ class TravelRequestPayableAdapter(PayableAdapter):
         Includes Wise ``wise_account_id`` in metadata when the requestor is verified.
         """
         user = obj.user
-        currency = 'EUR'
-        first_expense = obj.expenses.first()
-        if first_expense and first_expense.approved_currency:
-            currency = first_expense.approved_currency
+        totals = obj.totals_payable()
+        if len(totals) > 1:
+            # Taking the first expense's currency used to label the whole sum,
+            # so a 3 USD line was paid as 3 EUR. One transfer moves one
+            # currency, so this needs a person, not a guess.
+            mixed = ', '.join(f'{amount} {code}' for code, amount in totals)
+            raise ValueError(
+                f'Request #{obj.pk} mixes currencies ({mixed}). '
+                'Pay each currency separately or re-approve it in one currency.'
+            )
+        currency, amount = totals[0] if totals else ('EUR', Decimal('0'))
 
         profile = getattr(user, 'profile', None)
         metadata = {}
@@ -51,7 +58,7 @@ class TravelRequestPayableAdapter(PayableAdapter):
                 metadata['wise_account_id'] = profile.wise_account_id
 
         return PaymentRequest(
-            amount=Decimal(str(obj.total_payable())),
+            amount=Decimal(str(amount)),
             currency=currency,
             recipient_name=user.get_full_name() or user.username,
             recipient_email=user.email,
@@ -83,8 +90,8 @@ class TravelRequestPayableAdapter(PayableAdapter):
         return {
             'title': f'#{obj.pk} — {obj.user.get_full_name() or obj.user.username}',
             'subtitle': f'{obj.event.name} · {obj.user.email}',
-            'amount': obj.total_payable(),
-            'currency': obj.expenses.first().approved_currency if obj.expenses.exists() else 'EUR',
+            'totals': obj.totals_payable(),
+            'mixed_currencies': obj.has_mixed_currencies(),
             'banking': profile.banking_summary() if profile else 'Not configured',
             'wise_ready': wise_ready,
         }
