@@ -688,6 +688,62 @@ def request_approve(request, pk):
 @login_required
 @group_required(GROUP_TSP)
 @require_POST
+def request_batch_review(request):
+    """Approve or reject several submitted requests in one go."""
+    action = request.POST.get('action')
+    ids = request.POST.getlist('request_ids')
+    notes = request.POST.get('notes', '').strip()
+
+    if action not in ('approve', 'reject'):
+        messages.error(request, 'Choose whether to approve or reject.')
+        return redirect('dashboard')
+    if not ids:
+        messages.error(request, 'Select at least one request first.')
+        return redirect('dashboard')
+    if action == 'reject' and not notes:
+        messages.error(request, 'Rejecting needs a note saying why.')
+        return redirect('dashboard')
+
+    selected = TravelRequest.objects.filter(
+        pk__in=ids, state=RequestState.SUBMITTED,
+    ).prefetch_related('expenses')
+
+    reviewed = 0
+    for travel_request in selected:
+        if action == 'approve':
+            # Approving in bulk means approving exactly what was asked for.
+            # Left unpriced, the request would reach finance worth nothing,
+            # since total_approved() counts a missing amount as zero.
+            for expense in travel_request.expenses.all():
+                if expense.approved_amount is None:
+                    expense.approved_amount = expense.estimated_amount
+                    expense.approved_currency = expense.estimated_currency
+                    expense.save(update_fields=['approved_amount', 'approved_currency'])
+            target = RequestState.APPROVED
+        else:
+            target = RequestState.REJECTED
+
+        try:
+            transition_request(travel_request, target, request.user, notes)
+            reviewed += 1
+        except StateTransitionError:
+            continue
+
+    if reviewed:
+        messages.success(request, f'{reviewed} request{"s" if reviewed != 1 else ""} {action}d.')
+    ignored = len(ids) - reviewed
+    if ignored:
+        messages.warning(
+            request,
+            f'{ignored} selected request{"s were" if ignored != 1 else " was"} '
+            'left alone, having already moved on.',
+        )
+    return redirect('dashboard')
+
+
+@login_required
+@group_required(GROUP_TSP)
+@require_POST
 def request_reject(request, pk):
     """Reject a submitted request with required notes."""
     travel_request = get_object_or_404(TravelRequest, pk=pk)
