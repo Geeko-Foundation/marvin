@@ -10,6 +10,7 @@ urlpatterns = [
     path('signup/banking/', views.signup_banking, name='signup_banking'),
     path('signup/banking/progress/', views.signup_banking_progress, name='signup_banking_progress'),
     path('signup/banking/step/', views.signup_banking_step, name='signup_banking_step'),
+    path('signup/banking/options/', views.signup_banking_options, name='signup_banking_options'),
     path('signup/banking/skip/', views.signup_skip_banking, name='signup_skip_banking'),
     path('signup/complete/', views.signup_complete, name='signup_complete'),
     path('', views.dashboard, name='dashboard'),

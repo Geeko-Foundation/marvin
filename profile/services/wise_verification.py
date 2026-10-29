@@ -86,16 +86,17 @@ def run_verification_step(profile: UserProfile, state: dict, step_id: str) -> di
 
     try:
         if step_id == 'create_payee':
+            payee_country = resolve_country(profile, banking)
             payee = client.create_payee(
                 full_name=user.get_full_name() or user.username,
                 email=user.email,
                 currency=banking_currency,
                 account_type=recipient_type,
-                country=resolve_country(profile, banking),
+                country=payee_country,
                 address_line=profile.address_line or None,
                 city=profile.city or None,
                 post_code=profile.postal_code or None,
-                state=resolve_state(profile),
+                state=resolve_state(profile, payee_country),
                 **bank,
             )
             state['account_id'] = payee['id']

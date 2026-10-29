@@ -2,6 +2,7 @@ from django.conf import settings
 from django.db import models
 
 from marvin.audit import AuditModel
+from profile.countries import STATE_CODES, normalise_country
 
 
 class BankingMethod(models.TextChoices):
@@ -10,6 +11,10 @@ class BankingMethod(models.TextChoices):
     IBAN = 'iban', 'International (IBAN)'
     US_BANK = 'us_bank', 'United States'
     INDIA_IFSC = 'india_ifsc', 'India (IFSC)'
+    AUSTRALIA = 'australia', 'Australia (BSB)'
+    BRAZIL = 'brazil', 'Brazil (CPF)'
+    INDONESIA = 'indonesia', 'Indonesia'
+    JAPAN = 'japan', 'Japan'
 
 
 class UserProfile(AuditModel):
@@ -115,7 +120,12 @@ class UserProfile(AuditModel):
             self.address_line,
             self.city,
             self.country,
+            # Wise wants a post code on every corridor, and a state for US and
+            # Australian addresses, or it refuses to create the payee.
+            self.postal_code,
         ]
+        if normalise_country(self.country) in STATE_CODES:
+            required.append(self.state)
         return all(required)
 
     def is_wise_recipient_ready(self) -> bool:

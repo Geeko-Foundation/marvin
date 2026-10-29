@@ -53,39 +53,54 @@
         </div>
       </div>
 
-      <div id="iban-fields" class="grid gap-4 md:grid-cols-2">
-        <div class="form-control md:col-span-2">
+      <div class="grid gap-4 md:grid-cols-2">
+        <div id="field-iban" class="form-control md:col-span-2">
           <label class="label"><span class="label-text">IBAN *</span></label>
           {{ form.bank_iban }}
         </div>
-        <div class="form-control md:col-span-2">
+        <div id="field-swift" class="form-control md:col-span-2">
           <label class="label">
             <span class="label-text">SWIFT/BIC</span>
             <span class="label-text-alt">Optional — required for some non-SEPA routes</span>
           </label>
           {{ form.bank_swift }}
         </div>
-      </div>
-      <div id="account-fields" class="grid gap-4 md:grid-cols-2 hidden">
-        <div class="form-control md:col-span-2">
+        <div id="field-bank-code" class="form-control md:col-span-2 hidden">
+          <label class="label"><span class="label-text">Bank *</span></label>
+          {{ form.bank_code }}
+          <span id="bank-code-hint" class="label-text-alt mt-1 hidden">Loading banks…</span>
+        </div>
+        <div id="field-account-no" class="form-control md:col-span-2 hidden">
           <label class="label"><span class="label-text">Account Number *</span></label>
           {{ form.bank_account_no }}
         </div>
-      </div>
-      <div id="us-fields" class="grid gap-4 md:grid-cols-2 hidden">
-        <div class="form-control">
+        <div id="field-routing" class="form-control hidden">
           <label class="label"><span class="label-text">ABA Routing Number *</span></label>
           {{ form.bank_routing_no }}
         </div>
-        <div class="form-control">
-          <label class="label"><span class="label-text">Account Type *</span></label>
-          {{ form.bank_account_type }}
-        </div>
-      </div>
-      <div id="india-fields" class="grid gap-4 md:grid-cols-2 hidden">
-        <div class="form-control">
+        <div id="field-ifsc" class="form-control hidden">
           <label class="label"><span class="label-text">IFSC Code *</span></label>
           {{ form.bank_ifsc }}
+        </div>
+        <div id="field-bsb" class="form-control hidden">
+          <label class="label"><span class="label-text">BSB Code *</span></label>
+          {{ form.bank_bsb }}
+        </div>
+        <div id="field-branch" class="form-control hidden">
+          <label class="label"><span class="label-text">Branch Code *</span></label>
+          {{ form.bank_branch }}
+        </div>
+        <div id="field-japan-branch" class="form-control hidden">
+          <label class="label"><span class="label-text">Branch *</span></label>
+          {{ form.bank_japan_branch }}
+        </div>
+        <div id="field-cpf" class="form-control hidden">
+          <label class="label"><span class="label-text">CPF *</span></label>
+          {{ form.bank_cpf }}
+        </div>
+        <div id="field-account-type" class="form-control hidden">
+          <label class="label"><span class="label-text">Account Type *</span></label>
+          {{ form.bank_account_type }}
         </div>
       </div>
 
@@ -110,19 +125,110 @@
 
 {% block extra_js %}
 <script>
+  const optionsUrl = "{% url 'signup_banking_options' %}";
   const methodSelect = document.querySelector('[name="banking_method"]');
-  const ibanFields = document.getElementById('iban-fields');
-  const usFields = document.getElementById('us-fields');
-  const indiaFields = document.getElementById('india-fields');
-  const accountFields = document.getElementById('account-fields');
+  const bankSelect = document.querySelector('[name="bank_code"]');
+  const branchSelect = document.querySelector('[name="bank_japan_branch"]');
+  const typeSelect = document.querySelector('[name="bank_account_type"]');
+  const bankHint = document.getElementById('bank-code-hint');
+
+  // Mirrors REQUIRED_BANK_FIELDS in profile/forms.py, plus the optional BIC.
+  const fieldsByMethod = {
+    iban: ['field-iban', 'field-swift'],
+    us_bank: ['field-account-no', 'field-routing', 'field-account-type'],
+    india_ifsc: ['field-account-no', 'field-ifsc'],
+    australia: ['field-account-no', 'field-bsb'],
+    brazil: ['field-account-no', 'field-bank-code', 'field-branch', 'field-cpf',
+             'field-account-type'],
+    indonesia: ['field-account-no', 'field-bank-code'],
+    japan: ['field-account-no', 'field-bank-code', 'field-japan-branch',
+            'field-account-type'],
+  };
+  const accountTypesByMethod = {
+    us_bank: ['CHECKING', 'SAVINGS'],
+    brazil: ['CHECKING', 'SAVINGS', 'PAYMENT'],
+    japan: ['CURRENT', 'SAVINGS', 'CHECKING'],
+  };
+  const allFields = [...new Set(Object.values(fieldsByMethod).flat())];
+  const typeLabels = {CHECKING: 'Checking', SAVINGS: 'Savings', CURRENT: 'Current',
+                      PAYMENT: 'Payment'};
+
+  function fill(select, options, placeholder) {
+    if (!select) return;
+    const previous = select.value;
+    select.innerHTML = '';
+    const blank = document.createElement('option');
+    blank.value = '';
+    blank.textContent = placeholder;
+    select.appendChild(blank);
+    for (const option of options) {
+      const el = document.createElement('option');
+      el.value = option.value;
+      el.textContent = option.label;
+      select.appendChild(el);
+    }
+    if (options.some((o) => o.value === previous)) select.value = previous;
+  }
+
+  async function loadOptions(params) {
+    const response = await fetch(`${optionsUrl}?${new URLSearchParams(params)}`, {
+      headers: {'X-Requested-With': 'fetch'},
+    });
+    if (!response.ok) throw new Error(response.status);
+    return (await response.json()).options;
+  }
+
+  async function loadBanks(method) {
+    fill(bankSelect, [], 'Loading banks…');
+    bankHint?.classList.add('hidden');
+    try {
+      const options = await loadOptions({method});
+      fill(bankSelect, options, 'Select your bank');
+      if (!options.length && bankHint) {
+        bankHint.textContent = 'Could not reach Wise for the bank list. Reload to try again.';
+        bankHint.classList.remove('hidden');
+      }
+    } catch (err) {
+      fill(bankSelect, [], 'Select your bank');
+      if (bankHint) {
+        bankHint.textContent = 'Could not reach Wise for the bank list. Reload to try again.';
+        bankHint.classList.remove('hidden');
+      }
+    }
+  }
+
+  async function loadBranches() {
+    const method = methodSelect?.value;
+    if (method !== 'japan' || !bankSelect?.value) {
+      fill(branchSelect, [], 'Choose a bank first');
+      return;
+    }
+    fill(branchSelect, [], 'Loading branches…');
+    try {
+      fill(branchSelect, await loadOptions({method, bank_code: bankSelect.value}),
+           'Select the branch');
+    } catch (err) {
+      fill(branchSelect, [], 'Select the branch');
+    }
+  }
+
   function toggleBankingFields() {
     const method = methodSelect?.value;
-    ibanFields?.classList.toggle('hidden', method !== 'iban');
-    accountFields?.classList.toggle('hidden', method === 'iban');
-    usFields?.classList.toggle('hidden', method !== 'us_bank');
-    indiaFields?.classList.toggle('hidden', method !== 'india_ifsc');
+    const shown = fieldsByMethod[method] || [];
+    for (const id of allFields) {
+      document.getElementById(id)?.classList.toggle('hidden', !shown.includes(id));
+    }
+    const allowed = accountTypesByMethod[method];
+    if (allowed && typeSelect) {
+      fill(typeSelect, allowed.map((v) => ({value: v, label: typeLabels[v]})),
+           'Select the account type');
+    }
+    if (shown.includes('field-bank-code')) loadBanks(method);
+    if (shown.includes('field-japan-branch')) loadBranches();
   }
+
   methodSelect?.addEventListener('change', toggleBankingFields);
+  bankSelect?.addEventListener('change', loadBranches);
   toggleBankingFields();
 </script>
 {% endblock %}

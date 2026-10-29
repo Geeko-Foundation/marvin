@@ -67,7 +67,7 @@ class WiseUsAccountTests(TestCase):
             'bank_routing_no': '111000025',
             'bank_account_type': 'CHECKING',
         })
-        self.assertEqual(kwargs['us_account_type'], 'CHECKING')
+        self.assertEqual(kwargs['bank_account_type'], 'CHECKING')
 
     def test_the_form_asks_for_an_account_type(self):
         from profile.forms import WiseRecipientForm
@@ -90,7 +90,7 @@ class WiseUsAccountTests(TestCase):
             client.create_payee(
                 full_name='A Requester', email='a@example.org', currency='USD',
                 account_type='aba', account_number='12345678', routing_number='111000025',
-                us_account_type='CHECKING', country='US', address_line='1 Main Street',
+                bank_account_type='CHECKING', country='US', address_line='1 Main Street',
                 city='Portland', post_code='97201', state='OR',
             )
         details = request.call_args.args[2]['details']
@@ -105,6 +105,7 @@ class BankingFormRenderTests(TestCase):
         self.user = make_user('rendertester', [GROUP_REQUESTER], onboarded=False)
         profile = self.user.profile
         profile.address_line, profile.city, profile.country = '1 Main St', 'Portland', 'US'
+        profile.postal_code, profile.state = '97201', 'OR'
         profile.save()
         self.client.force_login(self.user)
 

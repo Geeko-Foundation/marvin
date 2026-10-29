@@ -23,6 +23,7 @@ from django_tables2 import RequestConfig
 from profile.decorators import get_profile
 from profile.forms import OnboardingPersonalForm, WiseRecipientForm
 from profile.groups import GROUP_FINANCE, GROUP_REQUESTER, GROUP_TSP
+from profile.services.wise_banking_options import bank_choices, branch_choices
 from profile.services.wise_recipient import (
     RETURN_TO_SESSION_KEY,
     banking_session_payload,
@@ -217,6 +218,19 @@ def signup_banking(request):
         'recreate': recreate,
         'can_skip_banking': profile.can_skip_banking,
     })
+
+
+@login_required
+@group_required(GROUP_REQUESTER)
+def signup_banking_options(request):
+    """Bank and branch lists for the banking step, fetched from Wise on demand."""
+    method = request.GET.get('method', '')
+    bank_code = request.GET.get('bank_code', '')
+    if bank_code:
+        choices = branch_choices(method, bank_code)
+    else:
+        choices = bank_choices(method)
+    return JsonResponse({'options': [{'value': key, 'label': name} for key, name in choices]})
 
 
 @login_required

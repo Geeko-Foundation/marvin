@@ -36,7 +36,7 @@ def make_requester(username):
     )
     profile = UserProfile.objects.create(
         user=user, address_line='1 Main St', city='Pune', country='India',
-        wise_account_id=1, wise_recipient_verified_at=timezone.now(),
+        postal_code='411001', wise_account_id=1, wise_recipient_verified_at=timezone.now(),
     )
     profile.user.groups.clear()
     assign_user_to_group(user, 'Requester')
@@ -61,7 +61,8 @@ def make_user(username, groups, onboarded=True):
     if onboarded:
         extra = dict(
             address_line='1 Main St', city='Pune', country='India',
-            wise_account_id=1, wise_recipient_verified_at=timezone.now(),
+            postal_code='411001', wise_account_id=1,
+            wise_recipient_verified_at=timezone.now(),
         )
     UserProfile.objects.create(user=user, **extra)
     for group in groups:
