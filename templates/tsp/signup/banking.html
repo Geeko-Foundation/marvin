@@ -66,21 +66,23 @@
           {{ form.bank_swift }}
         </div>
       </div>
-      <div id="us-fields" class="grid gap-4 md:grid-cols-2 hidden">
-        <div class="form-control">
+      <div id="account-fields" class="grid gap-4 md:grid-cols-2 hidden">
+        <div class="form-control md:col-span-2">
           <label class="label"><span class="label-text">Account Number *</span></label>
           {{ form.bank_account_no }}
         </div>
+      </div>
+      <div id="us-fields" class="grid gap-4 md:grid-cols-2 hidden">
         <div class="form-control">
           <label class="label"><span class="label-text">ABA Routing Number *</span></label>
           {{ form.bank_routing_no }}
         </div>
+        <div class="form-control">
+          <label class="label"><span class="label-text">Account Type *</span></label>
+          {{ form.bank_account_type }}
+        </div>
       </div>
       <div id="india-fields" class="grid gap-4 md:grid-cols-2 hidden">
-        <div class="form-control">
-          <label class="label"><span class="label-text">Account Number *</span></label>
-          {{ form.bank_account_no }}
-        </div>
         <div class="form-control">
           <label class="label"><span class="label-text">IFSC Code *</span></label>
           {{ form.bank_ifsc }}
@@ -112,9 +114,11 @@
   const ibanFields = document.getElementById('iban-fields');
   const usFields = document.getElementById('us-fields');
   const indiaFields = document.getElementById('india-fields');
+  const accountFields = document.getElementById('account-fields');
   function toggleBankingFields() {
     const method = methodSelect?.value;
     ibanFields?.classList.toggle('hidden', method !== 'iban');
+    accountFields?.classList.toggle('hidden', method === 'iban');
     usFields?.classList.toggle('hidden', method !== 'us_bank');
     indiaFields?.classList.toggle('hidden', method !== 'india_ifsc');
   }

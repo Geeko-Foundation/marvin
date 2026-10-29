@@ -14,6 +14,7 @@ from profile.services.wise_recipient import (
     bank_details_kwargs_from_banking,
     recipient_type_for_method,
     resolve_country,
+    resolve_state,
 )
 
 
@@ -94,6 +95,7 @@ def run_verification_step(profile: UserProfile, state: dict, step_id: str) -> di
                 address_line=profile.address_line or None,
                 city=profile.city or None,
                 post_code=profile.postal_code or None,
+                state=resolve_state(profile),
                 **bank,
             )
             state['account_id'] = payee['id']

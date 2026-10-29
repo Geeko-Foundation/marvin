@@ -207,11 +207,13 @@ class WiseApiClient:
         address_line: str | None = None,
         city: str | None = None,
         post_code: str | None = None,
+        state: str | None = None,
         iban: str | None = None,
         bic: str | None = None,
         account_number: str | None = None,
         routing_number: str | None = None,
         ifsc: str | None = None,
+        us_account_type: str | None = None,
     ) -> dict:
         """
         Create a recipient (payee) account with bank and address details.
@@ -232,6 +234,9 @@ class WiseApiClient:
             address['city'] = city
         if post_code:
             address['postCode'] = post_code
+        if state:
+            # Wise requires a state for US addresses, as a two letter code.
+            address['state'] = state
         if address:
             details['address'] = address
 
@@ -245,6 +250,9 @@ class WiseApiClient:
             details['abartn'] = routing_number
         if ifsc:
             details['ifscCode'] = ifsc
+        if us_account_type:
+            # Wise calls a US payee invalid without CHECKING or SAVINGS.
+            details['accountType'] = us_account_type
 
         payload: dict[str, Any] = {
             'profile': int(profile_id),
