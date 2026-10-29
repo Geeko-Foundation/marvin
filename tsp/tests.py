@@ -1,8 +1,8 @@
 from datetime import date
+from decimal import Decimal
 from unittest import mock
 
 from django.contrib.auth.models import User
-from django.core import mail
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import RequestFactory, TestCase
 from django.urls import reverse
@@ -445,71 +445,104 @@ class InternalNotesTests(TestCase):
         self.assertIn(self.owner, notified)
 
 
-class EmailNotificationTests(TestCase):
+class ActualCostTests(TestCase):
+    """Reimbursement is the lesser of what was approved and what was spent."""
+
     def setUp(self):
-        self.owner = make_requester('mailowner')
-        self.committee = make_committee('mailcommittee')
-        self.committee.email = 'committee@example.org'
-        self.committee.save()
-        self.finance = make_user('mailfinance', [GROUP_FINANCE])
-        self.request = TravelRequest.objects.create(
-            user=self.owner, event=make_event(), description='Talk',
+        self.owner = make_user('actualowner', [GROUP_REQUESTER])
+        self.event = Event.objects.create(
+            name='Conf', location='Berlin',
+            start_date=date(2026, 5, 1), end_date=date(2026, 5, 3),
         )
-        mail.outbox = []
+        self.request = TravelRequest.objects.create(
+            user=self.owner, event=self.event, state=RequestState.ACCEPTED,
+            description='Trip',
+        )
 
-    def test_submitting_emails_the_committee_not_the_requester(self):
-        transition_request(self.request, RequestState.SUBMITTED, self.owner)
-        recipients = [address for message in mail.outbox for address in message.to]
-        self.assertIn(self.committee.email, recipients)
-        self.assertNotIn(self.owner.email, recipients)
+    def _expense(self, approved, actual=None, currency='EUR', actual_currency=None):
+        return Expense.objects.create(
+            request=self.request, category='transportation', description='Flight',
+            estimated_amount=approved, estimated_currency=currency,
+            approved_amount=approved, approved_currency=currency,
+            actual_amount=actual,
+            actual_currency=actual_currency or (currency if actual is not None else None),
+        )
 
-    def test_approving_emails_the_requester(self):
-        transition_request(self.request, RequestState.SUBMITTED, self.owner)
-        mail.outbox = []
-        transition_request(self.request, RequestState.APPROVED, self.committee, 'Approved at a lower amount')
-        self.assertEqual(len(mail.outbox), 1)
-        message = mail.outbox[0]
-        self.assertEqual(message.to, [self.owner.email])
-        self.assertIn('approved', message.subject.lower())
-        self.assertIn('Approved at a lower amount', message.body)
+    def test_spending_less_than_approved_pays_the_lower_figure(self):
+        expense = self._expense(600, 400)
+        self.assertEqual(expense.payable_amount(), 400)
+        self.assertEqual(self.request.total_payable(), 400)
 
-    def test_the_email_links_to_the_request(self):
-        transition_request(self.request, RequestState.SUBMITTED, self.owner)
-        mail.outbox = []
-        transition_request(self.request, RequestState.APPROVED, self.committee)
-        self.assertIn(f'/requests/{self.request.pk}/', mail.outbox[0].body)
+    def test_spending_more_than_approved_still_pays_the_approved_figure(self):
+        expense = self._expense(600, 800)
+        self.assertEqual(expense.payable_amount(), 600)
+        self.assertEqual(self.request.total_payable(), 600)
 
-    def test_ready_for_payment_emails_finance(self):
-        for state in (RequestState.SUBMITTED, RequestState.APPROVED, RequestState.ACCEPTED):
-            transition_request(self.request, state, self.committee)
-        mail.outbox = []
-        transition_request(self.request, RequestState.SUBMITTED_FOR_PAYMENT, self.owner)
-        recipients = [address for message in mail.outbox for address in message.to]
-        self.assertEqual(recipients, [self.finance.email])
+    def test_the_lesser_is_taken_line_by_line(self):
+        # Approved 300 + 300, spent 400 + 100. Per line that is 300 + 100 = 400.
+        # Comparing the totals instead would pay 500, letting an overspend on one
+        # line be covered by an underspend on another.
+        self._expense(300, 400)
+        self._expense(300, 100)
+        self.assertEqual(self.request.total_approved(), 600)
+        self.assertEqual(self.request.total_actual(), 500)
+        self.assertEqual(self.request.total_payable(), 400)
 
-    def test_a_user_without_an_address_is_skipped(self):
-        self.owner.email = ''
-        self.owner.save()
-        transition_request(self.request, RequestState.SUBMITTED, self.owner)
-        mail.outbox = []
-        transition_request(self.request, RequestState.APPROVED, self.committee)
-        self.assertEqual(mail.outbox, [])
+    def test_nothing_reported_yet_falls_back_to_approved(self):
+        expense = self._expense(600)
+        self.assertEqual(expense.payable_amount(), 600)
+        self.assertFalse(self.request.has_all_actual_amounts())
 
-    def test_a_broken_template_does_not_block_the_transition(self):
-        transition_request(self.request, RequestState.SUBMITTED, self.owner)
-        with mock.patch('profile.services.email_notifications.render_to_string',
-                        side_effect=RuntimeError('template blew up')):
-            with self.assertLogs('marvin.email', level='ERROR'):
-                transition_request(self.request, RequestState.APPROVED, self.committee)
+    def test_a_receipt_in_another_currency_is_left_for_finance(self):
+        expense = self._expense(600, 400, currency='EUR', actual_currency='USD')
+        self.assertTrue(expense.has_currency_mismatch())
+        # 400 USD is not necessarily less than 600 EUR, so it is not guessed at.
+        self.assertEqual(expense.payable_amount(), 600)
+        self.assertEqual(self.request.expenses_needing_a_decision(), [expense])
+
+    def test_finance_is_asked_to_pay_the_payable_total(self):
+        from tsp.payables import TravelRequestPayableAdapter
+
+        self._expense(600, 400)
+        self.request.state = RequestState.SUBMITTED_FOR_PAYMENT
+        self.request.save()
+        payment = TravelRequestPayableAdapter().build_payment_request(self.request)
+        self.assertEqual(payment.amount, Decimal('400'))
+
+    def test_a_request_cannot_go_to_finance_without_actual_costs(self):
+        self._expense(600)
+        for kind in ('receipt', 'invoice', 'signed_form'):
+            Document.objects.create(
+                request=self.request, kind=kind, size=9, uploaded_by=self.owner,
+                file=SimpleUploadedFile(f'{kind}.pdf', b'%PDF-1.4 x'),
+            )
+        self.client.force_login(self.owner)
+        response = self.client.post(
+            reverse('request_submit_for_payment', args=[self.request.pk]),
+        )
+        self.assertRedirects(response, reverse('request_actuals', args=[self.request.pk]))
         self.request.refresh_from_db()
-        self.assertEqual(self.request.state, RequestState.APPROVED)
+        self.assertEqual(self.request.state, RequestState.ACCEPTED)
 
-    def test_a_broken_mail_server_does_not_block_the_transition(self):
-        transition_request(self.request, RequestState.SUBMITTED, self.owner)
-        with mock.patch('profile.services.email_notifications.EmailMessage.send',
-                        side_effect=OSError('smtp is down')):
-            with self.assertLogs('marvin.email', level='ERROR') as logged:
-                transition_request(self.request, RequestState.APPROVED, self.committee)
-        self.request.refresh_from_db()
-        self.assertEqual(self.request.state, RequestState.APPROVED)
-        self.assertIn('smtp is down', '\n'.join(logged.output))
+    def test_the_requestor_reports_actual_costs(self):
+        expense = self._expense(600)
+        self.client.force_login(self.owner)
+        response = self.client.post(reverse('request_actuals', args=[self.request.pk]), {
+            'expenses-TOTAL_FORMS': '1',
+            'expenses-INITIAL_FORMS': '1',
+            'expenses-MIN_NUM_FORMS': '0',
+            'expenses-MAX_NUM_FORMS': '1000',
+            'expenses-0-id': str(expense.pk),
+            'expenses-0-actual_amount': '425.50',
+            'expenses-0-actual_currency': 'EUR',
+        })
+        self.assertRedirects(response, reverse('request_detail', args=[self.request.pk]))
+        expense.refresh_from_db()
+        self.assertEqual(expense.actual_amount, Decimal('425.50'))
+        self.assertEqual(self.request.total_payable(), Decimal('425.50'))
+
+    def test_only_the_owner_can_report_them(self):
+        self._expense(600)
+        self.client.force_login(make_user('someoneelse', [GROUP_REQUESTER]))
+        response = self.client.get(reverse('request_actuals', args=[self.request.pk]))
+        self.assertEqual(response.status_code, 403)
