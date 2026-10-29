@@ -3,21 +3,45 @@
 from __future__ import annotations
 
 from payments.gateways.wise_api import WiseApiError, get_wise_client
+from profile.countries import CODES_BY_NAME, VALID_CODES, state_code
 from profile.models import BankingMethod, UserProfile
 
 
 RETURN_TO_SESSION_KEY = 'signup_return_to'
 
 
+# Wise's own account type per method, and the one currency each is valid for.
+# Wise calls India 'indian': 'ifsc' is the code inside the details, not an
+# account type, and it answers "Account type is not valid".
+METHOD_TYPES = {
+    BankingMethod.US_BANK: ('aba', 'USD'),
+    BankingMethod.INDIA_IFSC: ('indian', 'INR'),
+    BankingMethod.AUSTRALIA: ('australian', 'AUD'),
+    BankingMethod.BRAZIL: ('brazil', 'BRL'),
+    BankingMethod.INDONESIA: ('indonesian', 'IDR'),
+    BankingMethod.JAPAN: ('japanese', 'JPY'),
+}
+
+
+# Wise's allowed accountType values, which differ per country.
+ACCOUNT_TYPES = {
+    BankingMethod.US_BANK: ('CHECKING', 'SAVINGS'),
+    BankingMethod.BRAZIL: ('CHECKING', 'SAVINGS', 'PAYMENT'),
+    BankingMethod.JAPAN: ('CURRENT', 'SAVINGS', 'CHECKING'),
+}
+
+# Each of these currencies has exactly one method Wise accepts for it.
+METHOD_FOR_CURRENCY = {currency: method for method, (_, currency) in METHOD_TYPES.items()}
+
+
 def recipient_type_for_method(method: str | None) -> str:
     """Map a ``BankingMethod`` value to the Wise account ``type`` string."""
-    if method == BankingMethod.US_BANK:
-        return 'aba'
-    if method == BankingMethod.INDIA_IFSC:
-        # Wise calls this one 'indian'. 'ifsc' is the code inside the details,
-        # not an account type, and Wise rejects it with "Account type is not valid".
-        return 'indian'
-    return 'iban'
+    return METHOD_TYPES.get(method, ('iban', None))[0]
+
+
+def currency_for_method(method: str | None) -> str | None:
+    """The only currency Wise accepts for a method, or ``None`` for IBAN."""
+    return METHOD_TYPES.get(method, ('iban', None))[1]
 
 
 def bank_details_kwargs_from_banking(banking: dict) -> dict:
@@ -34,16 +58,42 @@ def bank_details_kwargs_from_banking(banking: dict) -> dict:
         if banking.get('bank_swift'):
             details['bic'] = banking['bank_swift']
         return details
+    account_number = banking.get('bank_account_no')
     if method == BankingMethod.US_BANK:
         return {
-            'account_number': banking.get('bank_account_no'),
+            'account_number': account_number,
             'routing_number': banking.get('bank_routing_no'),
-            'us_account_type': banking.get('bank_account_type'),
+            'bank_account_type': banking.get('bank_account_type'),
         }
     if method == BankingMethod.INDIA_IFSC:
         return {
-            'account_number': banking.get('bank_account_no'),
+            'account_number': account_number,
             'ifsc': banking.get('bank_ifsc'),
+        }
+    if method == BankingMethod.AUSTRALIA:
+        return {
+            'account_number': account_number,
+            'bsb_code': banking.get('bank_bsb'),
+        }
+    if method == BankingMethod.BRAZIL:
+        return {
+            'account_number': account_number,
+            'bank_code': banking.get('bank_code'),
+            'branch_code': banking.get('bank_branch'),
+            'cpf': banking.get('bank_cpf'),
+            'bank_account_type': banking.get('bank_account_type'),
+        }
+    if method == BankingMethod.INDONESIA:
+        return {
+            'account_number': account_number,
+            'bank_code': banking.get('bank_code'),
+        }
+    if method == BankingMethod.JAPAN:
+        return {
+            'account_number': account_number,
+            'bank_code': banking.get('bank_code'),
+            'branch_code': banking.get('bank_japan_branch'),
+            'bank_account_type': banking.get('bank_account_type'),
         }
     return {}
 
@@ -52,48 +102,27 @@ def resolve_country(profile: UserProfile, banking: dict) -> str | None:
     """
     Determine ISO country code for Wise payee creation.
 
-    Prefers a two-letter ``profile.country``, then the IBAN prefix.
+    Prefers a two-letter ``profile.country``, then its spelled out name, then
+    the IBAN prefix. Wise answers "Must be ISO 3166-1 alpha-2 country code" for
+    anything else, and older profiles hold free text.
     """
     country = (profile.country or '').strip()
-    if len(country) == 2:
+    if country.upper() in VALID_CODES:
         return country.upper()
+    named = CODES_BY_NAME.get(country.lower())
+    if named:
+        return named
     iban = banking.get('bank_iban', '')
     if iban and len(iban.replace(' ', '')) >= 2:
         return iban.replace(' ', '')[:2].upper()
     return country or None
 
 
-# Wise asks for US states as a two letter code and rejects anything else.
-US_STATE_CODES = {
-    'alabama': 'AL', 'alaska': 'AK', 'arizona': 'AZ', 'arkansas': 'AR',
-    'armed forces americas': 'AA', 'armed forces europe': 'AE',
-    'armed forces pacific': 'AP', 'california': 'CA', 'colorado': 'CO',
-    'connecticut': 'CT', 'delaware': 'DE', 'district of columbia': 'DC', 'florida': 'FL',
-    'georgia': 'GA', 'guam': 'GU', 'hawaii': 'HI', 'idaho': 'ID', 'illinois': 'IL',
-    'indiana': 'IN', 'iowa': 'IA', 'kansas': 'KS', 'kentucky': 'KY', 'louisiana': 'LA',
-    'maine': 'ME', 'maryland': 'MD', 'massachusetts': 'MA', 'michigan': 'MI',
-    'minnesota': 'MN', 'mississippi': 'MS', 'missouri': 'MO', 'montana': 'MT',
-    'nebraska': 'NE', 'nevada': 'NV', 'new hampshire': 'NH', 'new jersey': 'NJ',
-    'new mexico': 'NM', 'new york': 'NY', 'north carolina': 'NC', 'north dakota': 'ND',
-    'northern mariana islands': 'MP', 'ohio': 'OH', 'oklahoma': 'OK', 'oregon': 'OR',
-    'pennsylvania': 'PA', 'puerto rico': 'PR', 'rhode island': 'RI',
-    'south carolina': 'SC', 'south dakota': 'SD', 'tennessee': 'TN', 'texas': 'TX',
-    'utah': 'UT', 'vermont': 'VT', 'virgin islands': 'VI', 'virginia': 'VA',
-    'washington': 'WA', 'west virginia': 'WV', 'wisconsin': 'WI', 'wyoming': 'WY',
-}
-
-_US_STATE_CODE_SET = frozenset(US_STATE_CODES.values())
 
 
-def resolve_state(profile: UserProfile) -> str | None:
-    """
-    Determine the US state code for Wise payee creation.
-
-    ``profile.state`` is free text, so accept the code or the spelled out name.
-    """
-    state = (profile.state or '').strip()
-    code = US_STATE_CODES.get(state.lower(), state.upper())
-    return code if code in _US_STATE_CODE_SET else None
+def resolve_state(profile: UserProfile, country: str | None = None) -> str | None:
+    """The state code for a payee, from the country actually sent to Wise."""
+    return state_code(country or profile.country, profile.state)
 
 
 def banking_session_payload(cleaned_data: dict) -> dict:
@@ -107,6 +136,11 @@ def banking_session_payload(cleaned_data: dict) -> dict:
         'bank_routing_no': cleaned_data.get('bank_routing_no', ''),
         'bank_ifsc': cleaned_data.get('bank_ifsc', ''),
         'bank_account_type': cleaned_data.get('bank_account_type', ''),
+        'bank_bsb': cleaned_data.get('bank_bsb', ''),
+        'bank_code': cleaned_data.get('bank_code', ''),
+        'bank_branch': cleaned_data.get('bank_branch', ''),
+        'bank_japan_branch': cleaned_data.get('bank_japan_branch', ''),
+        'bank_cpf': cleaned_data.get('bank_cpf', ''),
     }
 
 

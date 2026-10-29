@@ -213,7 +213,11 @@ class WiseApiClient:
         account_number: str | None = None,
         routing_number: str | None = None,
         ifsc: str | None = None,
-        us_account_type: str | None = None,
+        bsb_code: str | None = None,
+        bank_code: str | None = None,
+        branch_code: str | None = None,
+        cpf: str | None = None,
+        bank_account_type: str | None = None,
     ) -> dict:
         """
         Create a recipient (payee) account with bank and address details.
@@ -250,9 +254,17 @@ class WiseApiClient:
             details['abartn'] = routing_number
         if ifsc:
             details['ifscCode'] = ifsc
-        if us_account_type:
-            # Wise calls a US payee invalid without CHECKING or SAVINGS.
-            details['accountType'] = us_account_type
+        if bsb_code:
+            details['bsbCode'] = bsb_code
+        if bank_code:
+            details['bankCode'] = bank_code
+        if branch_code:
+            details['branchCode'] = branch_code
+        if cpf:
+            details['cpf'] = cpf
+        if bank_account_type:
+            # Required for US, Brazil and Japan, with different values each.
+            details['accountType'] = bank_account_type
 
         payload: dict[str, Any] = {
             'profile': int(profile_id),
@@ -323,6 +335,27 @@ class WiseApiClient:
     # ------------------------------------------------------------------
     # Transfers
     # ------------------------------------------------------------------
+
+    def account_requirements(
+        self,
+        *,
+        target_currency: str,
+        source_currency: str = 'GBP',
+        payload: dict | None = None,
+    ) -> list:
+        """
+        The fields Wise requires for each account type on a corridor.
+
+        GET /v1/account-requirements, or POST when ``payload`` carries details
+        already filled in: some fields only appear once an earlier answer is
+        sent back, and Japanese branches only list after a bank is chosen.
+        """
+        path = (f'/v1/account-requirements?source={source_currency}'
+                f'&target={target_currency}&sourceAmount=1000')
+        headers = {'Accept-Minor-Version': '1'}
+        method = 'GET' if payload is None else 'POST'
+        result = self._request(method, path, payload, extra_headers=headers)
+        return result if isinstance(result, list) else []
 
     def create_quote(
         self,

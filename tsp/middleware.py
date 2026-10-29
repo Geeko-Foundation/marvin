@@ -11,6 +11,7 @@ ONBOARDING_URL_NAMES = {
     'signup_account',
     'signup_profile',
     'signup_banking',
+    'signup_banking_options',
     'signup_banking_progress',
     'signup_banking_step',
     'signup_skip_banking',
