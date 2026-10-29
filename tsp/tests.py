@@ -1,4 +1,5 @@
 from datetime import date
+from decimal import Decimal
 from unittest import mock
 
 from django.contrib.auth.models import User
@@ -444,77 +445,104 @@ class InternalNotesTests(TestCase):
         self.assertIn(self.owner, notified)
 
 
-class BatchReviewTests(TestCase):
+class ActualCostTests(TestCase):
+    """Reimbursement is the lesser of what was approved and what was spent."""
+
     def setUp(self):
-        self.committee = make_committee('batchcommittee')
-        self.requester = make_requester('batchrequester')
-        self.event = make_event()
-        self.requests = []
-        for i in range(3):
-            travel_request = TravelRequest.objects.create(
-                user=self.requester, event=self.event,
-                description=f'Talk {i}', state=RequestState.SUBMITTED,
-            )
-            Expense.objects.create(
-                request=travel_request, category='transportation',
-                description='Flight', estimated_amount=500 + i, estimated_currency='EUR',
-            )
-            self.requests.append(travel_request)
+        self.owner = make_user('actualowner', [GROUP_REQUESTER])
+        self.event = Event.objects.create(
+            name='Conf', location='Berlin',
+            start_date=date(2026, 5, 1), end_date=date(2026, 5, 3),
+        )
+        self.request = TravelRequest.objects.create(
+            user=self.owner, event=self.event, state=RequestState.ACCEPTED,
+            description='Trip',
+        )
 
-    def post(self, user, data):
-        self.client.force_login(user)
-        return self.client.post(reverse('request_batch_review'), data)
+    def _expense(self, approved, actual=None, currency='EUR', actual_currency=None):
+        return Expense.objects.create(
+            request=self.request, category='transportation', description='Flight',
+            estimated_amount=approved, estimated_currency=currency,
+            approved_amount=approved, approved_currency=currency,
+            actual_amount=actual,
+            actual_currency=actual_currency or (currency if actual is not None else None),
+        )
 
-    def test_approving_in_bulk_approves_the_amount_requested(self):
-        self.post(self.committee, {
-            'request_ids': [r.pk for r in self.requests], 'action': 'approve',
+    def test_spending_less_than_approved_pays_the_lower_figure(self):
+        expense = self._expense(600, 400)
+        self.assertEqual(expense.payable_amount(), 400)
+        self.assertEqual(self.request.total_payable(), 400)
+
+    def test_spending_more_than_approved_still_pays_the_approved_figure(self):
+        expense = self._expense(600, 800)
+        self.assertEqual(expense.payable_amount(), 600)
+        self.assertEqual(self.request.total_payable(), 600)
+
+    def test_the_lesser_is_taken_line_by_line(self):
+        # Approved 300 + 300, spent 400 + 100. Per line that is 300 + 100 = 400.
+        # Comparing the totals instead would pay 500, letting an overspend on one
+        # line be covered by an underspend on another.
+        self._expense(300, 400)
+        self._expense(300, 100)
+        self.assertEqual(self.request.total_approved(), 600)
+        self.assertEqual(self.request.total_actual(), 500)
+        self.assertEqual(self.request.total_payable(), 400)
+
+    def test_nothing_reported_yet_falls_back_to_approved(self):
+        expense = self._expense(600)
+        self.assertEqual(expense.payable_amount(), 600)
+        self.assertFalse(self.request.has_all_actual_amounts())
+
+    def test_a_receipt_in_another_currency_is_left_for_finance(self):
+        expense = self._expense(600, 400, currency='EUR', actual_currency='USD')
+        self.assertTrue(expense.has_currency_mismatch())
+        # 400 USD is not necessarily less than 600 EUR, so it is not guessed at.
+        self.assertEqual(expense.payable_amount(), 600)
+        self.assertEqual(self.request.expenses_needing_a_decision(), [expense])
+
+    def test_finance_is_asked_to_pay_the_payable_total(self):
+        from tsp.payables import TravelRequestPayableAdapter
+
+        self._expense(600, 400)
+        self.request.state = RequestState.SUBMITTED_FOR_PAYMENT
+        self.request.save()
+        payment = TravelRequestPayableAdapter().build_payment_request(self.request)
+        self.assertEqual(payment.amount, Decimal('400'))
+
+    def test_a_request_cannot_go_to_finance_without_actual_costs(self):
+        self._expense(600)
+        for kind in ('receipt', 'invoice', 'signed_form'):
+            Document.objects.create(
+                request=self.request, kind=kind, size=9, uploaded_by=self.owner,
+                file=SimpleUploadedFile(f'{kind}.pdf', b'%PDF-1.4 x'),
+            )
+        self.client.force_login(self.owner)
+        response = self.client.post(
+            reverse('request_submit_for_payment', args=[self.request.pk]),
+        )
+        self.assertRedirects(response, reverse('request_actuals', args=[self.request.pk]))
+        self.request.refresh_from_db()
+        self.assertEqual(self.request.state, RequestState.ACCEPTED)
+
+    def test_the_requestor_reports_actual_costs(self):
+        expense = self._expense(600)
+        self.client.force_login(self.owner)
+        response = self.client.post(reverse('request_actuals', args=[self.request.pk]), {
+            'expenses-TOTAL_FORMS': '1',
+            'expenses-INITIAL_FORMS': '1',
+            'expenses-MIN_NUM_FORMS': '0',
+            'expenses-MAX_NUM_FORMS': '1000',
+            'expenses-0-id': str(expense.pk),
+            'expenses-0-actual_amount': '425.50',
+            'expenses-0-actual_currency': 'EUR',
         })
-        for travel_request in self.requests:
-            travel_request.refresh_from_db()
-            self.assertEqual(travel_request.state, RequestState.APPROVED)
-            expense = travel_request.expenses.get()
-            self.assertEqual(expense.approved_amount, expense.estimated_amount)
-            self.assertEqual(expense.approved_currency, 'EUR')
-            # the whole point: finance must not receive a request worth nothing
-            self.assertGreater(travel_request.total_approved(), 0)
-
-    def test_an_amount_already_set_is_left_alone(self):
-        expense = self.requests[0].expenses.get()
-        expense.approved_amount = 100
-        expense.approved_currency = 'EUR'
-        expense.save()
-        self.post(self.committee, {'request_ids': [self.requests[0].pk], 'action': 'approve'})
+        self.assertRedirects(response, reverse('request_detail', args=[self.request.pk]))
         expense.refresh_from_db()
-        self.assertEqual(expense.approved_amount, 100)
+        self.assertEqual(expense.actual_amount, Decimal('425.50'))
+        self.assertEqual(self.request.total_payable(), Decimal('425.50'))
 
-    def test_rejecting_in_bulk_records_the_note(self):
-        self.post(self.committee, {
-            'request_ids': [self.requests[0].pk], 'action': 'reject', 'notes': 'Out of budget',
-        })
-        self.requests[0].refresh_from_db()
-        self.assertEqual(self.requests[0].state, RequestState.REJECTED)
-        history = StateHistory.objects.filter(request=self.requests[0]).latest('id')
-        self.assertEqual(history.notes, 'Out of budget')
-
-    def test_rejecting_without_a_note_rejects_nothing(self):
-        self.post(self.committee, {'request_ids': [self.requests[0].pk], 'action': 'reject'})
-        self.requests[0].refresh_from_db()
-        self.assertEqual(self.requests[0].state, RequestState.SUBMITTED)
-
-    def test_requests_that_already_moved_on_are_skipped(self):
-        self.requests[0].state = RequestState.APPROVED
-        self.requests[0].save()
-        self.post(self.committee, {
-            'request_ids': [r.pk for r in self.requests], 'action': 'reject', 'notes': 'No',
-        })
-        states = [TravelRequest.objects.get(pk=r.pk).state for r in self.requests]
-        self.assertEqual(states[0], RequestState.APPROVED)
-        self.assertEqual(states[1:], [RequestState.REJECTED, RequestState.REJECTED])
-
-    def test_a_requester_cannot_batch_review(self):
-        response = self.post(self.requester, {
-            'request_ids': [self.requests[0].pk], 'action': 'approve',
-        })
+    def test_only_the_owner_can_report_them(self):
+        self._expense(600)
+        self.client.force_login(make_user('someoneelse', [GROUP_REQUESTER]))
+        response = self.client.get(reverse('request_actuals', args=[self.request.pk]))
         self.assertEqual(response.status_code, 403)
-        self.requests[0].refresh_from_db()
-        self.assertEqual(self.requests[0].state, RequestState.SUBMITTED)

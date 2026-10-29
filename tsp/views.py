@@ -36,6 +36,7 @@ from profile.services.wise_verification import (
 )
 from tsp.decorators import group_required, login_required, staff_or_owner
 from tsp.forms import (
+    ExpenseActualFormSet,
     AcceptForm,
     ApprovalForm,
     CommentForm,
@@ -822,6 +823,32 @@ def request_accept(request, pk):
 
 
 @login_required
+def request_actuals(request, pk):
+    """Let the requestor report what each approved line actually cost."""
+    travel_request = get_object_or_404(TravelRequest, pk=pk)
+    if travel_request.user_id != request.user.id:
+        raise PermissionDenied
+    if travel_request.state != RequestState.ACCEPTED:
+        messages.error(request, 'Actual costs can only be reported on an accepted request.')
+        return redirect('request_detail', pk=pk)
+
+    queryset = travel_request.expenses.filter(approved_amount__isnull=False)
+    if request.method == 'POST':
+        formset = ExpenseActualFormSet(request.POST, instance=travel_request, queryset=queryset)
+        if formset.is_valid():
+            formset.save()
+            messages.success(request, 'Actual costs saved.')
+            return redirect('request_detail', pk=pk)
+    else:
+        formset = ExpenseActualFormSet(instance=travel_request, queryset=queryset)
+
+    return render(request, 'tsp/requests/actuals.html', {
+        'travel_request': travel_request,
+        'formset': formset,
+    })
+
+
+@login_required
 @require_POST
 def request_submit_for_payment(request, pk):
     """Move an accepted request to finance queue when all documents are uploaded."""
@@ -833,6 +860,12 @@ def request_submit_for_payment(request, pk):
         missing = ', '.join(travel_request.missing_document_kinds())
         messages.error(request, f'Missing required documents: {missing}')
         return redirect('request_detail', pk=pk)
+
+    # Finance pays the lesser of approved and actual, so the actual costs have
+    # to be in before the request reaches them.
+    if not travel_request.has_all_actual_amounts():
+        messages.error(request, 'Report what each approved expense actually cost first.')
+        return redirect('request_actuals', pk=pk)
 
     try:
         transition_request(travel_request, RequestState.SUBMITTED_FOR_PAYMENT, request.user)

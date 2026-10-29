@@ -27,6 +27,7 @@
     <a href="{% url 'request_accept_page' travel_request.pk %}" class="btn btn-sm btn-warning">Accept Request</a>
     {% endif %}
     {% if travel_request.state == 'accepted' and travel_request.user_id == user.id %}
+    <a href="{% url 'request_actuals' travel_request.pk %}" class="btn btn-sm btn-outline">Report Actual Costs</a>
     <form method="post" action="{% url 'request_submit_for_payment' travel_request.pk %}">
       {% csrf_token %}
       <button type="submit" class="btn btn-sm btn-success" {% if missing_docs %}disabled title="Upload all required documents first"{% endif %}>Submit for Payment</button>
@@ -73,6 +74,10 @@
                 {% if travel_request.state != 'draft' and travel_request.state != 'submitted' %}
                 <th>Approved</th>
                 {% endif %}
+                {% if travel_request.total_actual %}
+                <th>Actual</th>
+                <th>Payable</th>
+                {% endif %}
               </tr>
             </thead>
             <tbody>
@@ -84,6 +89,16 @@
                 {% if travel_request.state != 'draft' and travel_request.state != 'submitted' %}
                 <td>{% if expense.approved_amount %}{{ expense.approved_amount }} {{ expense.approved_currency }}{% else %}—{% endif %}</td>
                 {% endif %}
+                {% if travel_request.total_actual %}
+                <td>{% if expense.actual_amount %}{{ expense.actual_amount }} {{ expense.actual_currency }}{% else %}—{% endif %}</td>
+                <td>
+                  {% if expense.has_currency_mismatch %}
+                  <span class="badge badge-warning badge-sm">finance to settle</span>
+                  {% else %}
+                  {{ expense.payable_amount|default_if_none:"—" }} {{ expense.approved_currency }}
+                  {% endif %}
+                </td>
+                {% endif %}
               </tr>
               {% endfor %}
             </tbody>
@@ -93,6 +108,10 @@
                 <td>{{ travel_request.total_estimated }} EUR</td>
                 {% if travel_request.state != 'draft' and travel_request.state != 'submitted' %}
                 <td>{{ travel_request.total_approved }} EUR</td>
+                {% endif %}
+                {% if travel_request.total_actual %}
+                <td>{{ travel_request.total_actual }} EUR</td>
+                <td>{{ travel_request.total_payable }} EUR</td>
                 {% endif %}
               </tr>
             </tfoot>

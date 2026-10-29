@@ -31,6 +31,7 @@ urlpatterns = [
     path('requests/<int:pk>/cancel/', views.request_cancel, name='request_cancel'),
     path('requests/<int:pk>/accept/', views.request_accept_page, name='request_accept_page'),
     path('requests/<int:pk>/accept/confirm/', views.request_accept, name='request_accept'),
+    path('requests/<int:pk>/actuals/', views.request_actuals, name='request_actuals'),
     path('requests/<int:pk>/submit-for-payment/', views.request_submit_for_payment, name='request_submit_for_payment'),
     path('requests/<int:pk>/comments/', views.request_comment, name='request_comment'),
     path('requests/<int:pk>/documents/', views.request_document_upload, name='request_document_upload'),
