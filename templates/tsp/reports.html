@@ -34,11 +34,11 @@
   </div>
   <div class="stat">
     <div class="stat-title">Total Approved</div>
-    <div class="stat-value text-lg">{{ total_approved|floatformat:0 }} €</div>
+    <div class="stat-value text-lg">{% for currency, amount in total_approved %}{{ amount|floatformat:0 }} {{ currency }}{% if not forloop.last %}<br>{% endif %}{% empty %}0{% endfor %}</div>
   </div>
   <div class="stat">
     <div class="stat-title">Total Paid</div>
-    <div class="stat-value text-lg">{{ total_paid|floatformat:0 }} €</div>
+    <div class="stat-value text-lg">{% for currency, amount in total_paid %}{{ amount|floatformat:0 }} {{ currency }}{% if not forloop.last %}<br>{% endif %}{% empty %}0{% endfor %}</div>
   </div>
 </div>
 
@@ -68,7 +68,7 @@
             <td>{{ req.user.get_full_name|default:req.user.username }}</td>
             <td>{{ req.user.profile.country|default:"—" }}</td>
             <td><span class="badge {{ req.state|state_badge }} badge-sm">{{ req.get_state_display }}</span></td>
-            <td>{{ req.total_approved }}</td>
+            <td>{% for currency, amount in req.totals_approved %}{{ amount }} {{ currency }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
             <td>{% if req.payment %}{{ req.payment.amount }}{% else %}—{% endif %}</td>
             <td>{% if req.payment %}{{ req.payment.method_label }}{% else %}—{% endif %}</td>
           </tr>

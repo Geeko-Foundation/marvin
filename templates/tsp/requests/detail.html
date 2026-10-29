@@ -105,13 +105,13 @@
             <tfoot>
               <tr class="font-semibold">
                 <td colspan="2">Total</td>
-                <td>{{ travel_request.total_estimated }} EUR</td>
+                <td>{% for currency, amount in travel_request.totals_estimated %}{{ amount }} {{ currency }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
                 {% if travel_request.state != 'draft' and travel_request.state != 'submitted' %}
-                <td>{{ travel_request.total_approved }} EUR</td>
+                <td>{% for currency, amount in travel_request.totals_approved %}{{ amount }} {{ currency }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
                 {% endif %}
                 {% if travel_request.total_actual %}
-                <td>{{ travel_request.total_actual }} EUR</td>
-                <td>{{ travel_request.total_payable }} EUR</td>
+                <td>{% for currency, amount in travel_request.totals_actual %}{{ amount }} {{ currency }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
+                <td>{% for currency, amount in travel_request.totals_payable %}{{ amount }} {{ currency }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
                 {% endif %}
               </tr>
             </tfoot>

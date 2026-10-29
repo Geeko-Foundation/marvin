@@ -37,7 +37,7 @@
     <tfoot>
       <tr class="font-bold">
         <td colspan="2">Total Approved</td>
-        <td>{{ travel_request.total_approved }} EUR</td>
+        <td>{% for currency, amount in travel_request.totals_approved %}{{ amount }} {{ currency }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
       </tr>
     </tfoot>
   </table>
@@ -57,7 +57,7 @@
       <p class="text-sm">Printed Name</p>
     </div>
     <div>
-      <div class="border-b border-base-content pb-1 mb-2">{{ travel_request.total_approved }} EUR</div>
+      <div class="border-b border-base-content pb-1 mb-2">{% for currency, amount in travel_request.totals_approved %}{{ amount }} {{ currency }}{% if not forloop.last %}, {% endif %}{% endfor %}</div>
       <p class="text-sm">Total Amount</p>
     </div>
     <div>
