@@ -1,0 +1,9 @@
+{{ headline }}
+
+Request:  #{{ travel_request.pk }} {{ travel_request.event.name }}
+Event:    {{ travel_request.event.location }}, {{ travel_request.event.start_date }} to {{ travel_request.event.end_date }}
+Requester: {{ travel_request.user.get_full_name|default:travel_request.user.username }}
+{% if notes %}
+Notes: {{ notes }}
+{% endif %}
+See the request: {{ url }}

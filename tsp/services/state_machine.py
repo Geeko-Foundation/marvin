@@ -66,6 +66,9 @@ def transition_request(travel_request, to_state, user, notes=''):
     from profile.services.push_notifications import notify_request_state_change
     notify_request_state_change(travel_request, from_state, to_state, user, notes)
 
+    from profile.services.email_notifications import notify_request_state_change_email
+    notify_request_state_change_email(travel_request, from_state, to_state, user, notes)
+
     return travel_request
 
 
