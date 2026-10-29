@@ -104,6 +104,12 @@ DATABASES = {
     'default': {
         'ENGINE': env('DATABASE_ENGINE', 'django.db.backends.sqlite3'),
         'NAME': env('DATABASE_NAME', str(BASE_DIR / 'db.sqlite3')),
+        # Ignored by SQLite, needed by every networked database.
+        'USER': env('DATABASE_USER'),
+        'PASSWORD': env('DATABASE_PASSWORD'),
+        'HOST': env('DATABASE_HOST'),
+        'PORT': env('DATABASE_PORT'),
+        'CONN_MAX_AGE': int(env('DATABASE_CONN_MAX_AGE', '0')),
     }
 }
 

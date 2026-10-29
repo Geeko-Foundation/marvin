@@ -248,9 +248,29 @@ If `.env` is missing, `marvin/settings.py` falls back to **dev/test defaults** (
 | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` | Web push keys |
 | `WEBPUSH_APP_BASE_URL` | Public site URL for notification links |
 
+## PostgreSQL
+
+SQLite is the default and needs no setup. For PostgreSQL, install the driver and point the app at your server:
+
+```bash
+uv sync --extra postgres
+```
+
+```bash
+DATABASE_ENGINE=django.db.backends.postgresql
+DATABASE_NAME=marvin
+DATABASE_USER=marvin
+DATABASE_PASSWORD=yourpassword
+DATABASE_HOST=localhost
+DATABASE_PORT=5432
+DATABASE_CONN_MAX_AGE=60      # seconds to reuse a connection; 0 closes each time
+```
+
+Then run `python manage.py migrate` and `python manage.py seed_data` as usual. CI runs the whole test suite against both SQLite and PostgreSQL.
+
 ## Development notes
 
-- **Database:** SQLite file at `db.sqlite3` in the project root (override with `DATABASE_ENGINE` / `DATABASE_NAME` in `.env`).
+- **Database:** SQLite file at `db.sqlite3` in the project root. See PostgreSQL below to use that instead.
 - **Uploaded files:** stored under `uploads/` (served in development when `DEBUG=True`).
 - **Static files:** served from `static/` during development.
 - **Audit fields:** defined on abstract `AuditModel` in `marvin/audit.py`.

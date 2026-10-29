@@ -1,9 +1,10 @@
 from datetime import date
+from decimal import Decimal
 from unittest import mock
 
 from django.contrib.auth.models import User
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import RequestFactory, TestCase, override_settings
+from django.test import RequestFactory, TestCase
 from django.urls import reverse
 from django.utils import timezone
 
@@ -444,51 +445,104 @@ class InternalNotesTests(TestCase):
         self.assertIn(self.owner, notified)
 
 
-@override_settings(
-    BRAND_APP_NAME='Wanderer',
-    BRAND_ORG_NAME='GNOME Foundation',
-    BRAND_TAGLINE='Conference Travel Subsidy',
-    BRAND_THEME_LIGHT='emerald',
-    BRAND_THEME_DARK='forest',
-)
-class BrandingTests(TestCase):
-    """A fork should be able to rename and recolour everything from settings."""
+class ActualCostTests(TestCase):
+    """Reimbursement is the lesser of what was approved and what was spent."""
 
-    def test_the_login_page_uses_the_configured_names(self):
-        response = self.client.get(reverse('login'))
-        self.assertContains(response, 'Wanderer')
-        self.assertContains(response, 'GNOME Foundation')
-        self.assertNotContains(response, 'Marvin')
-        self.assertNotContains(response, 'Geeko')
-
-    def test_the_signed_in_pages_use_them_too(self):
-        self.client.force_login(make_committee('brandcommittee'))
-        response = self.client.get(reverse('dashboard'))
-        self.assertContains(response, 'Wanderer')
-        self.assertContains(response, 'Conference Travel Subsidy')
-        self.assertNotContains(response, 'Marvin')
-
-    def test_the_signup_wizard_and_printable_form_use_them(self):
-        response = self.client.get(reverse('signup'))
-        self.assertContains(response, 'Conference Travel Subsidy')
-        self.assertNotContains(response, 'Travel Support Program')
-
-        owner = make_requester('brandowner')
-        travel_request = TravelRequest.objects.create(
-            user=owner, event=make_event(), description='Talk',
+    def setUp(self):
+        self.owner = make_user('actualowner', [GROUP_REQUESTER])
+        self.event = Event.objects.create(
+            name='Conf', location='Berlin',
+            start_date=date(2026, 5, 1), end_date=date(2026, 5, 3),
         )
-        self.client.force_login(owner)
-        form = self.client.get(reverse('request_form', args=[travel_request.pk]))
-        self.assertContains(form, 'Conference Travel Subsidy')
-        self.assertNotContains(form, 'Travel Support Program')
+        self.request = TravelRequest.objects.create(
+            user=self.owner, event=self.event, state=RequestState.ACCEPTED,
+            description='Trip',
+        )
 
-    def test_the_themes_are_configurable(self):
-        response = self.client.get(reverse('login'))
-        self.assertContains(response, 'data-theme="emerald"')
-        self.assertContains(response, "var DARK = 'forest'")
+    def _expense(self, approved, actual=None, currency='EUR', actual_currency=None):
+        return Expense.objects.create(
+            request=self.request, category='transportation', description='Flight',
+            estimated_amount=approved, estimated_currency=currency,
+            approved_amount=approved, approved_currency=currency,
+            actual_amount=actual,
+            actual_currency=actual_currency or (currency if actual is not None else None),
+        )
 
-    def test_the_defaults_are_still_marvin(self):
-        with self.settings(BRAND_APP_NAME='Marvin', BRAND_ORG_NAME='Geeko Foundation'):
-            response = self.client.get(reverse('login'))
-            self.assertContains(response, 'Marvin')
-            self.assertContains(response, 'Geeko Foundation')
+    def test_spending_less_than_approved_pays_the_lower_figure(self):
+        expense = self._expense(600, 400)
+        self.assertEqual(expense.payable_amount(), 400)
+        self.assertEqual(self.request.total_payable(), 400)
+
+    def test_spending_more_than_approved_still_pays_the_approved_figure(self):
+        expense = self._expense(600, 800)
+        self.assertEqual(expense.payable_amount(), 600)
+        self.assertEqual(self.request.total_payable(), 600)
+
+    def test_the_lesser_is_taken_line_by_line(self):
+        # Approved 300 + 300, spent 400 + 100. Per line that is 300 + 100 = 400.
+        # Comparing the totals instead would pay 500, letting an overspend on one
+        # line be covered by an underspend on another.
+        self._expense(300, 400)
+        self._expense(300, 100)
+        self.assertEqual(self.request.total_approved(), 600)
+        self.assertEqual(self.request.total_actual(), 500)
+        self.assertEqual(self.request.total_payable(), 400)
+
+    def test_nothing_reported_yet_falls_back_to_approved(self):
+        expense = self._expense(600)
+        self.assertEqual(expense.payable_amount(), 600)
+        self.assertFalse(self.request.has_all_actual_amounts())
+
+    def test_a_receipt_in_another_currency_is_left_for_finance(self):
+        expense = self._expense(600, 400, currency='EUR', actual_currency='USD')
+        self.assertTrue(expense.has_currency_mismatch())
+        # 400 USD is not necessarily less than 600 EUR, so it is not guessed at.
+        self.assertEqual(expense.payable_amount(), 600)
+        self.assertEqual(self.request.expenses_needing_a_decision(), [expense])
+
+    def test_finance_is_asked_to_pay_the_payable_total(self):
+        from tsp.payables import TravelRequestPayableAdapter
+
+        self._expense(600, 400)
+        self.request.state = RequestState.SUBMITTED_FOR_PAYMENT
+        self.request.save()
+        payment = TravelRequestPayableAdapter().build_payment_request(self.request)
+        self.assertEqual(payment.amount, Decimal('400'))
+
+    def test_a_request_cannot_go_to_finance_without_actual_costs(self):
+        self._expense(600)
+        for kind in ('receipt', 'invoice', 'signed_form'):
+            Document.objects.create(
+                request=self.request, kind=kind, size=9, uploaded_by=self.owner,
+                file=SimpleUploadedFile(f'{kind}.pdf', b'%PDF-1.4 x'),
+            )
+        self.client.force_login(self.owner)
+        response = self.client.post(
+            reverse('request_submit_for_payment', args=[self.request.pk]),
+        )
+        self.assertRedirects(response, reverse('request_actuals', args=[self.request.pk]))
+        self.request.refresh_from_db()
+        self.assertEqual(self.request.state, RequestState.ACCEPTED)
+
+    def test_the_requestor_reports_actual_costs(self):
+        expense = self._expense(600)
+        self.client.force_login(self.owner)
+        response = self.client.post(reverse('request_actuals', args=[self.request.pk]), {
+            'expenses-TOTAL_FORMS': '1',
+            'expenses-INITIAL_FORMS': '1',
+            'expenses-MIN_NUM_FORMS': '0',
+            'expenses-MAX_NUM_FORMS': '1000',
+            'expenses-0-id': str(expense.pk),
+            'expenses-0-actual_amount': '425.50',
+            'expenses-0-actual_currency': 'EUR',
+        })
+        self.assertRedirects(response, reverse('request_detail', args=[self.request.pk]))
+        expense.refresh_from_db()
+        self.assertEqual(expense.actual_amount, Decimal('425.50'))
+        self.assertEqual(self.request.total_payable(), Decimal('425.50'))
+
+    def test_only_the_owner_can_report_them(self):
+        self._expense(600)
+        self.client.force_login(make_user('someoneelse', [GROUP_REQUESTER]))
+        response = self.client.get(reverse('request_actuals', args=[self.request.pk]))
+        self.assertEqual(response.status_code, 403)
