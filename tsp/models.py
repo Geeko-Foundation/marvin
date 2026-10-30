@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from django.conf import settings
 from django.contrib.contenttypes.fields import GenericRelation
 from django.db import models
@@ -223,12 +225,25 @@ class Expense(AuditModel):
     approved_currency = models.CharField(max_length=3, blank=True, null=True)
     actual_amount = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
     actual_currency = models.CharField(max_length=3, blank=True, null=True)
+    # Fixed when the line is approved in a different currency from the one
+    # requested: one unit of the approved currency in the requested currency,
+    # averaged over the window ending on ``approval_rate_date``.
+    approval_rate = models.DecimalField(max_digits=18, decimal_places=8, blank=True, null=True)
+    approval_rate_date = models.DateField(blank=True, null=True)
 
     class Meta:
         ordering = ['id']
 
     def __str__(self):
         return f'{self.get_category_display()}: {self.estimated_amount} {self.estimated_currency}'
+
+    def approved_in_requested_currency(self):
+        """The approved amount converted back at the locked rate, or None."""
+        if self.approved_amount is None or self.approval_rate is None:
+            return None
+        if self.approved_currency == self.estimated_currency:
+            return None
+        return (self.approved_amount * self.approval_rate).quantize(Decimal('0.01'))
 
     def has_currency_mismatch(self):
         """True when the receipt is in a different currency from the approval."""
@@ -249,6 +264,24 @@ class Expense(AuditModel):
         if self.actual_amount is None or self.has_currency_mismatch():
             return self.approved_amount
         return min(self.approved_amount, self.actual_amount)
+
+
+class ExchangeRate(AuditModel):
+    """One day's reference rate: how much of ``currency`` one euro buys."""
+
+    date = models.DateField()
+    currency = models.CharField(max_length=3)
+    rate = models.DecimalField(max_digits=18, decimal_places=8)
+    source = models.CharField(max_length=30, default='ecb')
+
+    class Meta:
+        ordering = ['date', 'currency']
+        constraints = [
+            models.UniqueConstraint(fields=['date', 'currency'], name='unique_daily_rate'),
+        ]
+
+    def __str__(self):
+        return f'{self.date}: 1 EUR = {self.rate} {self.currency}'
 
 
 class StateHistory(AuditModel):

@@ -87,7 +87,17 @@
                 <td>{{ expense.description }}</td>
                 <td>{{ expense.estimated_amount }} {{ expense.estimated_currency }}</td>
                 {% if travel_request.state != 'draft' and travel_request.state != 'submitted' %}
-                <td>{% if expense.approved_amount %}{{ expense.approved_amount }} {{ expense.approved_currency }}{% else %}—{% endif %}</td>
+                <td>
+                  {% if expense.approved_amount %}{{ expense.approved_amount }} {{ expense.approved_currency }}{% else %}—{% endif %}
+                  {% with approx=expense.approved_in_requested_currency %}
+                  {% if approx %}
+                  <span class="block text-xs opacity-70"
+                        title="90-day average rate up to {{ expense.approval_rate_date|date:'j M Y' }}: 1 {{ expense.approved_currency }} = {{ expense.approval_rate|floatformat:4 }} {{ expense.estimated_currency }}">
+                    ≈ {{ approx|floatformat:"2g" }} {{ expense.estimated_currency }}
+                  </span>
+                  {% endif %}
+                  {% endwith %}
+                </td>
                 {% endif %}
                 {% if travel_request.total_actual %}
                 <td>{% if expense.actual_amount %}{{ expense.actual_amount }} {{ expense.actual_currency }}{% else %}—{% endif %}</td>
@@ -122,18 +132,54 @@
         <div class="divider">TSP Review</div>
         <form method="post" action="{% url 'request_approve' travel_request.pk %}">
           {% csrf_token %}
-          {% for expense in travel_request.expenses.all %}
+          {% for line in review_lines %}
+          {% with expense=line.expense %}
           <input type="hidden" name="expense_id" value="{{ expense.pk }}">
-          <div class="flex flex-wrap gap-3 items-end mb-3 p-3 bg-base-200 rounded-box">
-            <span class="text-sm flex-1">{{ expense.get_category_display }}: {{ expense.description }}</span>
-            <input type="number" name="approved_amount_{{ expense.pk }}" step="0.01" value="{{ expense.estimated_amount }}"
-                   class="input input-bordered input-sm w-28" placeholder="Amount">
-            <select name="approved_currency_{{ expense.pk }}" class="select select-bordered select-sm w-24">
-              <option value="EUR">EUR</option>
-              <option value="USD">USD</option>
-            </select>
+          <div class="mb-3 p-3 bg-base-200 rounded-box" data-approval-line>
+            <div class="flex flex-wrap gap-3 items-end">
+              <span class="text-sm flex-1">
+                {{ expense.get_category_display }}: {{ expense.description }}
+                <span class="block opacity-70">Requested {{ expense.estimated_amount }} {{ expense.estimated_currency }}</span>
+              </span>
+              <input type="number" name="approved_amount_{{ expense.pk }}" step="0.01"
+                     value="{% for option in line.options %}{% if option.selected %}{{ option.amount }}{% endif %}{% endfor %}"
+                     class="input input-bordered input-sm w-32" placeholder="Amount" data-amount>
+              <select name="approved_currency_{{ expense.pk }}" class="select select-bordered select-sm w-24" data-currency>
+                {% for option in line.options %}
+                <option value="{{ option.code }}" data-amount="{{ option.amount }}"{% if option.selected %} selected{% endif %}>{{ option.code }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            {% for option in line.options %}
+            <p class="text-xs opacity-80 mt-2{% if not option.selected %} hidden{% endif %}" data-rate-for="{{ option.code }}">
+              {% if option.rates %}
+              90-day average: 1 {{ option.code }} = {{ option.rates.average|floatformat:4 }} {{ expense.estimated_currency }}
+              ({{ option.rates.window_start|date:"j M" }} – {{ option.rates.window_end|date:"j M" }})
+              · today: {{ option.rates.current|floatformat:4 }}
+              · range {{ option.rates.low|floatformat:4 }}–{{ option.rates.high|floatformat:4 }}
+              {% elif option.code == expense.estimated_currency %}
+              Same currency as requested.
+              {% endif %}
+            </p>
+            {% endfor %}
           </div>
+          {% endwith %}
           {% endfor %}
+          <p class="text-xs opacity-70 mb-3">
+            Amounts in another currency are filled in at the 90-day average rate. That rate is saved with
+            the approval, so the requester sees what it is worth in their own currency.
+          </p>
+          <script>
+            document.querySelectorAll('[data-approval-line]').forEach(function (line) {
+              var select = line.querySelector('[data-currency]');
+              select.addEventListener('change', function () {
+                line.querySelector('[data-amount]').value = select.selectedOptions[0].dataset.amount;
+                line.querySelectorAll('[data-rate-for]').forEach(function (hint) {
+                  hint.classList.toggle('hidden', hint.dataset.rateFor !== select.value);
+                });
+              });
+            });
+          </script>
           <textarea name="notes" class="textarea textarea-bordered w-full mb-3" rows="2" placeholder="Approval notes (optional)"></textarea>
           <div class="flex gap-2">
             <button type="submit" class="btn btn-success btn-sm">Approve</button>
