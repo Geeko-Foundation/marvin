@@ -99,6 +99,10 @@ class PayableAdapter(ABC):
     def on_payment_completed(self, obj, payment_record, user) -> None:
         """Host-project hook called after a payment is recorded."""
 
+    def payment_purpose(self, obj) -> str:
+        """What the next payment for ``obj`` is for. One may be open per purpose."""
+        return 'payment'
+
     def get_detail_url(self, obj) -> str:
         """URL name or path for linking to the payable object detail page."""
         return ''

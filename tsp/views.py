@@ -60,6 +60,7 @@ from tsp.models import (
     Expense,
     RequestState,
     TravelRequest,
+    request_owing_money,
 )
 from tsp.services import exchange_rates
 from tsp.services.state_machine import (
@@ -68,6 +69,7 @@ from tsp.services.state_machine import (
     transition_request,
 )
 from payments.models import PaymentRecord
+from tsp.payables import TravelRequestPayableAdapter
 
 
 def _state_badge_class(state):
@@ -403,10 +405,16 @@ def _finance_sections(request):
         content_type=travel_request_ct,
     ).aggregate(total=Sum('amount'))['total'] or 0
 
+    with_advance = TravelRequest.objects.filter(
+        payments__purpose='advance', refund_settled_at__isnull=True,
+    ).distinct().select_related('user', 'event')
+
     return {
         'payment_queue': TravelRequest.objects.filter(
             state=RequestState.SUBMITTED_FOR_PAYMENT,
         ).select_related('user', 'event').annotate(doc_count=Count('documents')),
+        'advance_queue': TravelRequestPayableAdapter().get_queue().filter(state=RequestState.ACCEPTED),
+        'owed_back': [r for r in with_advance if r.amount_owed_back()],
         'recently_paid': _paginate(request, recently_paid, 10, 'paid_page'),
         'paid_total': paid_total,
     }
@@ -556,6 +564,15 @@ def check_wise_account(request):
     return JsonResponse(result)
 
 
+def _tell_about_refund(request, owing):
+    currency, amount = owing.amount_owed_back()
+    messages.error(
+        request,
+        f'Request #{owing.pk} has {amount} {currency} of its advance to pay back. '
+        'New requests can be submitted once finance has confirmed it.',
+    )
+
+
 @login_required
 @group_required(GROUP_REQUESTER, GROUP_TSP)
 def request_create(request):
@@ -564,6 +581,10 @@ def request_create(request):
     onboarding = profile.onboarding_step()
     if onboarding:
         return redirect(onboarding)
+    owing = request_owing_money(request.user)
+    if owing:
+        _tell_about_refund(request, owing)
+        return redirect('request_detail', pk=owing.pk)
     if request.method == 'POST':
         form = TravelRequestForm(request.POST)
         formset = ExpenseFormSet(request.POST)
@@ -646,6 +667,7 @@ def request_detail(request, pk, travel_request, profile):
         review_lines = _review_lines(travel_request)
     return render(request, 'tsp/requests/detail.html', {
         'review_lines': review_lines,
+        'payout_currencies': settings.PAYOUT_CURRENCIES,
         'travel_request': travel_request,
         'profile': profile,
         'comments': comments,
@@ -659,6 +681,22 @@ def request_detail(request, pk, travel_request, profile):
     })
 
 
+def _send_back_for_review(travel_request, user):
+    """New amounts mean the old approval, and any advance it allowed, no longer apply."""
+    travel_request.expenses.update(
+        approved_amount=None, approved_currency=None,
+        approval_rate=None, approval_rate_date=None,
+    )
+    travel_request.approved_at = None
+    travel_request.advance_amount = None
+    travel_request.advance_currency = None
+    travel_request.advance_requested_at = None
+    transition_request(
+        travel_request, RequestState.SUBMITTED, user,
+        notes='Amounts changed after approval, so it needs approving again.',
+    )
+
+
 @login_required
 def request_edit(request, pk):
     """Edit a draft or submitted request owned by the current user."""
@@ -667,7 +705,8 @@ def request_edit(request, pk):
 
     if travel_request.user_id != request.user.id:
         raise PermissionDenied
-    if not travel_request.is_editable_by_requester:
+    needs_review_again = travel_request.can_change_amounts()
+    if not (travel_request.is_editable_by_requester or needs_review_again):
         messages.error(request, 'This request can no longer be edited.')
         return redirect('request_detail', pk=pk)
 
@@ -677,7 +716,11 @@ def request_edit(request, pk):
         if form.is_valid() and formset.is_valid():
             form.save()
             formset.save()
-            messages.success(request, 'Request updated.')
+            if needs_review_again:
+                _send_back_for_review(travel_request, request.user)
+                messages.success(request, 'Request updated and sent back to the committee for approval.')
+            else:
+                messages.success(request, 'Request updated.')
             return redirect('request_detail', pk=pk)
     else:
         form = TravelRequestForm(instance=travel_request)
@@ -689,6 +732,7 @@ def request_edit(request, pk):
         'profile': profile,
         'travel_request': travel_request,
         'is_edit': True,
+        'needs_review_again': needs_review_again,
     })
 
 
@@ -704,6 +748,10 @@ def request_submit(request, pk):
     if onboarding:
         messages.error(request, 'Finish setting up your payout account before submitting.')
         return redirect(onboarding)
+    owing = request_owing_money(request.user)
+    if owing:
+        _tell_about_refund(request, owing)
+        return redirect('request_detail', pk=pk)
 
     try:
         transition_request(travel_request, RequestState.SUBMITTED, request.user)
@@ -711,6 +759,29 @@ def request_submit(request, pk):
     except StateTransitionError as e:
         messages.error(request, str(e))
     return redirect('request_detail', pk=pk)
+
+
+def _set_advance(travel_request, data):
+    """Record the advance the committee allows, if any. Returns an error or None."""
+    travel_request.advance_amount = None
+    travel_request.advance_currency = None
+    raw = (data.get('advance_amount') or '').strip()
+    if not raw:
+        return None
+    try:
+        amount = Decimal(raw)
+    except InvalidOperation:
+        return 'The advance amount is not a number.'
+    currency = data.get('advance_currency', '')
+    approved = dict(travel_request.totals_approved())
+    if amount <= 0 or amount > approved.get(currency, Decimal('0')):
+        return (
+            f'An advance has to be more than zero and no more than what is approved '
+            f'in {currency} ({approved.get(currency, Decimal("0"))} {currency}).'
+        )
+    travel_request.advance_amount = amount
+    travel_request.advance_currency = currency
+    return None
 
 
 @login_required
@@ -739,6 +810,11 @@ def request_approve(request, pk):
         expense.save(update_fields=[
             'approved_amount', 'approved_currency', 'approval_rate', 'approval_rate_date',
         ])
+
+    advance_error = _set_advance(travel_request, request.POST)
+    if advance_error:
+        messages.error(request, advance_error)
+        return redirect('request_detail', pk=pk)
 
     notes = form.cleaned_data.get('notes', '') if form.is_valid() else request.POST.get('notes', '')
     try:
@@ -931,11 +1007,90 @@ def request_submit_for_payment(request, pk):
         messages.error(request, 'Report what each approved expense actually cost first.')
         return redirect('request_actuals', pk=pk)
 
+    # The final amount takes the advance off, so it has to be settled first.
+    advance_in_flight = travel_request.payments.filter(purpose='advance').exclude(
+        status__in=['success', 'completed', 'failed', 'cancelled'],
+    ).exists()
+    if advance_in_flight:
+        messages.error(request, 'Your advance is still being paid. Submit once it has arrived.')
+        return redirect('request_detail', pk=pk)
+
     try:
         transition_request(travel_request, RequestState.SUBMITTED_FOR_PAYMENT, request.user)
         messages.success(request, 'Request submitted for payment.')
     except StateTransitionError as e:
         messages.error(request, str(e))
+    return redirect('request_detail', pk=pk)
+
+
+@login_required
+@require_POST
+def request_take_back(request, pk):
+    """Pull a request back out of the payment queue so the requester can fix it."""
+    travel_request = get_object_or_404(TravelRequest, pk=pk)
+    if travel_request.user_id != request.user.id:
+        raise PermissionDenied
+    if not travel_request.can_take_back_from_payment():
+        messages.error(request, 'Finance has already started paying this request.')
+        return redirect('request_detail', pk=pk)
+
+    transition_request(
+        travel_request, RequestState.ACCEPTED, request.user,
+        notes='Taken back from the payment queue to edit.',
+    )
+    messages.success(request, 'Taken back. Fix your costs or documents, then submit for payment again.')
+    return redirect('request_detail', pk=pk)
+
+
+@login_required
+@require_POST
+def request_advance(request, pk):
+    """Ask finance to pay the advance the committee allowed, before the event."""
+    from profile.services.push_notifications import send_push_to_group
+
+    travel_request = get_object_or_404(TravelRequest, pk=pk)
+    if travel_request.user_id != request.user.id:
+        raise PermissionDenied
+    if not travel_request.can_request_advance():
+        messages.error(request, 'No advance can be requested on this request.')
+        return redirect('request_detail', pk=pk)
+
+    travel_request.advance_requested_at = timezone.now()
+    travel_request.save(update_fields=['advance_requested_at', 'updated_at'])
+    send_push_to_group(
+        GROUP_FINANCE,
+        head='Advance requested',
+        body=(
+            f'#{travel_request.pk} {travel_request.event.name}: '
+            f'{travel_request.advance_amount} {travel_request.advance_currency} before the event.'
+        ),
+        url=reverse('request_detail', args=[pk]),
+        exclude_user=request.user,
+    )
+    messages.success(request, 'Advance requested. Finance will pay it before the event.')
+    return redirect('request_detail', pk=pk)
+
+
+@login_required
+@group_required(GROUP_FINANCE)
+@require_POST
+def request_settle(request, pk):
+    """Finance closes a request the advance already covered, or records a refund."""
+    travel_request = get_object_or_404(TravelRequest, pk=pk)
+    action = request.POST.get('action')
+
+    if action == 'close' and travel_request.advance_covers_costs():
+        transition_request(
+            travel_request, RequestState.PAID, request.user,
+            notes='The advance already covered the costs.',
+        )
+        messages.success(request, 'Closed: the advance covered everything.')
+    elif action == 'refund' and travel_request.amount_owed_back():
+        travel_request.refund_settled_at = timezone.now()
+        travel_request.save(update_fields=['refund_settled_at', 'updated_at'])
+        messages.success(request, 'Refund recorded. The requester can submit new requests again.')
+    else:
+        messages.error(request, 'There is nothing to settle on this request.')
     return redirect('request_detail', pk=pk)
 
 

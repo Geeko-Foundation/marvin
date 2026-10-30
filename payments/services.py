@@ -55,9 +55,10 @@ class PaymentService:
         if not self.adapter.get_queue().filter(pk=obj.pk).exists():
             raise ValueError('This request is no longer awaiting payment.')
         ct = ContentType.objects.get_for_model(obj)
-        if PaymentRecord.objects.filter(content_type=ct, object_id=obj.pk).exclude(
-            status__in=['failed', 'cancelled'],
-        ).exists():
+        purpose = self.adapter.payment_purpose(obj)
+        if PaymentRecord.objects.filter(
+            content_type=ct, object_id=obj.pk, purpose=purpose,
+        ).exclude(status__in=['failed', 'cancelled']).exists():
             raise ValueError('A payment already exists for this request. Check its status before retrying.')
         gateway = get_gateway(gateway_id)
         if gateway is None:
@@ -78,6 +79,7 @@ class PaymentService:
             reference=payment_request.reference,
             external_id=result.external_id,
             status=result.status,
+            purpose=purpose,
             metadata=result.metadata,
             processed_by=user,
             created_by=user,

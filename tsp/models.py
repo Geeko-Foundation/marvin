@@ -87,6 +87,13 @@ class TravelRequest(AuditModel):
         null=True,
         related_name='accepted_requests',
     )
+    # Set by the committee when approving: how much may be paid before the
+    # event, for people who can't front the costs themselves.
+    advance_amount = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
+    advance_currency = models.CharField(max_length=3, blank=True, null=True)
+    advance_requested_at = models.DateTimeField(blank=True, null=True)
+    # When finance confirmed an overpaid advance came back.
+    refund_settled_at = models.DateTimeField(blank=True, null=True)
     payments = GenericRelation(
         'payments.PaymentRecord',
         content_type_field='content_type',
@@ -103,6 +110,87 @@ class TravelRequest(AuditModel):
     def is_editable_by_requester(self):
         """True while the request is still in draft or submitted (pre-review edit)."""
         return self.state in (RequestState.DRAFT, RequestState.SUBMITTED)
+
+    def _open_payments(self, purpose):
+        return self.payments.filter(purpose=purpose).exclude(status__in=['failed', 'cancelled'])
+
+    def can_change_amounts(self):
+        """
+        Approved or accepted, and no money has moved yet.
+
+        Changing the amounts then sends the request back for review. Once an
+        advance is out, the amounts it was based on have to stay put.
+        """
+        return (
+            self.state in (RequestState.APPROVED, RequestState.ACCEPTED)
+            and not self.payments.exclude(status__in=['failed', 'cancelled']).exists()
+        )
+
+    def can_take_back_from_payment(self):
+        """Submitted for payment, and finance hasn't started paying it."""
+        return (
+            self.state == RequestState.SUBMITTED_FOR_PAYMENT
+            and not self._open_payments('payment').exists()
+        )
+
+    def advance_payment(self):
+        """The advance that has actually been paid, if any."""
+        return self.payments.filter(
+            purpose='advance', status__in=['success', 'completed'],
+        ).order_by('-created_at').first()
+
+    def can_request_advance(self):
+        return (
+            self.state == RequestState.ACCEPTED
+            and self.advance_amount is not None
+            and self.advance_requested_at is None
+        )
+
+    def awaiting_advance(self):
+        """Asked for and not yet paid, nor being paid."""
+        return (
+            self.state == RequestState.ACCEPTED
+            and self.advance_requested_at is not None
+            and not self._open_payments('advance').exists()
+        )
+
+    def amount_still_to_pay(self):
+        """What finance still owes per currency once any advance is taken off."""
+        totals = dict(self.totals_payable())
+        advance = self.advance_payment()
+        if advance:
+            totals[advance.currency] = totals.get(advance.currency, Decimal('0')) - advance.amount
+        return sorted(totals.items())
+
+    def amounts_to_pay(self):
+        """The currencies in which finance still has something to send."""
+        return [(code, amount) for code, amount in self.amount_still_to_pay() if amount > 0]
+
+    def amount_owed_back(self):
+        """
+        ``(currency, amount)`` the requester owes after an advance, or None.
+
+        Either the advance came to more than the costs, or the trip was
+        cancelled or rejected after it was paid.
+        """
+        advance = self.advance_payment()
+        if advance is None or self.refund_settled_at:
+            return None
+        if self.state in (RequestState.CANCELLED, RequestState.REJECTED):
+            owed = advance.amount
+        elif self.state in (RequestState.SUBMITTED_FOR_PAYMENT, RequestState.PAID):
+            owed = -dict(self.amount_still_to_pay()).get(advance.currency, Decimal('0'))
+        else:
+            return None
+        return (advance.currency, owed) if owed > 0 else None
+
+    def advance_covers_costs(self):
+        """Nothing left to pay because the advance already covered it."""
+        return (
+            self.state == RequestState.SUBMITTED_FOR_PAYMENT
+            and self.advance_payment() is not None
+            and all(amount <= 0 for _, amount in self.amount_still_to_pay())
+        )
 
     # Which amount and currency field each total reads.
     AMOUNT_FIELDS = {
@@ -211,6 +299,14 @@ class TravelRequest(AuditModel):
     def payment(self):
         """Most recent payment record, for template compatibility."""
         return self.payments.order_by('-created_at').first()
+
+
+def request_owing_money(user):
+    """The first of ``user``'s requests with an advance still to pay back."""
+    candidates = TravelRequest.objects.filter(
+        user=user, payments__purpose='advance', refund_settled_at__isnull=True,
+    ).distinct()
+    return next((r for r in candidates if r.amount_owed_back()), None)
 
 
 class Expense(AuditModel):

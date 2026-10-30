@@ -70,6 +70,9 @@ def notify_request_state_change_email(
     requester = travel_request.user
     label = f'#{travel_request.pk} {travel_request.event.name}'
 
+    if from_state == RequestState.SUBMITTED_FOR_PAYMENT and to_state == RequestState.ACCEPTED:
+        # The requester took it back to edit; "accepted" would mislead them.
+        return
     if to_state == RequestState.SUBMITTED:
         send_to(
             group_members(GROUP_TSP, exclude=[actor]),
