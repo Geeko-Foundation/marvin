@@ -58,8 +58,6 @@ class Event(AuditModel):
     requests_open_until = models.DateField(blank=True, null=True)
     reimbursements_open_until = models.DateField(blank=True, null=True)
     visa_letters_offered = models.BooleanField(default=False)
-    validated = models.BooleanField(default=False)
-    shipment_type = models.CharField(max_length=50, blank=True)
 
     class Meta:
         ordering = ['-start_date']

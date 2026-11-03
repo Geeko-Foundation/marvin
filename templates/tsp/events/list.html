@@ -40,6 +40,12 @@
       <p class="text-xs opacity-60">Requests close {{ event.requests_open_until }}</p>
       {% endif %}
       <p class="text-xs opacity-60">Claims close {{ event.reimbursement_deadline }}</p>
+      {% if event.visa_letters_offered %}
+      <p class="text-xs">This event offers visa invitation letters</p>
+      {% endif %}
+      {% if event.url %}
+      <a href="{{ event.url }}" class="link link-primary text-xs" target="_blank" rel="noopener">Event website</a>
+      {% endif %}
       {% if event.budget and profile.is_committee %}
       <div class="mt-2 text-sm">
         <div class="flex justify-between">

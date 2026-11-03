@@ -943,7 +943,7 @@ class AuditLogTests(TestCase):
         with self.assertRaises(ValueError):
             self.entries.objects.first().delete()
 
-    def test_uploading_and_removing_a_document_is_recorded(self):
+    def test_removing_a_document_is_recorded(self):
         self.request.state = RequestState.ACCEPTED
         self.request.save()
         doc = Document.objects.create(
@@ -963,3 +963,54 @@ class AuditLogTests(TestCase):
             transition_request(self.request, RequestState.APPROVED, self.committee)
         self.request.refresh_from_db()
         self.assertEqual(self.request.state, RequestState.APPROVED)
+
+
+class EventAuditTests(TestCase):
+    """Events are the committee's, so creating and changing them is logged."""
+
+    def setUp(self):
+        from profile.audit_log import AuditLogEntry
+
+        self.entries = AuditLogEntry
+        self.committee = make_user('eventauditor', [GROUP_TSP])
+        self.client.force_login(self.committee)
+
+    def _actions(self):
+        return list(self.entries.objects.values_list('action', flat=True))
+
+    def test_creating_an_event_is_recorded(self):
+        self.client.post(reverse('event_create'), {
+            'name': 'Audited Summit', 'location': 'Berlin',
+            'start_date': '2099-05-01', 'end_date': '2099-05-03',
+            'budget': '500.00', 'budget_currency': 'EUR'})
+        entry = self.entries.objects.filter(action='event.created').first()
+        self.assertIsNotNone(entry)
+        self.assertEqual(entry.user, self.committee)
+        self.assertEqual(entry.target, 'Audited Summit')
+        self.assertIn('budget 500.00 EUR', entry.detail)
+
+    def test_editing_an_event_records_what_changed(self):
+        event = Event.objects.create(
+            name='Summit', location='Berlin',
+            start_date=date(2099, 5, 1), end_date=date(2099, 5, 3))
+        self.client.post(reverse('event_edit', args=[event.pk]), {
+            'name': 'Renamed Summit', 'location': 'Berlin',
+            'start_date': '2099-05-01', 'end_date': '2099-05-03'})
+        entry = self.entries.objects.filter(action='event.updated').first()
+        self.assertIsNotNone(entry)
+        self.assertIn('name', entry.detail)
+
+    def test_an_ordinary_upload_is_not_logged(self):
+        # Routine requester activity would bury the decisions that matter.
+        owner = make_user('uploader', [GROUP_REQUESTER])
+        event = Event.objects.create(
+            name='E', location='B',
+            start_date=date(2099, 5, 1), end_date=date(2099, 5, 3))
+        req = TravelRequest.objects.create(
+            user=owner, event=event, state=RequestState.ACCEPTED, description='T')
+        self.client.force_login(owner)
+        self.client.post(reverse('request_document_upload', args=[req.pk]), {
+            'kind': 'receipt',
+            'file': SimpleUploadedFile('r.pdf', b'%PDF-1.4 x'),
+        })
+        self.assertNotIn('document.uploaded', self._actions())

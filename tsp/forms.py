@@ -118,7 +118,7 @@ class EventForm(forms.ModelForm):
         fields = ['name', 'location', 'start_date', 'end_date', 'accepting_requests',
                   'budget', 'budget_currency', 'url', 'description',
                   'requests_open_until', 'reimbursements_open_until',
-                  'visa_letters_offered', 'validated', 'shipment_type']
+                  'visa_letters_offered']
         widgets = {
             'name': forms.TextInput(attrs={'class': 'input input-bordered w-full'}),
             'location': forms.TextInput(attrs={'class': 'input input-bordered w-full'}),
@@ -144,8 +144,6 @@ class EventForm(forms.ModelForm):
                 'class': 'input input-bordered w-full', 'type': 'date',
             }),
             'visa_letters_offered': forms.CheckboxInput(attrs={'class': 'checkbox'}),
-            'validated': forms.CheckboxInput(attrs={'class': 'checkbox'}),
-            'shipment_type': forms.TextInput(attrs={'class': 'input input-bordered w-full'}),
         }
 
     def __init__(self, *args, **kwargs):

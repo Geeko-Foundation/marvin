@@ -471,7 +471,11 @@ def event_create(request):
     if request.method == 'POST':
         form = EventForm(request.POST)
         if form.is_valid():
-            form.save()
+            event = form.save()
+            audit('event.created', user=request.user, target=event.name,
+                  detail=f'{event.start_date} to {event.end_date}'
+                         + (f', budget {event.budget} {event.budget_currency}'
+                            if event.budget else ''))
             messages.success(request, 'Event created successfully.')
             return redirect('event_list')
     else:
@@ -489,7 +493,9 @@ def event_edit(request, pk):
     if request.method == 'POST':
         form = EventForm(request.POST, instance=event)
         if form.is_valid():
-            form.save()
+            event = form.save()
+            audit('event.updated', user=request.user, target=event.name,
+                  detail=', '.join(form.changed_data) or 'no fields changed')
             messages.success(request, 'Event updated.')
             return redirect('event_list')
     else:
@@ -515,6 +521,8 @@ def event_delete(request, pk):
         return redirect('event_list')
 
     name = event.name
+    audit('event.deleted', user=request.user, target=event.name,
+          detail=f'{event.start_date} to {event.end_date}')
     event.delete()
     messages.success(request, f'{name} deleted.')
     return redirect('event_list')
@@ -953,9 +961,6 @@ def request_document_upload(request, pk, travel_request, profile):
         doc.mimetype = uploaded.content_type or 'application/octet-stream'
         doc.size = uploaded.size
         doc.save()
-        audit('document.uploaded', user=request.user,
-              target=f'request {travel_request.pk}',
-              detail=f'{doc.get_kind_display()}: {doc.original_name}')
         messages.success(request, 'Document uploaded.')
     else:
         file_errors = form.errors.get('file')
