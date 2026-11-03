@@ -20,6 +20,7 @@ from django.views.decorators.http import require_POST
 
 from django_tables2 import RequestConfig
 
+from profile.audit_log import record as audit
 from profile.decorators import get_profile
 from profile.forms import OnboardingPersonalForm, WiseRecipientForm
 from profile.groups import GROUP_FINANCE, GROUP_REQUESTER, GROUP_TSP
@@ -952,6 +953,9 @@ def request_document_upload(request, pk, travel_request, profile):
         doc.mimetype = uploaded.content_type or 'application/octet-stream'
         doc.size = uploaded.size
         doc.save()
+        audit('document.uploaded', user=request.user,
+              target=f'request {travel_request.pk}',
+              detail=f'{doc.get_kind_display()}: {doc.original_name}')
         messages.success(request, 'Document uploaded.')
     else:
         file_errors = form.errors.get('file')
@@ -987,6 +991,8 @@ def request_document_delete(request, pk, travel_request, profile, doc_id):
     name = doc.original_name
     doc.file.delete(save=False)
     doc.delete()
+    audit('document.removed', user=request.user,
+          target=f'request {travel_request.pk}', detail=name)
     messages.success(request, f'Removed {name}.')
     return redirect('request_detail', pk=pk)
 

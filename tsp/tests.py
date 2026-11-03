@@ -899,3 +899,67 @@ class EventSpendTests(TestCase):
         self.assertEqual(
             self.event.paid_by_currency(),
             [('EUR', Decimal('300.00')), ('USD', Decimal('100.00'))])
+
+
+class AuditLogTests(TestCase):
+    """Patrick asked for every action logged, and the log not alterable."""
+
+    def setUp(self):
+        from profile.audit_log import AuditLogEntry
+
+        self.entries = AuditLogEntry
+        self.owner = make_user('audited', [GROUP_REQUESTER])
+        self.committee = make_user('auditcommittee', [GROUP_TSP])
+        self.event = Event.objects.create(
+            name='Summit', location='Berlin',
+            start_date=date(2099, 5, 1), end_date=date(2099, 5, 3))
+        self.request = TravelRequest.objects.create(
+            user=self.owner, event=self.event, state=RequestState.SUBMITTED,
+            description='Trip')
+
+    def test_a_state_change_is_recorded(self):
+        from tsp.services.state_machine import transition_request
+
+        transition_request(self.request, RequestState.APPROVED, self.committee, 'looks fine')
+        entry = self.entries.objects.filter(action='request.state_change').first()
+        self.assertIsNotNone(entry)
+        self.assertEqual(entry.user, self.committee)
+        self.assertIn('submitted -> approved', entry.detail)
+        self.assertIn('looks fine', entry.detail)
+
+    def test_an_entry_cannot_be_changed_once_written(self):
+        from tsp.services.state_machine import transition_request
+
+        transition_request(self.request, RequestState.APPROVED, self.committee)
+        entry = self.entries.objects.first()
+        entry.detail = 'something else'
+        with self.assertRaises(ValueError):
+            entry.save()
+
+    def test_an_entry_cannot_be_deleted(self):
+        from tsp.services.state_machine import transition_request
+
+        transition_request(self.request, RequestState.APPROVED, self.committee)
+        with self.assertRaises(ValueError):
+            self.entries.objects.first().delete()
+
+    def test_uploading_and_removing_a_document_is_recorded(self):
+        self.request.state = RequestState.ACCEPTED
+        self.request.save()
+        doc = Document.objects.create(
+            request=self.request, kind='receipt', size=9, uploaded_by=self.owner,
+            file=SimpleUploadedFile('receipt.pdf', b'%PDF-1.4 x'))
+        self.client.force_login(self.owner)
+        self.client.post(reverse('request_document_delete', args=[self.request.pk, doc.pk]))
+        actions = set(self.entries.objects.values_list('action', flat=True))
+        self.assertIn('document.removed', actions)
+
+    def test_logging_never_breaks_the_action_it_records(self):
+        from unittest import mock
+        from tsp.services.state_machine import transition_request
+
+        with mock.patch('profile.audit_log.AuditLogEntry.objects.create',
+                        side_effect=RuntimeError('database on fire')):
+            transition_request(self.request, RequestState.APPROVED, self.committee)
+        self.request.refresh_from_db()
+        self.assertEqual(self.request.state, RequestState.APPROVED)
