@@ -40,7 +40,7 @@ class EventTable(tables.Table):
     def render_actions(self, record):
         """Link to create a travel request pre-filled with this event, when open."""
         if record.is_past or not record.accepting_requests:
-            return '—'
+            return '-'
         url = reverse('request_create') + f'?event={record.pk}'
         return format_html('<a href="{}" class="link link-primary text-sm">Apply</a>', url)
 
@@ -69,17 +69,17 @@ class UserTable(tables.Table):
 
     def render_full_name(self, record):
         """Display ``User.get_full_name()`` or a dash when empty."""
-        return record.get_full_name() or '—'
+        return record.get_full_name() or '-'
 
     def render_groups(self, record):
         """Comma-separated Marvin group names."""
         names = [g.name for g in record.groups.all()]
-        return ', '.join(names) if names else '—'
+        return ', '.join(names) if names else '-'
 
     def render_country(self, record):
         """Country from the linked ``UserProfile``, if set."""
         profile = getattr(record, 'profile', None)
-        return profile.country if profile and profile.country else '—'
+        return profile.country if profile and profile.country else '-'
 
     def render_staff(self, record):
         """Badge for superuser or staff status."""
@@ -87,4 +87,4 @@ class UserTable(tables.Table):
             return mark_safe('<span class="badge badge-primary badge-sm">Superuser</span>')
         if record.is_staff:
             return mark_safe('<span class="badge badge-secondary badge-sm">Staff</span>')
-        return '—'
+        return '-'

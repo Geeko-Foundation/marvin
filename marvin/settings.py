@@ -36,7 +36,7 @@ def env_list(key: str, default: str) -> list[str]:
 
 # --- Security (override in .env for production) ---
 
-# Dev/test default only — never use in production.
+# Dev/test default only - never use in production.
 SECRET_KEY = env(
     'DJANGO_SECRET_KEY',
     'django-insecure-dev-only-change-me-in-env',
@@ -50,6 +50,16 @@ ALLOWED_HOSTS = env_list(
 )
 
 CSRF_TRUSTED_ORIGINS = env_list('CSRF_TRUSTED_ORIGINS', '')
+
+# Local development only: let a tunnel reach the dev server, so the committee
+# can look at a branch without it being deployed anywhere.
+if DEBUG:
+    ALLOWED_HOSTS.extend(['.ngrok-free.dev', '.ngrok-free.app', '.ngrok.io'])
+    CSRF_TRUSTED_ORIGINS.extend([
+        'https://*.ngrok-free.dev',
+        'https://*.ngrok-free.app',
+        'https://*.ngrok.io',
+    ])
 
 IS_VERCEL = bool(os.environ.get('VERCEL') or env_bool('VERCEL_DEPLOYMENT', False))
 if IS_VERCEL:
@@ -210,7 +220,7 @@ PAYMENTS_PERMISSION_CHECK = 'profile.permissions.finance_can_process_payments'
 
 # --- Web Push (django-webpush) ---
 
-# Dev/test VAPID keys — generate your own for production (see .env.example).
+# Dev/test VAPID keys - generate your own for production (see .env.example).
 _DEV_VAPID_PUBLIC_KEY = (
     'BF8UddgDIQ_Y5lfOLbOqFLyb5inEudxst2ynx6tM5G7VyPMZwBn0JjpmOfbAdfKcvpVqYZXm5D1wRP-qZVPubu4'
 )
@@ -232,7 +242,7 @@ WEBPUSH_SETTINGS = {
 
 # --- Wise API ---
 
-# Dev/test sandbox token — override WISE_API_TOKEN in .env for production.
+# Dev/test sandbox token - override WISE_API_TOKEN in .env for production.
 WISE_API_TOKEN = env(
     'WISE_API_TOKEN',
     '4420b1fd-2246-4644-9730-56e7c9e4b41b',

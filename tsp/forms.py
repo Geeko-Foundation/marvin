@@ -44,7 +44,7 @@ class LoginForm(AuthenticationForm):
 
 
 class SignupAccountForm(forms.Form):
-    """Step 1 of the sign-up wizard — create a requestor account."""
+    """Step 1 of the sign-up wizard - create a requestor account."""
 
     username = forms.CharField(
         max_length=150,
@@ -274,7 +274,7 @@ class CommentForm(forms.ModelForm):
             'body': forms.Textarea(attrs={
                 'class': 'textarea textarea-bordered w-full',
                 'rows': 3,
-                'placeholder': 'Add a comment…',
+                'placeholder': 'Add a comment...',
             }),
             'internal': forms.CheckboxInput(attrs={'class': 'checkbox checkbox-sm checkbox-warning'}),
         }
@@ -371,7 +371,7 @@ class SearchForm(forms.Form):
         label='Search',
         widget=forms.TextInput(attrs={
             'class': INPUT_CLASS,
-            'placeholder': 'Events, locations, users…',
+            'placeholder': 'Events, locations, users...',
             'autocomplete': 'off',
         }),
     )

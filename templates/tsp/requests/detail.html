@@ -87,15 +87,15 @@
                 <td>{{ expense.description }}</td>
                 <td>{{ expense.estimated_amount }} {{ expense.estimated_currency }}</td>
                 {% if travel_request.state != 'draft' and travel_request.state != 'submitted' %}
-                <td>{% if expense.approved_amount %}{{ expense.approved_amount }} {{ expense.approved_currency }}{% else %}—{% endif %}</td>
+                <td>{% if expense.approved_amount %}{{ expense.approved_amount }} {{ expense.approved_currency }}{% else %}-{% endif %}</td>
                 {% endif %}
                 {% if travel_request.total_actual %}
-                <td>{% if expense.actual_amount %}{{ expense.actual_amount }} {{ expense.actual_currency }}{% else %}—{% endif %}</td>
+                <td>{% if expense.actual_amount %}{{ expense.actual_amount }} {{ expense.actual_currency }}{% else %}-{% endif %}</td>
                 <td>
                   {% if expense.has_currency_mismatch %}
                   <span class="badge badge-warning badge-sm">finance to settle</span>
                   {% else %}
-                  {{ expense.payable_amount|default_if_none:"—" }} {{ expense.approved_currency }}
+                  {{ expense.payable_amount|default_if_none:"-" }} {{ expense.approved_currency }}
                   {% endif %}
                 </td>
                 {% endif %}
