@@ -27,6 +27,26 @@
           {{ form.end_date }}
         </div>
       </div>
+      <div class="grid gap-4 md:grid-cols-2">
+        <div class="form-control">
+          <label class="label">
+            <span class="label-text">Budget</span>
+            <span class="label-text-alt">Optional</span>
+          </label>
+          {{ form.budget }}
+          {% for error in form.budget.errors %}
+          <span class="label-text-alt text-error">{{ error }}</span>
+          {% endfor %}
+        </div>
+        <div class="form-control">
+          <label class="label"><span class="label-text">Budget Currency</span></label>
+          {{ form.budget_currency }}
+        </div>
+      </div>
+      <p class="text-sm opacity-60">
+        Approvals for this event count against the budget. Going over it needs
+        the committee to confirm, and that is recorded on the request.
+      </p>
       <label class="label cursor-pointer justify-start gap-3">
         {{ form.accepting_requests }}
         <span class="label-text">Accepting travel support requests</span>
