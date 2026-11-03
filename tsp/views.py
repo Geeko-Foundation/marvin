@@ -895,6 +895,14 @@ def request_submit_for_payment(request, pk):
         messages.error(request, f'Missing required documents: {missing}')
         return redirect('request_detail', pk=pk)
 
+    if travel_request.event.reimbursement_window_closed():
+        messages.error(
+            request,
+            f'Claims for {travel_request.event.name} closed on '
+            f'{travel_request.event.reimbursement_deadline()}.',
+        )
+        return redirect('request_detail', pk=pk)
+
     # Finance pays the lesser of approved and actual, so the actual costs have
     # to be in before the request reaches them.
     if not travel_request.has_all_actual_amounts():

@@ -1,3 +1,4 @@
+from datetime import timedelta
 from decimal import Decimal
 
 from django.conf import settings
@@ -50,6 +51,15 @@ class Event(AuditModel):
     accepting_requests = models.BooleanField(default=True)
     budget = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
     budget_currency = models.CharField(max_length=3, default='EUR')
+    url = models.URLField(blank=True)
+    description = models.TextField(blank=True)
+    # Both deadlines are dates, and the cut-off is midnight UTC as that date
+    # starts, so an event closes everywhere at the same moment.
+    requests_open_until = models.DateField(blank=True, null=True)
+    reimbursements_open_until = models.DateField(blank=True, null=True)
+    visa_letters_offered = models.BooleanField(default=False)
+    validated = models.BooleanField(default=False)
+    shipment_type = models.CharField(max_length=50, blank=True)
 
     class Meta:
         ordering = ['-start_date']
@@ -61,6 +71,39 @@ class Event(AuditModel):
     def is_past(self):
         """True when the event end date is before today."""
         return self.end_date < timezone.now().date()
+
+    def reimbursement_deadline(self):
+        """
+        The last day a reimbursement can be submitted for this event.
+
+        Falls back to the organisation's window, which is settings
+        REIMBURSEMENT_WINDOW_DAYS after the event ends.
+        """
+        if self.reimbursements_open_until:
+            return self.reimbursements_open_until
+        window = getattr(settings, 'REIMBURSEMENT_WINDOW_DAYS', 30)
+        return self.end_date + timedelta(days=window)
+
+    def days_left_to_claim(self):
+        """Days remaining to submit a reimbursement; negative once it has passed."""
+        return (self.reimbursement_deadline() - timezone.now().date()).days
+
+    def reimbursement_window_closed(self):
+        """True when the deadline for claiming has gone by."""
+        return self.days_left_to_claim() < 0
+
+    def is_open_for_requests(self):
+        """
+        True when someone may still apply for support.
+
+        The checkbox is the committee's manual switch; the date closes the
+        event on its own so nobody has to remember to untick it.
+        """
+        if not self.accepting_requests or self.is_past:
+            return False
+        if self.requests_open_until:
+            return timezone.now().date() < self.requests_open_until
+        return True
 
     def _live_requests(self):
         """Requests that still count against the budget."""

@@ -454,7 +454,7 @@ class ActualCostTests(TestCase):
         self.owner = make_user('actualowner', [GROUP_REQUESTER])
         self.event = Event.objects.create(
             name='Conf', location='Berlin',
-            start_date=date(2026, 5, 1), end_date=date(2026, 5, 3),
+            start_date=date(2099, 5, 1), end_date=date(2099, 5, 3),
         )
         self.request = TravelRequest.objects.create(
             user=self.owner, event=self.event, state=RequestState.ACCEPTED,
@@ -744,3 +744,62 @@ class DocumentRemovalTests(TestCase):
                 self.client.force_login(self.owner)
                 self._delete()
                 self.assertEqual(self.request.documents.count(), 1)
+
+
+class EventDeadlineTests(TestCase):
+    """Events close themselves, so nobody has to remember to untick a box."""
+
+    def _event(self, **kwargs):
+        defaults = dict(
+            name='Summit', location='Berlin',
+            start_date=date(2026, 5, 1), end_date=date(2026, 5, 3))
+        return Event.objects.create(**{**defaults, **kwargs})
+
+    def test_requests_close_on_their_date_without_anyone_unticking(self):
+        past = self._event(requests_open_until=date(2026, 1, 1))
+        future = self._event(end_date=date(2099, 5, 3),
+                             requests_open_until=date(2099, 1, 1))
+        self.assertFalse(past.is_open_for_requests())
+        self.assertTrue(future.is_open_for_requests())
+
+    def test_the_checkbox_still_closes_an_event_on_its_own(self):
+        event = self._event(end_date=date(2099, 5, 3),
+                            requests_open_until=date(2099, 1, 1),
+                            accepting_requests=False)
+        self.assertFalse(event.is_open_for_requests())
+
+    def test_an_event_that_has_already_happened_takes_no_more_requests(self):
+        self.assertFalse(self._event().is_open_for_requests())
+
+    def test_an_event_with_no_date_follows_the_checkbox(self):
+        self.assertTrue(self._event(end_date=date(2099, 5, 3)).is_open_for_requests())
+
+    def test_claims_default_to_the_organisation_window(self):
+        event = self._event(end_date=date(2026, 5, 3))
+        # settings.REIMBURSEMENT_WINDOW_DAYS is 30 unless an org changes it.
+        self.assertEqual(event.reimbursement_deadline(), date(2026, 6, 2))
+
+    def test_an_event_can_set_its_own_claim_deadline(self):
+        event = self._event(reimbursements_open_until=date(2026, 9, 1))
+        self.assertEqual(event.reimbursement_deadline(), date(2026, 9, 1))
+
+    def test_a_closed_window_is_reported_as_closed(self):
+        self.assertTrue(self._event(end_date=date(2020, 1, 1)).reimbursement_window_closed())
+        self.assertFalse(self._event(end_date=date(2099, 1, 1)).reimbursement_window_closed())
+
+    def test_a_late_claim_is_refused(self):
+        owner = make_user('lateclaimer', [GROUP_REQUESTER])
+        event = self._event(end_date=date(2020, 1, 1))
+        req = TravelRequest.objects.create(
+            user=owner, event=event, state=RequestState.ACCEPTED, description='T')
+        Expense.objects.create(
+            request=req, category='transportation', description='Flight',
+            estimated_amount=100, approved_amount=100, approved_currency='EUR',
+            actual_amount=90, actual_currency='EUR')
+        for kind in ('receipt', 'invoice', 'signed_form'):
+            Document.objects.create(request=req, kind=kind, size=9, uploaded_by=owner,
+                                    file=SimpleUploadedFile(f'{kind}.pdf', b'%PDF-1.4 x'))
+        self.client.force_login(owner)
+        self.client.post(reverse('request_submit_for_payment', args=[req.pk]))
+        req.refresh_from_db()
+        self.assertEqual(req.state, RequestState.ACCEPTED)

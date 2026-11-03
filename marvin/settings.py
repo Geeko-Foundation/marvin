@@ -288,6 +288,11 @@ LOGGING = {
 }
 
 
+# How long after an event someone may still claim. An organisation can set
+# its own; an individual event can override it.
+REIMBURSEMENT_WINDOW_DAYS = int(env('REIMBURSEMENT_WINDOW_DAYS', '30'))
+
+
 # --- Branding ---
 # Everything a fork needs to change to make this its own.
 
