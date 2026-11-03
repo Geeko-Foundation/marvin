@@ -134,6 +134,27 @@ class Event(AuditModel):
                     totals[currency] = totals.get(currency, Decimal('0')) + amount
         return sorted(totals.items())
 
+    def paid_by_currency(self):
+        """
+        What has actually left the account for this event, per currency.
+
+        Read from the payment records rather than the request state, so a
+        request marked paid by hand without a payment behind it does not
+        count as money spent.
+        """
+        from django.contrib.contenttypes.models import ContentType
+        from payments.models import PaymentRecord
+
+        content_type = ContentType.objects.get_for_model(TravelRequest)
+        records = PaymentRecord.objects.filter(
+            content_type=content_type,
+            object_id__in=self.requests.values_list('pk', flat=True),
+        )
+        totals = {}
+        for record in records:
+            totals[record.currency] = totals.get(record.currency, Decimal('0')) + record.amount
+        return sorted(totals.items())
+
     def budget_remaining(self):
         """What is left of the budget, or None when none is set."""
         if self.budget is None:

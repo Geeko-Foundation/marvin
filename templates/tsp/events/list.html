@@ -50,6 +50,12 @@
           <span class="opacity-60">Approved</span>
           <span>{{ event.approved_against_budget }} {{ event.budget_currency }}</span>
         </div>
+        {% for currency, amount in event.paid_by_currency %}
+        <div class="flex justify-between">
+          <span class="opacity-60">Paid out</span>
+          <span>{{ amount }} {{ currency }}</span>
+        </div>
+        {% endfor %}
         <div class="flex justify-between font-semibold">
           <span class="opacity-60">Remaining</span>
           {% with left=event.budget_remaining %}

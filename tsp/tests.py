@@ -1,9 +1,10 @@
 import os
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from unittest import mock
 
 from django.contrib.auth.models import User
+from django.core import mail
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import RequestFactory, TestCase
 from django.urls import reverse
@@ -803,3 +804,98 @@ class EventDeadlineTests(TestCase):
         self.client.post(reverse('request_submit_for_payment', args=[req.pk]))
         req.refresh_from_db()
         self.assertEqual(req.state, RequestState.ACCEPTED)
+
+
+class ClaimReminderTests(TestCase):
+    """People forget to claim, so the deadline needs to chase them."""
+
+    def setUp(self):
+        self.owner = make_user('reminderme', [GROUP_REQUESTER])
+        self.owner.email = 'reminderme@example.org'
+        self.owner.save()
+
+    def _request_closing_in(self, days, state=RequestState.ACCEPTED):
+        deadline = timezone.now().date() + timedelta(days=days)
+        event = Event.objects.create(
+            name=f'Event closing in {days}', location='Berlin',
+            start_date=date(2026, 5, 1), end_date=date(2026, 5, 3),
+            reimbursements_open_until=deadline)
+        return TravelRequest.objects.create(
+            user=self.owner, event=event, state=state, description='T')
+
+    def _run(self, **kwargs):
+        from io import StringIO
+        from django.core.management import call_command
+
+        out = StringIO()
+        call_command('send_claim_reminders', stdout=out, **kwargs)
+        return out.getvalue()
+
+    def test_a_reminder_goes_out_at_the_set_intervals(self):
+        self._request_closing_in(7)
+        output = self._run()
+        self.assertIn('reminderme@example.org', output)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn('7 day(s) left', mail.outbox[0].subject)
+
+    def test_nothing_is_sent_on_an_ordinary_day(self):
+        self._request_closing_in(9)
+        self._run()
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_a_dry_run_sends_nothing(self):
+        self._request_closing_in(7)
+        output = self._run(dry_run=True)
+        self.assertIn('Would remind 1', output)
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_requests_that_already_moved_on_are_left_alone(self):
+        self._request_closing_in(7, state=RequestState.PAID)
+        self._request_closing_in(7, state=RequestState.SUBMITTED_FOR_PAYMENT)
+        self._run()
+        self.assertEqual(len(mail.outbox), 0)
+
+
+class EventSpendTests(TestCase):
+    """What was approved and what actually left the account are not the same."""
+
+    def setUp(self):
+        self.owner = make_user('spender', [GROUP_REQUESTER])
+        self.event = Event.objects.create(
+            name='Summit', location='Berlin', budget=Decimal('800.00'),
+            start_date=date(2026, 5, 1), end_date=date(2026, 5, 3))
+
+    def _paid_request(self, approved, paid=None, currency='EUR'):
+        from django.contrib.contenttypes.models import ContentType
+        from payments.models import PaymentRecord
+
+        req = TravelRequest.objects.create(
+            user=self.owner, event=self.event, state=RequestState.PAID, description='T')
+        Expense.objects.create(
+            request=req, category='transportation', description='Flight',
+            estimated_amount=approved, estimated_currency=currency,
+            approved_amount=approved, approved_currency=currency)
+        if paid is not None:
+            PaymentRecord.objects.create(
+                content_type=ContentType.objects.get_for_model(TravelRequest),
+                object_id=req.pk, gateway_id='manual', amount=paid, currency=currency,
+                recipient_name='X', recipient_email='x@example.org',
+                reference=f'TSP{req.pk}', status='completed')
+        return req
+
+    def test_paid_out_is_read_from_the_payments(self):
+        self._paid_request(Decimal('300.00'), paid=Decimal('250.00'))
+        self.assertEqual(self.event.paid_by_currency(), [('EUR', Decimal('250.00'))])
+        self.assertEqual(self.event.approved_against_budget(), Decimal('300.00'))
+
+    def test_a_request_marked_paid_with_no_payment_counts_as_nothing_spent(self):
+        # Flipping a state in the admin must not look like money going out.
+        self._paid_request(Decimal('300.00'), paid=None)
+        self.assertEqual(self.event.paid_by_currency(), [])
+
+    def test_each_currency_is_reported_separately(self):
+        self._paid_request(Decimal('300.00'), paid=Decimal('300.00'), currency='EUR')
+        self._paid_request(Decimal('100.00'), paid=Decimal('100.00'), currency='USD')
+        self.assertEqual(
+            self.event.paid_by_currency(),
+            [('EUR', Decimal('300.00')), ('USD', Decimal('100.00'))])
