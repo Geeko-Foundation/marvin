@@ -591,3 +591,100 @@ class ReportFilterTests(TestCase):
 
     def test_an_empty_search_returns_everything(self):
         self.assertEqual(sorted(self._rows(q='')), ['alice', 'bob'])
+
+
+class EventBudgetTests(TestCase):
+    """An event's budget is what the committee has to spend on it."""
+
+    def setUp(self):
+        self.committee = make_user('budgetcommittee', [GROUP_TSP])
+        self.owner = make_user('budgetowner', [GROUP_REQUESTER])
+        self.event = Event.objects.create(
+            name='Summit', location='Berlin', budget=Decimal('800.00'),
+            budget_currency='EUR',
+            start_date=date(2026, 5, 1), end_date=date(2026, 5, 3))
+
+    def _request(self, amount, currency='EUR', state=RequestState.APPROVED, user=None):
+        travel_request = TravelRequest.objects.create(
+            user=user or self.owner, event=self.event, state=state, description='T')
+        Expense.objects.create(
+            request=travel_request, category='transportation', description='Flight',
+            estimated_amount=amount, estimated_currency=currency,
+            approved_amount=amount, approved_currency=currency)
+        return travel_request
+
+    def test_remaining_budget_counts_what_is_approved(self):
+        self._request(Decimal('700.00'))
+        self.assertEqual(self.event.approved_against_budget(), Decimal('700.00'))
+        self.assertEqual(self.event.budget_remaining(), Decimal('100.00'))
+
+    def test_rejected_and_cancelled_requests_free_their_budget(self):
+        self._request(Decimal('700.00'), state=RequestState.REJECTED)
+        self._request(Decimal('100.00'), state=RequestState.CANCELLED)
+        self.assertEqual(self.event.budget_remaining(), Decimal('800.00'))
+
+    def test_an_event_without_a_budget_has_no_limit(self):
+        self.event.budget = None
+        self.event.save()
+        self._request(Decimal('5000.00'))
+        self.assertIsNone(self.event.budget_remaining())
+
+    def test_other_currencies_are_reported_not_converted(self):
+        self._request(Decimal('100.00'), currency='USD')
+        self.assertEqual(self.event.approved_against_budget(), Decimal('0'))
+        self.assertEqual(self.event.approved_in_other_currencies(),
+                         [('USD', Decimal('100.00'))])
+        self.assertEqual(self.event.budget_remaining(), Decimal('800.00'))
+
+    def test_approving_past_the_budget_is_refused(self):
+        self._request(Decimal('800.00'))
+        pending = TravelRequest.objects.create(
+            user=make_user('second', [GROUP_REQUESTER]), event=self.event,
+            state=RequestState.SUBMITTED, description='Second')
+        expense = Expense.objects.create(
+            request=pending, category='lodging', description='Hotel',
+            estimated_amount=Decimal('110.00'), estimated_currency='EUR')
+        self.client.force_login(self.committee)
+        self.client.post(reverse('request_approve', args=[pending.pk]), {
+            'expense_id': [str(expense.pk)],
+            f'approved_amount_{expense.pk}': '110.00',
+            f'approved_currency_{expense.pk}': 'EUR',
+        })
+        pending.refresh_from_db()
+        self.assertEqual(pending.state, RequestState.SUBMITTED)
+
+    def test_the_committee_can_approve_anyway_and_it_is_recorded(self):
+        self._request(Decimal('800.00'))
+        pending = TravelRequest.objects.create(
+            user=make_user('third', [GROUP_REQUESTER]), event=self.event,
+            state=RequestState.SUBMITTED, description='Third')
+        expense = Expense.objects.create(
+            request=pending, category='lodging', description='Hotel',
+            estimated_amount=Decimal('110.00'), estimated_currency='EUR')
+        self.client.force_login(self.committee)
+        self.client.post(reverse('request_approve', args=[pending.pk]), {
+            'expense_id': [str(expense.pk)],
+            f'approved_amount_{expense.pk}': '110.00',
+            f'approved_currency_{expense.pk}': 'EUR',
+            'over_budget': '1',
+        })
+        pending.refresh_from_db()
+        self.assertEqual(pending.state, RequestState.APPROVED)
+        latest = pending.state_history.order_by('-id').first()
+        self.assertIn('over budget', latest.notes)
+
+    def test_approving_within_budget_is_untouched(self):
+        pending = TravelRequest.objects.create(
+            user=self.owner, event=self.event,
+            state=RequestState.SUBMITTED, description='Within')
+        expense = Expense.objects.create(
+            request=pending, category='lodging', description='Hotel',
+            estimated_amount=Decimal('100.00'), estimated_currency='EUR')
+        self.client.force_login(self.committee)
+        self.client.post(reverse('request_approve', args=[pending.pk]), {
+            'expense_id': [str(expense.pk)],
+            f'approved_amount_{expense.pk}': '100.00',
+            f'approved_currency_{expense.pk}': 'EUR',
+        })
+        pending.refresh_from_db()
+        self.assertEqual(pending.state, RequestState.APPROVED)

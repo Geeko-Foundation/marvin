@@ -115,14 +115,32 @@ class EventForm(forms.ModelForm):
 
     class Meta:
         model = Event
-        fields = ['name', 'location', 'start_date', 'end_date', 'accepting_requests']
+        fields = ['name', 'location', 'start_date', 'end_date', 'accepting_requests',
+                  'budget', 'budget_currency']
         widgets = {
             'name': forms.TextInput(attrs={'class': 'input input-bordered w-full'}),
             'location': forms.TextInput(attrs={'class': 'input input-bordered w-full'}),
             'start_date': forms.DateInput(attrs={'class': 'input input-bordered w-full', 'type': 'date'}),
             'end_date': forms.DateInput(attrs={'class': 'input input-bordered w-full', 'type': 'date'}),
             'accepting_requests': forms.CheckboxInput(attrs={'class': 'checkbox'}),
+            'budget': forms.NumberInput(attrs={
+                'class': 'input input-bordered w-full', 'step': '0.01', 'min': '0',
+                'placeholder': 'Leave blank for no limit',
+            }),
+            'budget_currency': forms.Select(
+                choices=CURRENCY_CHOICES,
+                attrs={'class': 'select select-bordered w-full'},
+            ),
         }
+
+    def __init__(self, *args, **kwargs):
+        """The currency only matters once a budget is set, so let it default."""
+        super().__init__(*args, **kwargs)
+        self.fields['budget_currency'].required = False
+
+    def clean_budget_currency(self):
+        """Fall back to the model default when nothing was chosen."""
+        return self.cleaned_data.get('budget_currency') or 'EUR'
 
 
 class TravelRequestForm(forms.ModelForm):

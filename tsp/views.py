@@ -692,6 +692,25 @@ def request_approve(request, pk):
             )
 
     notes = form.cleaned_data.get('notes', '') if form.is_valid() else request.POST.get('notes', '')
+
+    # The event's budget is the committee's own limit, so going past it is
+    # allowed but has to be deliberate and is written into the history.
+    event = travel_request.event
+    remaining = event.budget_remaining()
+    override = request.POST.get('over_budget') == '1'
+    if remaining is not None and remaining < 0 and not override:
+        messages.error(
+            request,
+            f'Approving this would put {event.name} {abs(remaining)} '
+            f'{event.budget_currency} over its budget. Approve again with the '
+            f'over-budget box ticked to go ahead anyway.',
+        )
+        return redirect('request_detail', pk=pk)
+    if remaining is not None and remaining < 0 and override:
+        notes = (notes + ' ' if notes else '') + (
+            f'[over budget by {abs(remaining)} {event.budget_currency}]'
+        )
+
     try:
         transition_request(travel_request, RequestState.APPROVED, request.user, notes)
         messages.success(request, 'Request approved.')

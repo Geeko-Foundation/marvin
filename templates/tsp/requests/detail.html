@@ -135,6 +135,21 @@
           </div>
           {% endfor %}
           <textarea name="notes" class="textarea textarea-bordered w-full mb-3" rows="2" placeholder="Approval notes (optional)"></textarea>
+          {% with left=travel_request.event.budget_remaining %}
+          {% if left is not None %}
+          <p class="text-sm mb-2">
+            {{ travel_request.event.name }} has
+            <strong class="{% if left < 0 %}text-error{% endif %}">{{ left }} {{ travel_request.event.budget_currency }}</strong>
+            left of its budget.
+          </p>
+          {% if left < 0 %}
+          <label class="label cursor-pointer justify-start gap-2 mb-2">
+            <input type="checkbox" name="over_budget" value="1" class="checkbox checkbox-sm">
+            <span class="label-text">Approve even though this event is over budget</span>
+          </label>
+          {% endif %}
+          {% endif %}
+          {% endwith %}
           <div class="flex gap-2">
             <button type="submit" class="btn btn-success btn-sm">Approve</button>
           </div>
