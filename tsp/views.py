@@ -975,6 +975,15 @@ def reports(request):
             qs = qs.filter(event__end_date__lte=form.cleaned_data['date_to'])
         if form.cleaned_data.get('status'):
             qs = qs.filter(state=form.cleaned_data['status'])
+        query = (form.cleaned_data.get('q') or '').strip()
+        if query:
+            qs = qs.filter(
+                Q(user__first_name__icontains=query)
+                | Q(user__last_name__icontains=query)
+                | Q(user__username__icontains=query)
+                | Q(user__email__icontains=query)
+                | Q(event__name__icontains=query)
+            )
 
     requests_list = qs.order_by('-updated_at')
 

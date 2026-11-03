@@ -547,3 +547,47 @@ class ActualCostTests(TestCase):
         self.client.force_login(make_user('someoneelse', [GROUP_REQUESTER]))
         response = self.client.get(reverse('request_actuals', args=[self.request.pk]))
         self.assertEqual(response.status_code, 403)
+
+
+class ReportFilterTests(TestCase):
+    """Reports are the committee's way of finding a request after the fact."""
+
+    def setUp(self):
+        self.staff = make_user('reportstaff', [GROUP_FINANCE])
+        self.alice = make_user('alice', [GROUP_REQUESTER])
+        self.bob = make_user('bob', [GROUP_REQUESTER])
+        self.conf = Event.objects.create(
+            name='Summit', location='Berlin',
+            start_date=date(2026, 5, 1), end_date=date(2026, 5, 3))
+        self.other = Event.objects.create(
+            name='Workshop', location='Pune',
+            start_date=date(2026, 6, 1), end_date=date(2026, 6, 2))
+        TravelRequest.objects.create(user=self.alice, event=self.conf,
+                                     state=RequestState.SUBMITTED, description='A')
+        TravelRequest.objects.create(user=self.bob, event=self.other,
+                                     state=RequestState.APPROVED, description='B')
+        self.client.force_login(self.staff)
+
+    def _rows(self, **params):
+        response = self.client.get(reverse('reports'), params)
+        return [r.user.username for r in response.context['requests_list']]
+
+    def test_every_state_can_be_filtered_for(self):
+        from tsp.forms import ReportFilterForm
+
+        offered = {value for value, _ in ReportFilterForm().fields['status'].choices if value}
+        # Draft, submitted and approved used to be missing from the dropdown.
+        self.assertEqual(offered, {state.value for state in RequestState})
+
+    def test_filtering_by_a_previously_missing_state_works(self):
+        self.assertEqual(self._rows(status=RequestState.APPROVED), ['bob'])
+        self.assertEqual(self._rows(status=RequestState.SUBMITTED), ['alice'])
+
+    def test_searching_by_requester(self):
+        self.assertEqual(self._rows(q='alice'), ['alice'])
+
+    def test_searching_by_event(self):
+        self.assertEqual(self._rows(q='Workshop'), ['bob'])
+
+    def test_an_empty_search_returns_everything(self):
+        self.assertEqual(sorted(self._rows(q='')), ['alice', 'bob'])

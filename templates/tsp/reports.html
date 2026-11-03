@@ -21,6 +21,10 @@
         <label class="label py-0"><span class="label-text">Status</span></label>
         {{ form.status }}
       </div>
+      <div class="form-control">
+        <label class="label"><span class="label-text">Search</span></label>
+        {{ form.q }}
+      </div>
       <button type="submit" class="btn btn-primary btn-sm">Filter</button>
       <a href="{% url 'reports' %}?{{ request.GET.urlencode }}&format=csv" class="btn btn-outline btn-sm">Download CSV</a>
     </div>

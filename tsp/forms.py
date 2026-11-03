@@ -12,6 +12,7 @@ from tsp.models import (
     Event,
     Expense,
     ExpenseCategory,
+    RequestState,
     TravelRequest,
 )
 
@@ -326,17 +327,20 @@ class ReportFilterForm(forms.Form):
         required=False,
         widget=forms.DateInput(attrs={'class': 'input input-bordered', 'type': 'date'}),
     )
+    # Every state, rather than the five that used to be listed: draft,
+    # submitted and approved could not be filtered for at all.
     status = forms.ChoiceField(
         required=False,
-        choices=[
-            ('', 'All statuses'),
-            ('cancelled', 'Cancelled'),
-            ('rejected', 'Rejected'),
-            ('accepted', 'Accepted'),
-            ('submitted_for_payment', 'Submitted for Payment'),
-            ('paid', 'Paid'),
-        ],
+        choices=[('', 'All statuses')] + list(RequestState.choices),
         widget=forms.Select(attrs={'class': 'select select-bordered'}),
+    )
+    q = forms.CharField(
+        required=False,
+        max_length=200,
+        widget=forms.TextInput(attrs={
+            'class': 'input input-bordered',
+            'placeholder': 'Requester or event',
+        }),
     )
 
 
