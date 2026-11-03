@@ -951,6 +951,38 @@ def request_document_upload(request, pk, travel_request, profile):
     return redirect('request_detail', pk=pk)
 
 
+# Once a request is with finance its documents back a payment, so they stay.
+LOCKED_DOCUMENT_STATES = {RequestState.SUBMITTED_FOR_PAYMENT, RequestState.PAID}
+
+
+@login_required
+@staff_or_owner
+@require_POST
+def request_document_delete(request, pk, travel_request, profile, doc_id):
+    """
+    Remove a document uploaded by mistake.
+
+    Only the requester clears their own, and only while the request is still
+    with them. Once it has gone to finance these files are the evidence for a
+    payment, so they stay.
+    """
+    if travel_request.user_id != request.user.id:
+        raise PermissionDenied
+    if travel_request.state in LOCKED_DOCUMENT_STATES:
+        messages.error(
+            request,
+            'Documents cannot be removed once the request has gone for payment.',
+        )
+        return redirect('request_detail', pk=pk)
+
+    doc = get_object_or_404(Document, pk=doc_id, request=travel_request)
+    name = doc.original_name
+    doc.file.delete(save=False)
+    doc.delete()
+    messages.success(request, f'Removed {name}.')
+    return redirect('request_detail', pk=pk)
+
+
 @login_required
 @staff_or_owner
 def request_form_printable(request, pk, travel_request, profile):

@@ -71,7 +71,7 @@
             <td>{{ req.event.location }}</td>
             <td>{{ req.user.get_full_name|default:req.user.username }}</td>
             <td>{{ req.user.profile.country|default:"-" }}</td>
-            <td><span class="badge {{ req.state|state_badge }} badge-sm">{{ req.get_state_display }}</span></td>
+            <td><span class="badge {{ req.state|state_badge }} badge-sm whitespace-nowrap">{{ req.get_state_display }}</span></td>
             <td>{% for currency, amount in req.totals_approved %}{{ amount }} {{ currency }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
             <td>{% if req.payment %}{{ req.payment.amount }}{% else %}-{% endif %}</td>
             <td>{% if req.payment %}{{ req.payment.method_label }}{% else %}-{% endif %}</td>

@@ -1,3 +1,4 @@
+import os
 from datetime import date
 from decimal import Decimal
 from unittest import mock
@@ -688,3 +689,58 @@ class EventBudgetTests(TestCase):
         })
         pending.refresh_from_db()
         self.assertEqual(pending.state, RequestState.APPROVED)
+
+
+class DocumentRemovalTests(TestCase):
+    """A document uploaded by mistake has to be removable, up to a point."""
+
+    def setUp(self):
+        self.owner = make_user('docowner', [GROUP_REQUESTER])
+        self.event = Event.objects.create(
+            name='Conf', location='Berlin',
+            start_date=date(2026, 5, 1), end_date=date(2026, 5, 3))
+        self.request = TravelRequest.objects.create(
+            user=self.owner, event=self.event, state=RequestState.ACCEPTED,
+            description='Trip')
+        self.doc = self._doc()
+
+    def _doc(self, kind='invoice'):
+        return Document.objects.create(
+            request=self.request, kind=kind, size=9, uploaded_by=self.owner,
+            file=SimpleUploadedFile(f'{kind}.pdf', b'%PDF-1.4 x'))
+
+    def _delete(self, doc=None):
+        return self.client.post(reverse('request_document_delete',
+                                        args=[self.request.pk, (doc or self.doc).pk]))
+
+    def test_the_requester_can_remove_a_duplicate(self):
+        extra = self._doc()
+        self.assertEqual(self.request.documents.count(), 2)
+        self.client.force_login(self.owner)
+        self._delete(extra)
+        self.assertEqual(self.request.documents.count(), 1)
+
+    def test_the_file_is_removed_from_storage_too(self):
+        path = self.doc.file.path
+        self.client.force_login(self.owner)
+        self._delete()
+        self.assertFalse(os.path.exists(path))
+
+    def test_nobody_else_can_remove_it(self):
+        self.client.force_login(make_user('otherperson', [GROUP_REQUESTER]))
+        self.assertEqual(self._delete().status_code, 403)
+        self.assertEqual(self.request.documents.count(), 1)
+
+    def test_the_committee_cannot_remove_someone_else_s_evidence(self):
+        self.client.force_login(make_user('nosycommittee', [GROUP_TSP]))
+        self.assertEqual(self._delete().status_code, 403)
+        self.assertEqual(self.request.documents.count(), 1)
+
+    def test_documents_are_kept_once_the_request_is_with_finance(self):
+        for state in (RequestState.SUBMITTED_FOR_PAYMENT, RequestState.PAID):
+            with self.subTest(state=state):
+                self.request.state = state
+                self.request.save()
+                self.client.force_login(self.owner)
+                self._delete()
+                self.assertEqual(self.request.documents.count(), 1)
