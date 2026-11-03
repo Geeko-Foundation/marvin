@@ -547,3 +547,44 @@ class ActualCostTests(TestCase):
         self.client.force_login(make_user('someoneelse', [GROUP_REQUESTER]))
         response = self.client.get(reverse('request_actuals', args=[self.request.pk]))
         self.assertEqual(response.status_code, 403)
+
+
+class SelfNotificationTests(TestCase):
+    """Nobody should be told about something they just did themselves."""
+
+    def setUp(self):
+        from django.core import mail
+
+        self.mail = mail
+        self.owner = make_user('selfowner', [GROUP_REQUESTER])
+        self.chair = make_user('selfchair', [GROUP_TSP])
+        self.event = Event.objects.create(
+            name='Conf', location='Berlin',
+            start_date=date(2027, 5, 1), end_date=date(2027, 5, 3))
+        self.request = TravelRequest.objects.create(
+            user=self.owner, event=self.event,
+            state=RequestState.APPROVED, description='T')
+
+    def _recipients(self):
+        return [to for m in self.mail.outbox for to in m.to]
+
+    def test_accepting_does_not_email_the_person_who_accepted(self):
+        from tsp.services.state_machine import transition_request
+
+        transition_request(self.request, RequestState.ACCEPTED, self.owner)
+        self.assertNotIn(self.owner.email, self._recipients())
+
+    def test_accepting_tells_the_committee_instead(self):
+        from tsp.services.state_machine import transition_request
+
+        transition_request(self.request, RequestState.ACCEPTED, self.owner)
+        self.assertIn(self.chair.email, self._recipients())
+
+    def test_the_committee_member_who_acts_is_not_told_either(self):
+        from tsp.services.state_machine import transition_request
+
+        self.request.state = RequestState.SUBMITTED
+        self.request.save()
+        transition_request(self.request, RequestState.APPROVED, self.chair)
+        self.assertNotIn(self.chair.email, self._recipients())
+        self.assertIn(self.owner.email, self._recipients())

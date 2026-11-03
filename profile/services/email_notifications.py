@@ -92,10 +92,12 @@ def notify_request_state_change_email(
             travel_request=travel_request, notes=notes,
         )
     elif to_state == RequestState.ACCEPTED:
+        # Accepting is the requester's own action, so the committee is told
+        # instead; what to do next belongs on the page they are already on.
         send_to(
-            [requester],
+            group_members(GROUP_TSP, exclude=[actor]),
             subject=f'Travel request {label} accepted',
-            headline='Thanks for accepting. Upload your receipts and signed form when you have them.',
+            headline='The requester has accepted and will upload their documents.',
             travel_request=travel_request,
         )
     elif to_state == RequestState.SUBMITTED_FOR_PAYMENT:
