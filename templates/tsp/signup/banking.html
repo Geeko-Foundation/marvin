@@ -1,6 +1,6 @@
 {% extends "tsp/signup/wizard_base.html" %}
 
-{% block title %}Sign Up - Wise Banking{% endblock %}
+{% block title %}Sign Up — Wise Banking{% endblock %}
 
 {% block wizard_content %}
 <div class="card bg-base-100 shadow-xl">
@@ -13,7 +13,7 @@
     {% endif %}
     <p class="text-sm opacity-60 mb-4">
       Enter your bank details below. They are sent directly to Wise and are
-      <strong>not stored</strong> in {{ app_name }} - only your Wise recipient ID is kept.
+      <strong>not stored</strong> in {{ app_name }} — only your Wise recipient ID is kept.
     </p>
 
     <div class="alert alert-info mb-4 text-sm">
@@ -33,7 +33,7 @@
         {% else %}
         <p class="mt-3 opacity-80">
           <span class="badge badge-error badge-sm">Wise live</span>
-          Real Wise API calls - funding may require manual approval in the Wise app (UK/EU).
+          Real Wise API calls — funding may require manual approval in the Wise app (UK/EU).
         </p>
         {% endif %}
       </div>
@@ -61,14 +61,14 @@
         <div id="field-swift" class="form-control md:col-span-2">
           <label class="label">
             <span class="label-text">SWIFT/BIC</span>
-            <span class="label-text-alt">Optional - required for some non-SEPA routes</span>
+            <span class="label-text-alt">Optional — required for some non-SEPA routes</span>
           </label>
           {{ form.bank_swift }}
         </div>
         <div id="field-bank-code" class="form-control md:col-span-2 hidden">
           <label class="label"><span class="label-text">Bank *</span></label>
           {{ form.bank_code }}
-          <span id="bank-code-hint" class="label-text-alt mt-1 hidden">Loading banks...</span>
+          <span id="bank-code-hint" class="label-text-alt mt-1 hidden">Loading banks…</span>
         </div>
         <div id="field-account-no" class="form-control md:col-span-2 hidden">
           <label class="label"><span class="label-text">Account Number *</span></label>
@@ -179,7 +179,7 @@
   }
 
   async function loadBanks(method) {
-    fill(bankSelect, [], 'Loading banks...');
+    fill(bankSelect, [], 'Loading banks…');
     bankHint?.classList.add('hidden');
     try {
       const options = await loadOptions({method});
@@ -203,7 +203,7 @@
       fill(branchSelect, [], 'Choose a bank first');
       return;
     }
-    fill(branchSelect, [], 'Loading branches...');
+    fill(branchSelect, [], 'Loading branches…');
     try {
       fill(branchSelect, await loadOptions({method, bank_code: bankSelect.value}),
            'Select the branch');

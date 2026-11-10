@@ -7,10 +7,10 @@ Based on the functional test in ``api_tests3.py``. All HTTP traffic uses
 
 Recipient verification flow
 ---------------------------
-1. :meth:`WiseApiClient.create_payee` - POST /v1/accounts
-2. :meth:`WiseApiClient.add_bank_details` - PUT /v1/accounts/{id}
+1. :meth:`WiseApiClient.create_payee` — POST /v1/accounts
+2. :meth:`WiseApiClient.add_bank_details` — PUT /v1/accounts/{id}
 3. Quote → transfer → fund (or sandbox simulation advance)
-4. :meth:`WiseApiClient.reverse_transfer` - PUT /v1/transfers/{id}/cancel
+4. :meth:`WiseApiClient.reverse_transfer` — PUT /v1/transfers/{id}/cancel
 
 In the Wise sandbox, transfer progression after creation uses the official
 simulation endpoints (see Wise Simulation API docs).
@@ -142,7 +142,7 @@ class WiseApiClient:
         return data if data is not None else {}
 
     def get_profiles(self) -> list[dict]:
-        """GET /v2/profiles - list profiles available to the token."""
+        """GET /v2/profiles — list profiles available to the token."""
         data = self._request('GET', '/v2/profiles')
         if not isinstance(data, list):
             raise WiseApiError('Unexpected profiles response', payload={'response': data})
@@ -169,7 +169,7 @@ class WiseApiClient:
 
     def list_balances(self, types: str = 'STANDARD') -> list[dict]:
         """
-        GET /v4/profiles/{profileId}/balances - list balance accounts for the profile.
+        GET /v4/profiles/{profileId}/balances — list balance accounts for the profile.
 
         ``types`` filters balance kinds (default ``STANDARD``).
         """
@@ -612,7 +612,7 @@ class WiseApiClient:
         }
 
     def get_currencies(self) -> list[str]:
-        """GET /v1/currencies - returns supported currency codes."""
+        """GET /v1/currencies — returns supported currency codes."""
         try:
             data = self._request('GET', '/v1/currencies')
             if isinstance(data, list):
@@ -628,7 +628,7 @@ def get_wise_client(**kwargs) -> WiseApiClient:
 
     Settings:
         WISE_API_TOKEN
-        WISE_API_PROFILE_ID (optional - auto-resolved when empty)
+        WISE_API_PROFILE_ID (optional — auto-resolved when empty)
         WISE_API_SANDBOX (default True)
     """
     try:

@@ -36,7 +36,6 @@ urlpatterns = [
     path('requests/<int:pk>/submit-for-payment/', views.request_submit_for_payment, name='request_submit_for_payment'),
     path('requests/<int:pk>/comments/', views.request_comment, name='request_comment'),
     path('requests/<int:pk>/documents/', views.request_document_upload, name='request_document_upload'),
-    path('requests/<int:pk>/documents/<int:doc_id>/delete/', views.request_document_delete, name='request_document_delete'),
     path('requests/<int:pk>/form/', views.request_form_printable, name='request_form'),
     path('documents/<int:doc_id>/download/', views.document_download, name='document_download'),
     path('reports/', views.reports, name='reports'),

@@ -1,4 +1,4 @@
-# Marvin - Travel Support Program (TSP)
+# Marvin — Travel Support Program (TSP)
 
 Marvin is a Django web application for managing travel support requests: speakers apply for event reimbursement, committee members review and approve requests, and finance staff process payments. It includes a requestor signup wizard, Wise sandbox integration for banking verification, a pluggable payments module, and optional browser push notifications.
 
@@ -7,10 +7,10 @@ Marvin is a Django web application for managing travel support requests: speaker
 - **Python 3.13+** (tested with 3.13)
 - **Django 6.x**
 - **SQLite** (default, development)
-- **django-tables2** - searchable data tables
-- **django-webpush** - browser push notifications (opt-in)
-- **DaisyUI / Tailwind** - UI styling (via templates)
-- **Wise API** - sandbox recipient verification and payment initiation
+- **django-tables2** — searchable data tables
+- **django-webpush** — browser push notifications (opt-in)
+- **DaisyUI / Tailwind** — UI styling (via templates)
+- **Wise API** — sandbox recipient verification and payment initiation
 
 ## Project structure
 
@@ -33,13 +33,13 @@ logs/             Application logs (e.g. Wise API)
 | `profile` | `UserProfile`, role groups/permissions, signup/onboarding, Wise recipient services, push notification preferences |
 | `tsp` | Events, travel requests, expenses, documents, state machine, dashboards, search |
 | `payments` | Gateway-agnostic payment records and finance processing UI |
-| `webpush` | Third-party app - browser subscription storage and service worker (via django-webpush) |
+| `webpush` | Third-party app — browser subscription storage and service worker (via django-webpush) |
 
 All domain models in `profile`, `tsp`, and `payments` inherit from `AuditModel`, which adds automatic timestamp and user tracking on every save:
 
-- `created_at` - set when the record is first saved
-- `updated_at` - updated on every save
-- `created_by` / `changed_by` - populated from the logged-in user via `AuditUserMiddleware`
+- `created_at` — set when the record is first saved
+- `updated_at` — updated on every save
+- `created_by` / `changed_by` — populated from the logged-in user via `AuditUserMiddleware`
 
 These fields are defined once in `marvin/audit.py`; concrete models inherit them without re-declaring them in each `models.py`.
 
@@ -58,7 +58,7 @@ cd marvin
 
 ### 2. Install dependencies
 
-**Recommended - [uv](https://github.com/astral-sh/uv):**
+**Recommended — [uv](https://github.com/astral-sh/uv):**
 
 ```bash
 uv sync
@@ -66,7 +66,7 @@ uv sync
 
 This reads `pyproject.toml` and installs the exact versions pinned in `uv.lock` (Django, django-tables2, django-webpush, python-dotenv, requests, and their transitive deps).
 
-**Alternative - pip:**
+**Alternative — pip:**
 
 ```bash
 python3 -m venv .venv
@@ -145,15 +145,15 @@ Additional seeded users (`wizard1`, `ibanonly`, etc.) are available for testing 
 
 Roles are implemented as Django auth **groups** with custom permissions on `profile.UserProfile`:
 
-- **Requester** - submit travel requests, complete profile and Wise onboarding
-- **TSP Committee** - review, approve, reject, and manage events
-- **Finance** - view reports and process reimbursements
+- **Requester** — submit travel requests, complete profile and Wise onboarding
+- **TSP Committee** — review, approve, reject, and manage events
+- **Finance** — view reports and process reimbursements
 
 Groups are created automatically after migrations via `profile.groups.ensure_groups()`.
 
 ## Wise integration (optional)
 
-Wise runs in **sandbox mode** by default. Banking account numbers are sent to Wise only during verification - they are not stored in Marvin.
+Wise runs in **sandbox mode** by default. Banking account numbers are sent to Wise only during verification — they are not stored in Marvin.
 
 Staff and superusers may **skip Wise banking** during signup and complete it later from their profile.
 
