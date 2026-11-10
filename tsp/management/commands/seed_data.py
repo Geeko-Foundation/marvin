@@ -26,11 +26,11 @@ class Command(BaseCommand):
         force = options['force']
 
         if force:
-            self.stdout.write(self.style.WARNING('Flushing database…'))
+            self.stdout.write(self.style.WARNING('Flushing database...'))
             call_command('flush', '--noinput', verbosity=0)
         elif User.objects.exists():
             self.stdout.write(self.style.WARNING(
-                'Users already exist — skipping fixture load. '
+                'Users already exist - skipping fixture load. '
                 'Pass --force to flush and reload demo data.'
             ))
             self._set_demo_passwords()

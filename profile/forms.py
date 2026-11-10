@@ -44,7 +44,7 @@ REQUIRED_BANK_FIELDS = {
 
 
 class ProfileForm(forms.ModelForm):
-    """Personal details only — banking is managed via Wise onboarding for requestors."""
+    """Personal details only - banking is managed via Wise onboarding for requestors."""
 
     first_name = forms.CharField(max_length=150, required=True)
     last_name = forms.CharField(max_length=150, required=False)
@@ -107,7 +107,7 @@ class ProfileForm(forms.ModelForm):
 
 
 class OnboardingPersonalForm(ProfileForm):
-    """First-time requestor profile — all address fields required."""
+    """First-time requestor profile - all address fields required."""
 
     def __init__(self, *args, **kwargs):
         """Require address fields that are optional on the standard profile form."""
@@ -129,7 +129,7 @@ class OnboardingPersonalForm(ProfileForm):
 
 
 class WiseRecipientForm(forms.Form):
-    """Banking details sent to Wise only — never stored in Marvin."""
+    """Banking details sent to Wise only - never stored in Marvin."""
 
     banking_method = forms.ChoiceField(
         choices=BankingMethod.choices,
@@ -202,7 +202,7 @@ class WiseRecipientForm(forms.Form):
             if profile.banking_currency:
                 self.fields['banking_currency'].initial = profile.banking_currency
         self.fields['bank_swift'].help_text = (
-            'Optional for many SEPA transfers — IBAN alone is usually enough within the EU.'
+            'Optional for many SEPA transfers - IBAN alone is usually enough within the EU.'
         )
 
     def clean(self):

@@ -1,6 +1,6 @@
 {% extends "tsp/signup/wizard_base.html" %}
 
-{% block title %}Sign Up — Verifying{% endblock %}
+{% block title %}Sign Up - Verifying{% endblock %}
 
 {% block wizard_content %}
 <div class="card bg-base-100 shadow-xl">
@@ -12,9 +12,9 @@
     </p>
 
     {% if wise_api_sandbox %}
-    <div class="badge badge-warning badge-sm mb-4">Wise sandbox — test API at api.wise-sandbox.com</div>
+    <div class="badge badge-warning badge-sm mb-4">Wise sandbox - test API at api.wise-sandbox.com</div>
     {% else %}
-    <div class="badge badge-error badge-sm mb-4">Wise live API — real transfers</div>
+    <div class="badge badge-error badge-sm mb-4">Wise live API - real transfers</div>
     {% endif %}
 
     <ul class="space-y-3 mb-6">
@@ -23,7 +23,7 @@
         <span class="step-icon w-6 h-6 rounded-full bg-base-300 flex items-center justify-center text-xs shrink-0">·</span>
         <div>
           <p class="font-medium text-sm step-title">{{ step_label }}</p>
-          <p class="text-xs opacity-60 step-message">Waiting…</p>
+          <p class="text-xs opacity-60 step-message">Waiting...</p>
         </div>
       </li>
       {% endfor %}
@@ -35,7 +35,7 @@
 
     <div id="running-indicator" class="flex items-center gap-3">
       <span class="loading loading-spinner loading-md text-primary"></span>
-      <span class="text-sm opacity-60">Running verification…</span>
+      <span class="text-sm opacity-60">Running verification...</span>
     </div>
 
     <div id="done-actions" class="hidden">
@@ -62,8 +62,8 @@
 
     if (state === 'running') {
       el.classList.add('bg-warning/20');
-      icon.textContent = '…';
-      if (msgEl) msgEl.textContent = message || 'In progress…';
+      icon.textContent = '...';
+      if (msgEl) msgEl.textContent = message || 'In progress...';
     } else if (state === 'done') {
       el.classList.add('bg-success/20');
       icon.textContent = '✓';
