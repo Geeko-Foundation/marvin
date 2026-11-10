@@ -251,6 +251,18 @@ WISE_API_PROFILE_ID = env('WISE_API_PROFILE_ID', '')
 WISE_API_SANDBOX = env_bool('WISE_API_SANDBOX', default=True)
 WISE_SOURCE_CURRENCY = env('WISE_SOURCE_CURRENCY', 'GBP')
 
+# Currencies the committee approves in, which are the ones finance pays from.
+PAYOUT_CURRENCIES = env_list('PAYOUT_CURRENCIES', 'EUR,USD,GBP')
+
+# Approximate conversions. Today's rate comes from ExchangeRate-API when a key
+# is set; past days, needed for the 90-day average, come from the European
+# Central Bank's free reference rates either way.
+EXCHANGE_RATE_API_KEY = env('EXCHANGE_RATE_API_KEY')
+EXCHANGE_RATE_API_URL = env('EXCHANGE_RATE_API_URL', 'https://v6.exchangerate-api.com/v6')
+EXCHANGE_RATES_URL = env('EXCHANGE_RATES_URL', 'https://api.frankfurter.dev/v1')
+# Off under `manage.py test`, so no test depends on a live rates service.
+EXCHANGE_RATES_FETCH = env_bool('EXCHANGE_RATES_FETCH', sys.argv[1:2] != ['test'])
+
 
 # --- Logging ---
 
