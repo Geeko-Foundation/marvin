@@ -48,6 +48,8 @@ class Event(AuditModel):
     start_date = models.DateField()
     end_date = models.DateField()
     accepting_requests = models.BooleanField(default=True)
+    budget = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
+    budget_currency = models.CharField(max_length=3, default='EUR')
 
     class Meta:
         ordering = ['-start_date']
@@ -59,6 +61,41 @@ class Event(AuditModel):
     def is_past(self):
         """True when the event end date is before today."""
         return self.end_date < timezone.now().date()
+
+    def _live_requests(self):
+        """Requests that still count against the budget."""
+        return self.requests.exclude(
+            state__in=[RequestState.REJECTED, RequestState.CANCELLED],
+        ).prefetch_related('expenses')
+
+    def approved_against_budget(self):
+        """What has been approved in the budget's own currency."""
+        total = Decimal('0')
+        for travel_request in self._live_requests():
+            for currency, amount in travel_request.totals_approved():
+                if currency == self.budget_currency:
+                    total += amount
+        return total
+
+    def approved_in_other_currencies(self):
+        """
+        Approved amounts this budget cannot draw down, per currency.
+
+        Converting them needs a rate and a decision, so they are reported
+        beside the budget rather than folded into it.
+        """
+        totals = {}
+        for travel_request in self._live_requests():
+            for currency, amount in travel_request.totals_approved():
+                if currency != self.budget_currency:
+                    totals[currency] = totals.get(currency, Decimal('0')) + amount
+        return sorted(totals.items())
+
+    def budget_remaining(self):
+        """What is left of the budget, or None when none is set."""
+        if self.budget is None:
+            return None
+        return self.budget - self.approved_against_budget()
 
 
 class TravelRequest(AuditModel):
@@ -97,7 +134,7 @@ class TravelRequest(AuditModel):
         ordering = ['-updated_at']
 
     def __str__(self):
-        return f'Request #{self.pk} — {self.event.name}'
+        return f'Request #{self.pk} - {self.event.name}'
 
     @property
     def is_editable_by_requester(self):
@@ -165,6 +202,16 @@ class TravelRequest(AuditModel):
     def has_mixed_currencies(self):
         """True when the approved lines are not all in the same currency."""
         return len(self.totals_payable()) > 1
+    @property
+    def reference(self):
+        """
+        The number people quote for this request, as in TSP643.
+
+        The same string is used on the page, in notifications and as the Wise
+        transfer reference, so a comment, an email and a bank statement all
+        name the request the same way.
+        """
+        return f'TSP{self.pk}' if self.pk else 'TSP'
 
     def total_estimated(self):
         """Sum of all line-item estimated amounts, ignoring currency."""
@@ -346,4 +393,4 @@ class Document(AuditModel):
         ordering = ['-created_at']
 
     def __str__(self):
-        return f'{self.get_kind_display()} — {self.original_name}'
+        return f'{self.get_kind_display()} - {self.original_name}'

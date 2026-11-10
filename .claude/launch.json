@@ -1,0 +1,45 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "marvin",
+      "runtimeExecutable": ".venv/bin/python",
+      "runtimeArgs": ["manage.py", "runserver", "127.0.0.1:8000"],
+      "port": 8000
+    },
+    {
+      "name": "marvin-demo",
+      "runtimeExecutable": "/usr/bin/env",
+      "runtimeArgs": [
+        "DJANGO_SETTINGS_MODULE=marvin.demo_settings",
+        "/Users/geetanshgoyal/marvin/.venv/bin/python",
+        "/private/tmp/claude-501/-Users-geetanshgoyal-marvin/00691ecf-a10c-40a4-8167-76a4f951998f/scratchpad/marvin-demo/manage.py",
+        "runserver", "--insecure", "127.0.0.1:8001"
+      ],
+      "port": 8001
+    },
+    {
+      "name": "marvin-fx",
+      "runtimeExecutable": "/usr/bin/env",
+      "runtimeArgs": [
+        "DATABASE_NAME=/private/tmp/claude-501/-Users-geetanshgoyal-marvin/00691ecf-a10c-40a4-8167-76a4f951998f/scratchpad/fx.sqlite3",
+        "/Users/geetanshgoyal/marvin/.venv/bin/python",
+        "/private/tmp/claude-501/-Users-geetanshgoyal-marvin/00691ecf-a10c-40a4-8167-76a4f951998f/scratchpad/wt-fx/manage.py",
+        "runserver", "127.0.0.1:8002"
+      ],
+      "port": 8002
+    },
+    {
+      "name": "marvin-adv",
+      "runtimeExecutable": "/usr/bin/env",
+      "runtimeArgs": [
+        "DATABASE_NAME=/private/tmp/claude-501/-Users-geetanshgoyal-marvin/00691ecf-a10c-40a4-8167-76a4f951998f/scratchpad/adv.sqlite3",
+        "/Users/geetanshgoyal/marvin/.venv/bin/python",
+        "/private/tmp/claude-501/-Users-geetanshgoyal-marvin/00691ecf-a10c-40a4-8167-76a4f951998f/scratchpad/wt-adv/manage.py",
+        "runserver", "127.0.0.1:8003"
+      ],
+      "port": 8003
+    }
+  ]
+}
+

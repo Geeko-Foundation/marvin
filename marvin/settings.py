@@ -8,7 +8,8 @@ Copy `.env.example` to `.env` and set production values there.
 
 from pathlib import Path
 import os
-import sys
+import shutil
+import urllib.parse
 
 from dotenv import load_dotenv
 
@@ -35,7 +36,7 @@ def env_list(key: str, default: str) -> list[str]:
 
 # --- Security (override in .env for production) ---
 
-# Dev/test default only — never use in production.
+# Dev/test default only - never use in production.
 SECRET_KEY = env(
     'DJANGO_SECRET_KEY',
     'django-insecure-dev-only-change-me-in-env',
@@ -47,6 +48,31 @@ ALLOWED_HOSTS = env_list(
     'ALLOWED_HOSTS',
     'localhost,127.0.0.1,testserver',
 )
+
+CSRF_TRUSTED_ORIGINS = env_list('CSRF_TRUSTED_ORIGINS', '')
+
+# Local development only: let a tunnel reach the dev server, so the committee
+# can look at a branch without it being deployed anywhere.
+if DEBUG:
+    ALLOWED_HOSTS.extend(['.ngrok-free.dev', '.ngrok-free.app', '.ngrok.io'])
+    CSRF_TRUSTED_ORIGINS.extend([
+        'https://*.ngrok-free.dev',
+        'https://*.ngrok-free.app',
+        'https://*.ngrok.io',
+    ])
+
+IS_VERCEL = bool(os.environ.get('VERCEL') or env_bool('VERCEL_DEPLOYMENT', False))
+if IS_VERCEL:
+    ALLOWED_HOSTS.extend(['.vercel.app', '.now.sh'])
+    CSRF_TRUSTED_ORIGINS.extend([
+        'https://*.vercel.app',
+        'https://*.now.sh',
+    ])
+    vercel_url = os.environ.get('VERCEL_URL')
+    if vercel_url:
+        ALLOWED_HOSTS.append(vercel_url)
+        CSRF_TRUSTED_ORIGINS.append(f'https://{vercel_url}')
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 
 # --- Application ---
@@ -101,18 +127,47 @@ WSGI_APPLICATION = 'marvin.wsgi.application'
 
 # --- Database ---
 
-DATABASES = {
-    'default': {
-        'ENGINE': env('DATABASE_ENGINE', 'django.db.backends.sqlite3'),
-        'NAME': env('DATABASE_NAME', str(BASE_DIR / 'db.sqlite3')),
-        # Ignored by SQLite, needed by every networked database.
-        'USER': env('DATABASE_USER'),
-        'PASSWORD': env('DATABASE_PASSWORD'),
-        'HOST': env('DATABASE_HOST'),
-        'PORT': env('DATABASE_PORT'),
-        'CONN_MAX_AGE': int(env('DATABASE_CONN_MAX_AGE', '0')),
+db_url = env('DATABASE_URL') or env('POSTGRES_URL')
+if db_url:
+    parsed = urllib.parse.urlparse(db_url)
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': parsed.path.lstrip('/'),
+            'USER': parsed.username,
+            'PASSWORD': urllib.parse.unquote(parsed.password or ''),
+            'HOST': parsed.hostname,
+            'PORT': parsed.port or 5432,
+            'CONN_MAX_AGE': int(env('DATABASE_CONN_MAX_AGE', '60')),
+        }
     }
-}
+else:
+    db_name = env('DATABASE_NAME', '')
+    if not db_name:
+        if IS_VERCEL:
+            # On Vercel, /tmp is writable for serverless SQLite instances.
+            tmp_db = Path('/tmp/demo.sqlite3')
+            if not tmp_db.exists():
+                src_db = BASE_DIR / 'demo.sqlite3'
+                if not src_db.exists():
+                    src_db = BASE_DIR / 'db.sqlite3'
+                if src_db.exists():
+                    shutil.copy2(src_db, tmp_db)
+            db_name = str(tmp_db)
+        else:
+            db_name = str(BASE_DIR / 'db.sqlite3')
+
+    DATABASES = {
+        'default': {
+            'ENGINE': env('DATABASE_ENGINE', 'django.db.backends.sqlite3'),
+            'NAME': db_name,
+            'USER': env('DATABASE_USER'),
+            'PASSWORD': env('DATABASE_PASSWORD'),
+            'HOST': env('DATABASE_HOST'),
+            'PORT': env('DATABASE_PORT'),
+            'CONN_MAX_AGE': int(env('DATABASE_CONN_MAX_AGE', '0')),
+        }
+    }
 
 
 # --- Auth ---
@@ -141,9 +196,10 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 MEDIA_URL = 'uploads/'
-MEDIA_ROOT = BASE_DIR / 'uploads'
+MEDIA_ROOT = Path('/tmp/uploads') if IS_VERCEL else (BASE_DIR / 'uploads')
 
 DJANGO_TABLES2_TEMPLATE = 'django_tables2/daisyui.html'
 
@@ -164,7 +220,7 @@ PAYMENTS_PERMISSION_CHECK = 'profile.permissions.finance_can_process_payments'
 
 # --- Web Push (django-webpush) ---
 
-# Dev/test VAPID keys — generate your own for production (see .env.example).
+# Dev/test VAPID keys - generate your own for production (see .env.example).
 _DEV_VAPID_PUBLIC_KEY = (
     'BF8UddgDIQ_Y5lfOLbOqFLyb5inEudxst2ynx6tM5G7VyPMZwBn0JjpmOfbAdfKcvpVqYZXm5D1wRP-qZVPubu4'
 )
@@ -186,7 +242,7 @@ WEBPUSH_SETTINGS = {
 
 # --- Wise API ---
 
-# Dev/test sandbox token — override WISE_API_TOKEN in .env for production.
+# Dev/test sandbox token - override WISE_API_TOKEN in .env for production.
 WISE_API_TOKEN = env(
     'WISE_API_TOKEN',
     '4420b1fd-2246-4644-9730-56e7c9e4b41b',

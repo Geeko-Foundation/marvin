@@ -10,11 +10,11 @@
   </div>
 
   <div class="mb-6">
-    <p><strong>Request ID:</strong> #{{ travel_request.pk }}</p>
+    <p><strong>Request ID:</strong> {{ travel_request.reference }}</p>
     <p><strong>Requester:</strong> {{ travel_request.user.get_full_name|default:travel_request.user.username }}</p>
     <p><strong>Event:</strong> {{ travel_request.event.name }}</p>
     <p><strong>Location:</strong> {{ travel_request.event.location }}</p>
-    <p><strong>Dates:</strong> {{ travel_request.event.start_date }} — {{ travel_request.event.end_date }}</p>
+    <p><strong>Dates:</strong> {{ travel_request.event.start_date }} - {{ travel_request.event.end_date }}</p>
     {% if travel_request.approved_at %}
     <p><strong>Approved:</strong> {{ travel_request.approved_at|date:"F d, Y" }}</p>
     {% endif %}
@@ -30,7 +30,7 @@
       <tr>
         <td>{{ expense.get_category_display }}</td>
         <td>{{ expense.description }}</td>
-        <td>{% if expense.approved_amount %}{{ expense.approved_amount }} {{ expense.approved_currency }}{% else %}—{% endif %}</td>
+        <td>{% if expense.approved_amount %}{{ expense.approved_amount }} {{ expense.approved_currency }}{% else %}-{% endif %}</td>
       </tr>
       {% endfor %}
     </tbody>

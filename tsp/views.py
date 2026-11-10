@@ -741,6 +741,25 @@ def request_approve(request, pk):
         ])
 
     notes = form.cleaned_data.get('notes', '') if form.is_valid() else request.POST.get('notes', '')
+
+    # The event's budget is the committee's own limit, so going past it is
+    # allowed but has to be deliberate and is written into the history.
+    event = travel_request.event
+    remaining = event.budget_remaining()
+    override = request.POST.get('over_budget') == '1'
+    if remaining is not None and remaining < 0 and not override:
+        messages.error(
+            request,
+            f'Approving this would put {event.name} {abs(remaining)} '
+            f'{event.budget_currency} over its budget. Approve again with the '
+            f'over-budget box ticked to go ahead anyway.',
+        )
+        return redirect('request_detail', pk=pk)
+    if remaining is not None and remaining < 0 and override:
+        notes = (notes + ' ' if notes else '') + (
+            f'[over budget by {abs(remaining)} {event.budget_currency}]'
+        )
+
     try:
         transition_request(travel_request, RequestState.APPROVED, request.user, notes)
         messages.success(request, 'Request approved.')
@@ -981,6 +1000,38 @@ def request_document_upload(request, pk, travel_request, profile):
     return redirect('request_detail', pk=pk)
 
 
+# Once a request is with finance its documents back a payment, so they stay.
+LOCKED_DOCUMENT_STATES = {RequestState.SUBMITTED_FOR_PAYMENT, RequestState.PAID}
+
+
+@login_required
+@staff_or_owner
+@require_POST
+def request_document_delete(request, pk, travel_request, profile, doc_id):
+    """
+    Remove a document uploaded by mistake.
+
+    Only the requester clears their own, and only while the request is still
+    with them. Once it has gone to finance these files are the evidence for a
+    payment, so they stay.
+    """
+    if travel_request.user_id != request.user.id:
+        raise PermissionDenied
+    if travel_request.state in LOCKED_DOCUMENT_STATES:
+        messages.error(
+            request,
+            'Documents cannot be removed once the request has gone for payment.',
+        )
+        return redirect('request_detail', pk=pk)
+
+    doc = get_object_or_404(Document, pk=doc_id, request=travel_request)
+    name = doc.original_name
+    doc.file.delete(save=False)
+    doc.delete()
+    messages.success(request, f'Removed {name}.')
+    return redirect('request_detail', pk=pk)
+
+
 @login_required
 @staff_or_owner
 def request_form_printable(request, pk, travel_request, profile):
@@ -1024,6 +1075,15 @@ def reports(request):
             qs = qs.filter(event__end_date__lte=form.cleaned_data['date_to'])
         if form.cleaned_data.get('status'):
             qs = qs.filter(state=form.cleaned_data['status'])
+        query = (form.cleaned_data.get('q') or '').strip()
+        if query:
+            qs = qs.filter(
+                Q(user__first_name__icontains=query)
+                | Q(user__last_name__icontains=query)
+                | Q(user__username__icontains=query)
+                | Q(user__email__icontains=query)
+                | Q(event__name__icontains=query)
+            )
 
     requests_list = qs.order_by('-updated_at')
 

@@ -1,10 +1,10 @@
 {% extends "base.html" %}
 
-{% block title %}Accept Request #{{ travel_request.pk }}{% endblock %}
+{% block title %}Accept {{ travel_request.reference }}{% endblock %}
 
 {% block content %}
 <h1 class="text-2xl font-bold mb-2">Accept Travel Support Request</h1>
-<p class="opacity-60 mb-6">Request #{{ travel_request.pk }} — {{ travel_request.event.name }}</p>
+<p class="opacity-60 mb-6">Request #{{ travel_request.pk }} - {{ travel_request.event.name }}</p>
 
 <div class="grid gap-6 lg:grid-cols-2 mb-6">
   <div class="card bg-base-100 shadow-sm">

@@ -3,7 +3,7 @@
 {% block title %}{% if is_edit %}Edit{% else %}New{% endif %} Request{% endblock %}
 
 {% block content %}
-<h1 class="text-2xl font-bold mb-6">{% if is_edit %}Edit Request #{{ travel_request.pk }}{% else %}New Travel Support Request{% endif %}</h1>
+<h1 class="text-2xl font-bold mb-6">{% if is_edit %}Edit {{ travel_request.reference }}{% else %}New Travel Support Request{% endif %}</h1>
 
 {% if show_account_check %}
 <div class="card bg-base-100 shadow-sm mb-6">
@@ -13,7 +13,7 @@
         <h2 class="card-title text-lg">Payment Account</h2>
         <p class="text-sm opacity-60">
           Reimbursements are sent to your Wise recipient account.
-          Bank details are held by Wise — {{ app_name }} stores only the recipient ID.
+          Bank details are held by Wise - {{ app_name }} stores only the recipient ID.
         </p>
       </div>
       <button type="button" id="check-account-btn" class="btn btn-outline btn-primary">
@@ -228,7 +228,7 @@
     if (data.needs_recreate) {
       recreatePanel?.classList.remove('hidden');
       if (data.auto_redirect && data.redirect) {
-        messageEl.textContent += ' Redirecting to banking setup…';
+        messageEl.textContent += ' Redirecting to banking setup...';
         setTimeout(() => { window.location.href = data.redirect; }, 1500);
       }
     } else {

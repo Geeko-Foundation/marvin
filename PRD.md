@@ -1,4 +1,4 @@
-# Product Requirements Document — Marvin (TSP-NG)
+# Product Requirements Document - Marvin (TSP-NG)
 
 > **Version:** 2.1  
 > **Status:** Active development (Django rewrite)  
@@ -14,11 +14,11 @@
 3. [User Groups & Personas](#3-user-groups--personas)
 4. [System Architecture](#4-system-architecture)
 5. [Data Model](#5-data-model)
-6. [Request Lifecycle — State Machine](#6-request-lifecycle--state-machine)
+6. [Request Lifecycle - State Machine](#6-request-lifecycle--state-machine)
 7. [Feature Requirements](#7-feature-requirements)
 8. [Route Reference](#8-route-reference)
 9. [Authentication & Authorization](#9-authentication--authorization)
-10. [Payment Integration — Wise](#10-payment-integration--wise)
+10. [Payment Integration - Wise](#10-payment-integration--wise)
 11. [Push Notifications](#11-push-notifications)
 12. [Document Management](#12-document-management)
 13. [Reporting & Search](#13-reporting--search)
@@ -39,11 +39,11 @@ Marvin replaces an earlier Node.js/Express prototype (`prototype/`) and a legacy
 
 FOSS organizations routinely sponsor contributors to attend conferences, give talks, and represent the community. Manual processes lead to:
 
-- **Opaque status** — requesters don't know where their request is in the pipeline
-- **Slow turnaround** — manual handoffs between TSP committee, requester, and finance
-- **Weak audit trail** — state changes and approvals are not systematically logged
-- **Payment friction** — international transfers require manual SWIFT/IBAN entry and tracking
-- **Reporting gaps** — no aggregate view of spend per event, per country, or over time
+- **Opaque status** - requesters don't know where their request is in the pipeline
+- **Slow turnaround** - manual handoffs between TSP committee, requester, and finance
+- **Weak audit trail** - state changes and approvals are not systematically logged
+- **Payment friction** - international transfers require manual SWIFT/IBAN entry and tracking
+- **Reporting gaps** - no aggregate view of spend per event, per country, or over time
 
 Marvin addresses these with a structured request lifecycle, role-based dashboards, Wise payment integration, browser push notifications, and full audit fields on all domain models.
 
@@ -59,15 +59,15 @@ This PRD describes **Marvin as implemented today** in the Django project at the 
 
 | # | Goal | Success Metric |
 |---|---|---|
-| G1 | **End-to-end request lifecycle** — submission through approval, acceptance, document upload, and payment | A requester can complete the full cycle in the app |
-| G2 | **Group-based dashboards** — each user group sees actionable, scoped data | Three distinct dashboard views (Requester, TSP, Finance) |
-| G3 | **Wise integration** — reduce international payment friction | Sandbox API for recipient verification and transfers; pluggable payment gateways |
-| G4 | **Audit trail** — every state change and model mutation tracked | `created_by`, `changed_by`, `created_at`, `updated_at` on profile, TSP, and payment models |
-| G5 | **Financial reporting** — aggregate spend by event, status, and date range | Filterable reports with CSV export |
-| G6 | **Self-hostable** — small FOSS orgs can run their own instance | Django + SQLite; `manage.py runserver` for development |
-| G7 | **Portable architecture** — not hardcoded to openSUSE | Configurable branding, plugin-style payments layer, separate `profile` app |
-| G8 | **Privacy-conscious banking** — bank account numbers never stored locally | Only Wise recipient ID and metadata kept in Marvin |
-| G9 | **Timely alerts** — users notified of request activity without polling | Opt-in browser push notifications on key state changes |
+| G1 | **End-to-end request lifecycle** - submission through approval, acceptance, document upload, and payment | A requester can complete the full cycle in the app |
+| G2 | **Group-based dashboards** - each user group sees actionable, scoped data | Three distinct dashboard views (Requester, TSP, Finance) |
+| G3 | **Wise integration** - reduce international payment friction | Sandbox API for recipient verification and transfers; pluggable payment gateways |
+| G4 | **Audit trail** - every state change and model mutation tracked | `created_by`, `changed_by`, `created_at`, `updated_at` on profile, TSP, and payment models |
+| G5 | **Financial reporting** - aggregate spend by event, status, and date range | Filterable reports with CSV export |
+| G6 | **Self-hostable** - small FOSS orgs can run their own instance | Django + SQLite; `manage.py runserver` for development |
+| G7 | **Portable architecture** - not hardcoded to openSUSE | Configurable branding, plugin-style payments layer, separate `profile` app |
+| G8 | **Privacy-conscious banking** - bank account numbers never stored locally | Only Wise recipient ID and metadata kept in Marvin |
+| G9 | **Timely alerts** - users notified of request activity without polling | Opt-in browser push notifications on key state changes |
 
 ### 2.2 Non-Goals (current release)
 
@@ -100,19 +100,19 @@ Custom permissions are defined on `profile.UserProfile` and assigned to groups v
 
 ### 3.2 Personas
 
-**Requester — "Douglas"**
+**Requester - "Douglas"**
 - openSUSE contributor who speaks at conferences worldwide
 - Signs up via a 3-step wizard (account → profile → Wise banking verification)
 - Submits travel requests, tracks status, uploads receipts after the event
 - Opts into push notifications for approval/rejection/payment updates
 
-**TSP Committee — "Admin"**
-- Reviews 5–20 requests per event cycle
+**TSP Committee - "Admin"**
+- Reviews 5-20 requests per event cycle
 - Needs a pending queue sorted by age and per-event summaries
 - Receives push alerts when new requests are submitted
 - Uses Django admin for data management when needed (`admin` / `demo`)
 
-**Finance — "Finance Team"**
+**Finance - "Finance Team"**
 - Processes payments after events conclude
 - Verifies required documents before paying
 - Receives push alerts when requests enter the payment queue
@@ -139,10 +139,10 @@ Custom permissions are defined on `profile.UserProfile` and assigned to groups v
 │  │  search     │  │ Wise services│  ┌─────────────────────┐  │
 │  └─────────────┘  │ push service │  │ webpush (3rd party) │  │
 │                   └──────────────┘  └─────────────────────┘  │
-│  django.contrib.admin — /admin/                               │
+│  django.contrib.admin - /admin/                               │
 ├──────────────────────────────────────────────────────────────┤
-│  marvin.audit — AuditModel + AuditUserMiddleware             │
-│  profile.groups — Group setup and assignment helpers         │
+│  marvin.audit - AuditModel + AuditUserMiddleware             │
+│  profile.groups - Group setup and assignment helpers         │
 ├──────────────────────────────────────────────────────────────┤
 │  SQLite (db.sqlite3) · File uploads (uploads/)               │
 ├──────────────────────────────────────────────────────────────┤
@@ -191,7 +191,7 @@ profile/                         # User identity, groups, onboarding, push
 │   └── push_notifications.py    # Browser push on state changes
 └── migrations/
 tsp/                             # Travel Support Program core app
-├── models.py                    # Event, TravelRequest, Expense, Document, …
+├── models.py                    # Event, TravelRequest, Expense, Document, ...
 ├── views.py                     # TSP views (login, signup, requests, search)
 ├── urls.py
 ├── forms.py                     # Travel/expense forms, LoginForm, SignupAccountForm
@@ -353,7 +353,7 @@ Fixture: `tsp/fixtures/initial.json` (users reference `profile.userprofile`).
 
 ---
 
-## 6. Request Lifecycle — State Machine
+## 6. Request Lifecycle - State Machine
 
 ### 6.1 States
 
@@ -428,7 +428,7 @@ Implemented in `tsp/services/state_machine.py`. Each transition creates a `State
 
 - Event dropdown, talk fields, dynamic expense formset, description
 - Expense categories: transportation, lodging, meals, registration, visa, other
-- **Check Account** button (`POST /requests/check-account/`) — live Wise recipient status; auto-recreates stale recipients or redirects to banking step
+- **Check Account** button (`POST /requests/check-account/`) - live Wise recipient status; auto-recreates stale recipients or redirects to banking step
 - TSP members can also create requests (`group_required(Requester, TSP)`)
 
 ### 7.4 TSP Review & Approval
@@ -466,7 +466,7 @@ Implemented in `tsp/services/state_machine.py`. Each transition creates a `State
 - Disabling push removes stored browser subscriptions
 
 **Requesters:**
-- Wise recipient status shown (account ID, verification date) — no raw bank numbers displayed
+- Wise recipient status shown (account ID, verification date) - no raw bank numbers displayed
 - Re-verification via signup banking flow if recipient is missing at Wise
 
 **TSP/Finance staff:**
@@ -474,7 +474,7 @@ Implemented in `tsp/services/state_machine.py`. Each transition creates a `State
 
 ### 7.9 Search
 
-- `/search/` — event search for all authenticated users (django-tables2)
+- `/search/` - event search for all authenticated users (django-tables2)
 - User search table visible to staff only
 - Navbar search shortcut and sidebar link
 
@@ -487,7 +487,7 @@ Implemented in `tsp/services/state_machine.py`. Each transition creates a `State
 
 ### 7.11 Printable Reimbursement Form
 
-- `/requests/<id>/form/` — printable agreement with approved expenses
+- `/requests/<id>/form/` - printable agreement with approved expenses
 - Print-friendly CSS
 
 ---
@@ -498,9 +498,9 @@ Implemented in `tsp/services/state_machine.py`. Each transition creates a `State
 
 | Method | Path | Auth | Group | Description |
 |---|---|---|---|---|
-| GET/POST | `/login/` | No | — | Username/password login |
+| GET/POST | `/login/` | No | - | Username/password login |
 | GET | `/logout/` | Yes | Any | Logout |
-| GET/POST | `/signup/` | No* | — | Account creation |
+| GET/POST | `/signup/` | No* | - | Account creation |
 | GET/POST | `/signup/profile/` | Yes | Requester | Profile step |
 | GET/POST | `/signup/banking/` | Yes | Requester | Banking step |
 | GET | `/signup/banking/progress/` | Yes | Requester | Verification progress UI |
@@ -571,40 +571,40 @@ App views use `@login_required` with `APP_LOGIN_URL`. Admin uses Django's built-
 
 ### 9.2 Authorization Mechanisms
 
-1. **Django Groups** — primary access control (`profile/groups.py`)
-2. **Custom permissions** — on `profile.UserProfile`; checkable via `user.has_perm('profile.process_payments')`
-3. **View decorators** — `@group_required(...)`, `@staff_or_owner` (owner or TSP/Finance)
-4. **Payment plugin callback** — `PAYMENTS_PERMISSION_CHECK = 'profile.permissions.finance_can_process_payments'`
+1. **Django Groups** - primary access control (`profile/groups.py`)
+2. **Custom permissions** - on `profile.UserProfile`; checkable via `user.has_perm('profile.process_payments')`
+3. **View decorators** - `@group_required(...)`, `@staff_or_owner` (owner or TSP/Finance)
+4. **Payment plugin callback** - `PAYMENTS_PERMISSION_CHECK = 'profile.permissions.finance_can_process_payments'`
 
 ### 9.3 Authorization Matrix
 
 | Action | Requester | TSP | Finance |
 |---|---|---|---|
-| Sign up / onboard | ✓ | — | — |
-| Create request | ✓ | ✓ | — |
-| Edit own request (draft/submitted) | ✓ | — | — |
-| Approve/reject | — | ✓ | — |
-| Cancel request | ✓ (own) | ✓ | — |
-| Accept / submit for payment | ✓ (own) | — | — |
+| Sign up / onboard | ✓ | - | - |
+| Create request | ✓ | ✓ | - |
+| Edit own request (draft/submitted) | ✓ | - | - |
+| Approve/reject | - | ✓ | - |
+| Cancel request | ✓ (own) | ✓ | - |
+| Accept / submit for payment | ✓ (own) | - | - |
 | Upload/download documents | ✓ (own) | ✓ | ✓ |
-| Process payment | — | — | ✓ |
-| View reports | — | ✓ | ✓ |
+| Process payment | - | - | ✓ |
+| View reports | - | ✓ | ✓ |
 | Enable push notifications | ✓ | ✓ | ✓ |
-| Django admin | — | ✓* | — |
+| Django admin | - | ✓* | - |
 
 \* Requires `is_staff` / `is_superuser` in addition to group membership.
 
 ---
 
-## 10. Payment Integration — Wise
+## 10. Payment Integration - Wise
 
 ### 10.1 Architecture
 
 Payments use a **plugin registry** (`payments/registry.py`):
 
-- **Gateways** — how money moves (`WiseApiGateway`, `WiseCsvGateway`, `ManualTransferGateway`)
-- **Adapters** — how payables expose amount, recipient, reference (`TravelRequestPayableAdapter`)
-- **PaymentRecord** — audit log of every processed payment
+- **Gateways** - how money moves (`WiseApiGateway`, `WiseCsvGateway`, `ManualTransferGateway`)
+- **Adapters** - how payables expose amount, recipient, reference (`TravelRequestPayableAdapter`)
+- **PaymentRecord** - audit log of every processed payment
 
 Configured in `settings.py`:
 
@@ -773,7 +773,7 @@ Dev keys are included in settings; production must use environment variables.
 | Gap | Notes |
 |---|---|
 | No email notifications | Push implemented; email still roadmap |
-| No pagination | Lists capped (~20–100 items) |
+| No pagination | Lists capped (~20-100 items) |
 | No event edit/delete UI | Admin only |
 | No batch approve/reject | One request at a time |
 | No internal notes | All comments visible to requester |
@@ -799,7 +799,7 @@ Dev keys are included in settings; production must use environment variables.
 
 ## 15. Roadmap
 
-### Phase 1 — Production Hardening
+### Phase 1 - Production Hardening
 
 | Task | Priority | Status |
 |---|---|---|
@@ -812,7 +812,7 @@ Dev keys are included in settings; production must use environment variables.
 | Pagination on list views | Medium | Planned |
 | Automated test suite | High | Planned |
 
-### Phase 2 — Feature Completion
+### Phase 2 - Feature Completion
 
 | Task | Priority | Status |
 |---|---|---|
@@ -824,7 +824,7 @@ Dev keys are included in settings; production must use environment variables.
 | Internal notes (TSP/Finance only) | Medium | Planned |
 | Production Wise API + webhooks | High | Planned |
 
-### Phase 3 — Scale & Polish
+### Phase 3 - Scale & Polish
 
 | Task | Priority |
 |---|---|

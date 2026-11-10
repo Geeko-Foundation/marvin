@@ -4,7 +4,7 @@
   {% include "partials/theme_init.html" %}
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{% block title %}{{ app_name }}{% endblock %} — {{ app_tagline }}</title>
+  <title>{% block title %}{{ app_name }}{% endblock %} - {{ app_tagline }}</title>
   <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.14/dist/full.min.css" rel="stylesheet" type="text/css" />
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
@@ -36,7 +36,7 @@
           <span class="text-lg font-bold">{{ app_name }}</span>
           <span class="text-sm opacity-60 ml-2 hidden sm:inline">{{ app_tagline }}</span>
           <form method="get" action="{% url 'search' %}" class="hidden md:flex flex-1 max-w-xs ml-4">
-            <input type="search" name="q" value="{{ request.GET.q }}" placeholder="Search…" class="input input-bordered input-sm w-full" aria-label="Search">
+            <input type="search" name="q" value="{{ request.GET.q }}" placeholder="Search..." class="input input-bordered input-sm w-full" aria-label="Search">
           </form>
         </div>
         <div class="flex-none gap-2">
