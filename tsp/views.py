@@ -1,7 +1,6 @@
 """TSP views: auth, onboarding, events, travel requests, reports, and search."""
 
 import csv
-from decimal import Decimal, InvalidOperation
 
 from django.conf import settings
 from django.contrib import messages
@@ -61,7 +60,6 @@ from tsp.models import (
     RequestState,
     TravelRequest,
 )
-from tsp.services import exchange_rates
 from tsp.services.state_machine import (
     StateTransitionError,
     create_request_with_history,
@@ -596,40 +594,6 @@ def _sees_internal_notes(user, profile, travel_request):
     return profile.is_committee and travel_request.user_id != user.id
 
 
-def _review_lines(travel_request):
-    """
-    Each expense with the currencies it can be approved in, already converted.
-
-    A line requested in a payout currency starts in that currency. Anything
-    else starts converted into the first payout currency at the 90-day average,
-    unless no rate is known, when it stays as requested rather than turning
-    9000 INR into 9000 EUR.
-    """
-    exchange_rates.ensure_recent()
-    end = exchange_rates.window_end_for(travel_request.event)
-    payout = list(settings.PAYOUT_CURRENCIES)
-    lines = []
-    for expense in travel_request.expenses.all():
-        source = expense.estimated_currency
-        options = []
-        for code in dict.fromkeys(payout + [source]):
-            option = {'code': code, 'amount': expense.estimated_amount, 'rates': None}
-            if code != source:
-                # The same way round as the rate locked at approval, and the
-                # readable way too: 1 USD = 95.27 INR.
-                rates = exchange_rates.summary(code, source, end)
-                if rates is None:
-                    continue
-                option['amount'] = (expense.estimated_amount / rates.average).quantize(Decimal('0.01'))
-                option['rates'] = rates
-            options.append(option)
-        default = source if source in payout or len(options) == 1 else options[0]['code']
-        for option in options:
-            option['selected'] = option['code'] == default
-        lines.append({'expense': expense, 'options': options})
-    return lines
-
-
 @login_required
 @staff_or_owner
 def request_detail(request, pk, travel_request, profile):
@@ -641,11 +605,7 @@ def request_detail(request, pk, travel_request, profile):
 
     comment_form = CommentForm(can_write_internal=sees_internal)
     doc_form = DocumentUploadForm()
-    review_lines = None
-    if profile.is_tsp and travel_request.state == RequestState.SUBMITTED:
-        review_lines = _review_lines(travel_request)
     return render(request, 'tsp/requests/detail.html', {
-        'review_lines': review_lines,
         'travel_request': travel_request,
         'profile': profile,
         'comments': comments,
@@ -721,24 +681,15 @@ def request_approve(request, pk):
     travel_request = get_object_or_404(TravelRequest, pk=pk)
     form = ApprovalForm(request.POST)
 
-    expenses = {str(e.pk): e for e in travel_request.expenses.all()}
-    rate_end = exchange_rates.window_end_for(travel_request.event)
-    for eid in request.POST.getlist('expense_id'):
-        expense = expenses.get(eid)
-        try:
-            amount = Decimal(request.POST.get(f'approved_amount_{eid}', ''))
-        except InvalidOperation:
-            continue
-        if expense is None:
-            continue
-        expense.approved_amount = amount
-        expense.approved_currency = request.POST.get(f'approved_currency_{eid}', 'EUR')
-        if expense.approved_currency != expense.estimated_currency:
-            exchange_rates.ensure_recent()
-        exchange_rates.lock_approval_rate(expense, rate_end)
-        expense.save(update_fields=[
-            'approved_amount', 'approved_currency', 'approval_rate', 'approval_rate_date',
-        ])
+    expense_ids = request.POST.getlist('expense_id')
+    for eid in expense_ids:
+        amount = request.POST.get(f'approved_amount_{eid}')
+        currency = request.POST.get(f'approved_currency_{eid}', 'EUR')
+        if amount:
+            Expense.objects.filter(pk=eid, request=travel_request).update(
+                approved_amount=amount,
+                approved_currency=currency,
+            )
 
     notes = form.cleaned_data.get('notes', '') if form.is_valid() else request.POST.get('notes', '')
 
