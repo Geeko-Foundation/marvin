@@ -88,7 +88,7 @@ class TravelRequestPayableAdapter(PayableAdapter):
         profile = getattr(obj.user, 'profile', None)
         wise_ready = bool(profile and profile.is_wise_recipient_ready())
         return {
-            'title': f'#{obj.pk} — {obj.user.get_full_name() or obj.user.username}',
+            'title': f'#{obj.pk} - {obj.user.get_full_name() or obj.user.username}',
             'subtitle': f'{obj.event.name} · {obj.user.email}',
             'totals': obj.totals_payable(),
             'mixed_currencies': obj.has_mixed_currencies(),

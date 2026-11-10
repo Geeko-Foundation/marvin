@@ -32,10 +32,10 @@
       <div class="border border-base-300 rounded-box p-4">
         <div class="flex justify-between items-start mb-2">
           <div>
-            <h3 class="font-semibold">#{{ req.pk }} — {{ req.user.get_full_name|default:req.user.username }}</h3>
+            <h3 class="font-semibold">#{{ req.pk }} - {{ req.user.get_full_name|default:req.user.username }}</h3>
             <p class="text-sm opacity-60">{{ req.event.name }}</p>
           </div>
-          <span class="badge {{ req.state|state_badge }}">{{ req.get_state_display }}</span>
+          <span class="badge {{ req.state|state_badge }} whitespace-nowrap">{{ req.get_state_display }}</span>
         </div>
         <p class="text-sm">To pay: {% for currency, amount in req.totals_payable %}<strong>{{ amount }} {{ currency }}</strong>{% if not forloop.last %}, {% endif %}{% endfor %}{% if req.has_mixed_currencies %} <span class="text-warning">(mixed, pay separately)</span>{% endif %}</p>
         <p class="text-sm">Documents: {{ req.doc_count }}/3</p>
@@ -70,8 +70,8 @@
             <td>#{{ req.pk }}</td>
             <td>{{ req.user.get_full_name|default:req.user.username }}</td>
             <td>{{ req.event.name }}</td>
-            <td>{% if req.payment %}{{ req.payment.amount }} {{ req.payment.currency }}{% else %}—{% endif %}</td>
-            <td>{% if req.payment %}{{ req.payment.method_label }}{% else %}—{% endif %}</td>
+            <td>{% if req.payment %}{{ req.payment.amount }} {{ req.payment.currency }}{% else %}-{% endif %}</td>
+            <td>{% if req.payment %}{{ req.payment.method_label }}{% else %}-{% endif %}</td>
           </tr>
           {% endfor %}
         </tbody>
