@@ -202,6 +202,16 @@ class TravelRequest(AuditModel):
     def has_mixed_currencies(self):
         """True when the approved lines are not all in the same currency."""
         return len(self.totals_payable()) > 1
+    @property
+    def reference(self):
+        """
+        The number people quote for this request, as in TSP643.
+
+        The same string is used on the page, in notifications and as the Wise
+        transfer reference, so a comment, an email and a bank statement all
+        name the request the same way.
+        """
+        return f'TSP{self.pk}' if self.pk else 'TSP'
 
     def total_estimated(self):
         """Sum of all line-item estimated amounts, ignoring currency."""

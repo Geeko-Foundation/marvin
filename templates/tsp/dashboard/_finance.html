@@ -67,7 +67,7 @@
         <tbody>
           {% for req in recently_paid %}
           <tr>
-            <td>#{{ req.pk }}</td>
+            <td>{{ req.reference }}</td>
             <td>{{ req.user.get_full_name|default:req.user.username }}</td>
             <td>{{ req.event.name }}</td>
             <td>{% if req.payment %}{{ req.payment.amount }} {{ req.payment.currency }}{% else %}-{% endif %}</td>

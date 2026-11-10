@@ -97,5 +97,5 @@ class TravelRequestPayableAdapter(PayableAdapter):
         }
 
     def payment_reference(self, obj) -> str:
-        """Gateway reference string for this travel request."""
-        return f'TSP-{obj.pk}'
+        """Gateway reference string, the same one shown on the request."""
+        return obj.reference
