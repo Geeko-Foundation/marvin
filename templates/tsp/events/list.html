@@ -35,30 +35,7 @@
         {% endif %}
       </div>
       <p class="text-sm opacity-60">{{ event.location }}</p>
-      <p class="text-sm">{{ event.start_date }} - {{ event.end_date }}</p>
-      {% if event.budget and profile.is_committee %}
-      <div class="mt-2 text-sm">
-        <div class="flex justify-between">
-          <span class="opacity-60">Budget</span>
-          <span>{{ event.budget }} {{ event.budget_currency }}</span>
-        </div>
-        <div class="flex justify-between">
-          <span class="opacity-60">Approved</span>
-          <span>{{ event.approved_against_budget }} {{ event.budget_currency }}</span>
-        </div>
-        <div class="flex justify-between font-semibold">
-          <span class="opacity-60">Remaining</span>
-          {% with left=event.budget_remaining %}
-          <span class="{% if left < 0 %}text-error{% endif %}">{{ left }} {{ event.budget_currency }}</span>
-          {% endwith %}
-        </div>
-        {% for currency, amount in event.approved_in_other_currencies %}
-        <div class="flex justify-between text-xs opacity-60">
-          <span>Also approved</span><span>{{ amount }} {{ currency }}</span>
-        </div>
-        {% endfor %}
-      </div>
-      {% endif %}
+      <p class="text-sm">{{ event.start_date }} — {{ event.end_date }}</p>
       {% if event.accepting_requests and not event.is_past and profile.is_requester %}
       <div class="card-actions justify-end mt-2">
         <a href="{% url 'request_create' %}?event={{ event.pk }}" class="btn btn-primary btn-sm">Apply for Travel Support</a>

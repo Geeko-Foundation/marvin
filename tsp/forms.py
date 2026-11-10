@@ -12,7 +12,6 @@ from tsp.models import (
     Event,
     Expense,
     ExpenseCategory,
-    RequestState,
     TravelRequest,
 )
 
@@ -44,7 +43,7 @@ class LoginForm(AuthenticationForm):
 
 
 class SignupAccountForm(forms.Form):
-    """Step 1 of the sign-up wizard - create a requestor account."""
+    """Step 1 of the sign-up wizard — create a requestor account."""
 
     username = forms.CharField(
         max_length=150,
@@ -115,32 +114,14 @@ class EventForm(forms.ModelForm):
 
     class Meta:
         model = Event
-        fields = ['name', 'location', 'start_date', 'end_date', 'accepting_requests',
-                  'budget', 'budget_currency']
+        fields = ['name', 'location', 'start_date', 'end_date', 'accepting_requests']
         widgets = {
             'name': forms.TextInput(attrs={'class': 'input input-bordered w-full'}),
             'location': forms.TextInput(attrs={'class': 'input input-bordered w-full'}),
             'start_date': forms.DateInput(attrs={'class': 'input input-bordered w-full', 'type': 'date'}),
             'end_date': forms.DateInput(attrs={'class': 'input input-bordered w-full', 'type': 'date'}),
             'accepting_requests': forms.CheckboxInput(attrs={'class': 'checkbox'}),
-            'budget': forms.NumberInput(attrs={
-                'class': 'input input-bordered w-full', 'step': '0.01', 'min': '0',
-                'placeholder': 'Leave blank for no limit',
-            }),
-            'budget_currency': forms.Select(
-                choices=CURRENCY_CHOICES,
-                attrs={'class': 'select select-bordered w-full'},
-            ),
         }
-
-    def __init__(self, *args, **kwargs):
-        """The currency only matters once a budget is set, so let it default."""
-        super().__init__(*args, **kwargs)
-        self.fields['budget_currency'].required = False
-
-    def clean_budget_currency(self):
-        """Fall back to the model default when nothing was chosen."""
-        return self.cleaned_data.get('budget_currency') or 'EUR'
 
 
 class TravelRequestForm(forms.ModelForm):
@@ -274,7 +255,7 @@ class CommentForm(forms.ModelForm):
             'body': forms.Textarea(attrs={
                 'class': 'textarea textarea-bordered w-full',
                 'rows': 3,
-                'placeholder': 'Add a comment...',
+                'placeholder': 'Add a comment…',
             }),
             'internal': forms.CheckboxInput(attrs={'class': 'checkbox checkbox-sm checkbox-warning'}),
         }
@@ -345,20 +326,17 @@ class ReportFilterForm(forms.Form):
         required=False,
         widget=forms.DateInput(attrs={'class': 'input input-bordered', 'type': 'date'}),
     )
-    # Every state, rather than the five that used to be listed: draft,
-    # submitted and approved could not be filtered for at all.
     status = forms.ChoiceField(
         required=False,
-        choices=[('', 'All statuses')] + list(RequestState.choices),
+        choices=[
+            ('', 'All statuses'),
+            ('cancelled', 'Cancelled'),
+            ('rejected', 'Rejected'),
+            ('accepted', 'Accepted'),
+            ('submitted_for_payment', 'Submitted for Payment'),
+            ('paid', 'Paid'),
+        ],
         widget=forms.Select(attrs={'class': 'select select-bordered'}),
-    )
-    q = forms.CharField(
-        required=False,
-        max_length=200,
-        widget=forms.TextInput(attrs={
-            'class': 'input input-bordered',
-            'placeholder': 'Requester or event',
-        }),
     )
 
 
@@ -371,7 +349,7 @@ class SearchForm(forms.Form):
         label='Search',
         widget=forms.TextInput(attrs={
             'class': INPUT_CLASS,
-            'placeholder': 'Events, locations, users...',
+            'placeholder': 'Events, locations, users…',
             'autocomplete': 'off',
         }),
     )

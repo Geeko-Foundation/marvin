@@ -8,7 +8,7 @@
   <div>
     <div class="flex items-center gap-3 mb-1">
       <h1 class="text-2xl font-bold">Request #{{ travel_request.pk }}</h1>
-      <span class="badge {{ travel_request.state|state_badge }} whitespace-nowrap">{{ travel_request.get_state_display }}</span>
+      <span class="badge {{ travel_request.state|state_badge }}">{{ travel_request.get_state_display }}</span>
     </div>
     <p class="opacity-60">{{ travel_request.event.name }} · {{ travel_request.event.location }}</p>
     <p class="text-sm opacity-60">Requester: {{ travel_request.user.get_full_name|default:travel_request.user.username }}</p>
@@ -87,15 +87,15 @@
                 <td>{{ expense.description }}</td>
                 <td>{{ expense.estimated_amount }} {{ expense.estimated_currency }}</td>
                 {% if travel_request.state != 'draft' and travel_request.state != 'submitted' %}
-                <td>{% if expense.approved_amount %}{{ expense.approved_amount }} {{ expense.approved_currency }}{% else %}-{% endif %}</td>
+                <td>{% if expense.approved_amount %}{{ expense.approved_amount }} {{ expense.approved_currency }}{% else %}—{% endif %}</td>
                 {% endif %}
                 {% if travel_request.total_actual %}
-                <td>{% if expense.actual_amount %}{{ expense.actual_amount }} {{ expense.actual_currency }}{% else %}-{% endif %}</td>
+                <td>{% if expense.actual_amount %}{{ expense.actual_amount }} {{ expense.actual_currency }}{% else %}—{% endif %}</td>
                 <td>
                   {% if expense.has_currency_mismatch %}
                   <span class="badge badge-warning badge-sm">finance to settle</span>
                   {% else %}
-                  {{ expense.payable_amount|default_if_none:"-" }} {{ expense.approved_currency }}
+                  {{ expense.payable_amount|default_if_none:"—" }} {{ expense.approved_currency }}
                   {% endif %}
                 </td>
                 {% endif %}
@@ -171,21 +171,6 @@
             });
           </script>
           <textarea name="notes" class="textarea textarea-bordered w-full mb-3" rows="2" placeholder="Approval notes (optional)"></textarea>
-          {% with left=travel_request.event.budget_remaining %}
-          {% if left is not None %}
-          <p class="text-sm mb-2">
-            {{ travel_request.event.name }} has
-            <strong class="{% if left < 0 %}text-error{% endif %}">{{ left }} {{ travel_request.event.budget_currency }}</strong>
-            left of its budget.
-          </p>
-          {% if left < 0 %}
-          <label class="label cursor-pointer justify-start gap-2 mb-2">
-            <input type="checkbox" name="over_budget" value="1" class="checkbox checkbox-sm">
-            <span class="label-text">Approve even though this event is over budget</span>
-          </label>
-          {% endif %}
-          {% endif %}
-          {% endwith %}
           <div class="flex gap-2">
             <button type="submit" class="btn btn-success btn-sm">Approve</button>
           </div>
@@ -218,16 +203,7 @@
                 <td>{{ doc.get_kind_display }}</td>
                 <td>{{ doc.original_name }}</td>
                 <td>{{ doc.created_at|date:"M d, Y" }}</td>
-                <td class="flex gap-3">
-                  <a href="{% url 'document_download' doc.pk %}" class="link link-primary">Download</a>
-                  {% if travel_request.user_id == user.id and travel_request.state != 'submitted_for_payment' and travel_request.state != 'paid' %}
-                  <form method="post" action="{% url 'request_document_delete' travel_request.pk doc.pk %}"
-                        onsubmit="return confirm('Remove {{ doc.original_name|escapejs }}?');">
-                    {% csrf_token %}
-                    <button type="submit" class="link link-error">Remove</button>
-                  </form>
-                  {% endif %}
-                </td>
+                <td><a href="{% url 'document_download' doc.pk %}" class="link link-primary">Download</a></td>
               </tr>
               {% endfor %}
             </tbody>
@@ -298,7 +274,7 @@
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4 text-primary"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clip-rule="evenodd" /></svg>
           </div>
           <div class="timeline-end timeline-box text-sm">
-            <span class="badge {{ entry.to_state|state_badge }} badge-xs whitespace-nowrap">{{ entry.to_state }}</span>
+            <span class="badge {{ entry.to_state|state_badge }} badge-xs">{{ entry.to_state }}</span>
             <p class="text-xs opacity-60">{{ entry.user.username }}</p>
             {% if entry.notes %}<p class="text-xs mt-1">{{ entry.notes }}</p>{% endif %}
           </div>

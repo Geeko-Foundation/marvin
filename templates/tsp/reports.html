@@ -21,10 +21,6 @@
         <label class="label py-0"><span class="label-text">Status</span></label>
         {{ form.status }}
       </div>
-      <div class="form-control">
-        <label class="label"><span class="label-text">Search</span></label>
-        {{ form.q }}
-      </div>
       <button type="submit" class="btn btn-primary btn-sm">Filter</button>
       <a href="{% url 'reports' %}?{{ request.GET.urlencode }}&format=csv" class="btn btn-outline btn-sm">Download CSV</a>
     </div>
@@ -70,11 +66,11 @@
             <td><a href="{% url 'request_detail' req.pk %}" class="link link-primary">{{ req.event.name }}</a></td>
             <td>{{ req.event.location }}</td>
             <td>{{ req.user.get_full_name|default:req.user.username }}</td>
-            <td>{{ req.user.profile.country|default:"-" }}</td>
-            <td><span class="badge {{ req.state|state_badge }} badge-sm whitespace-nowrap">{{ req.get_state_display }}</span></td>
+            <td>{{ req.user.profile.country|default:"—" }}</td>
+            <td><span class="badge {{ req.state|state_badge }} badge-sm">{{ req.get_state_display }}</span></td>
             <td>{% for currency, amount in req.totals_approved %}{{ amount }} {{ currency }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
-            <td>{% if req.payment %}{{ req.payment.amount }}{% else %}-{% endif %}</td>
-            <td>{% if req.payment %}{{ req.payment.method_label }}{% else %}-{% endif %}</td>
+            <td>{% if req.payment %}{{ req.payment.amount }}{% else %}—{% endif %}</td>
+            <td>{% if req.payment %}{{ req.payment.method_label }}{% else %}—{% endif %}</td>
           </tr>
           {% empty %}
           <tr><td colspan="9" class="text-center opacity-60">No results.</td></tr>

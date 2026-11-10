@@ -1,4 +1,4 @@
-"""Wise recipient helpers - no local storage of bank account numbers."""
+"""Wise recipient helpers — no local storage of bank account numbers."""
 
 from __future__ import annotations
 
@@ -148,7 +148,7 @@ def mask_account_value(value: str) -> str:
     """Mask an account or IBAN for safe display (first/last four digits visible)."""
     cleaned = (value or '').replace(' ', '')
     if len(cleaned) <= 8:
-        return cleaned or '-'
+        return cleaned or '—'
     return f'{cleaned[:4]} **** {cleaned[-4:]}'
 
 
