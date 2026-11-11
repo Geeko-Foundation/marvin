@@ -16,6 +16,21 @@
   <div class="flex flex-wrap gap-2">
     {% if travel_request.is_editable_by_requester and travel_request.user_id == user.id %}
     <a href="{% url 'request_edit' travel_request.pk %}" class="btn btn-sm btn-outline">Edit</a>
+    {% elif travel_request.can_change_amounts and travel_request.user_id == user.id %}
+    <a href="{% url 'request_edit' travel_request.pk %}" class="btn btn-sm btn-outline"
+       title="Sends the request back to the committee for approval">Change Amounts</a>
+    {% endif %}
+    {% if travel_request.can_request_advance and travel_request.user_id == user.id %}
+    <form method="post" action="{% url 'request_advance' travel_request.pk %}">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-sm btn-info">Request Advance of {{ travel_request.advance_amount }} {{ travel_request.advance_currency }}</button>
+    </form>
+    {% endif %}
+    {% if travel_request.can_take_back_from_payment and travel_request.user_id == user.id %}
+    <form method="post" action="{% url 'request_take_back' travel_request.pk %}">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-sm btn-outline">Take Back to Edit</button>
+    </form>
     {% endif %}
     {% if travel_request.state == 'draft' and travel_request.user_id == user.id %}
     <form method="post" action="{% url 'request_submit' travel_request.pk %}">
@@ -33,9 +48,9 @@
       <button type="submit" class="btn btn-sm btn-success" {% if missing_docs %}disabled title="Upload all required documents first"{% endif %}>Submit for Payment</button>
     </form>
     {% endif %}
-    {% if travel_request.state == 'draft' or travel_request.state == 'submitted' or travel_request.state == 'approved' %}
+    {% if travel_request.state == 'draft' or travel_request.state == 'submitted' or travel_request.state == 'approved' or travel_request.state == 'accepted' %}
     {% if travel_request.user_id == user.id or profile.is_tsp %}
-    <form method="post" action="{% url 'request_cancel' travel_request.pk %}" onsubmit="return confirm('Cancel this request?')">
+    <form method="post" action="{% url 'request_cancel' travel_request.pk %}" onsubmit="return confirm('Cancel this request?{% if travel_request.advance_payment %} The advance already paid will have to be paid back.{% endif %}')">
       {% csrf_token %}
       <button type="submit" class="btn btn-sm btn-error btn-outline">Cancel</button>
     </form>
@@ -44,6 +59,46 @@
     <a href="{% url 'request_form' travel_request.pk %}" class="btn btn-sm btn-ghost" target="_blank">Print Form</a>
   </div>
 </div>
+
+{% with owed=travel_request.amount_owed_back advance=travel_request.advance_payment %}
+{% if owed %}
+<div class="alert alert-error mb-6 flex flex-wrap justify-between">
+  <span>
+    <strong>{{ owed.1 }} {{ owed.0 }}</strong> of the advance has to be paid back.
+    {% if travel_request.user_id == user.id %}New requests can be submitted once finance has confirmed it.{% endif %}
+  </span>
+  {% if profile.is_finance %}
+  <form method="post" action="{% url 'request_settle' travel_request.pk %}">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="refund">
+    <button type="submit" class="btn btn-sm">Refund Received</button>
+  </form>
+  {% endif %}
+</div>
+{% elif travel_request.advance_covers_costs and profile.is_finance %}
+<div class="alert alert-info mb-6 flex flex-wrap justify-between">
+  <span>The advance already covers the actual costs, so there is nothing more to pay.</span>
+  <form method="post" action="{% url 'request_settle' travel_request.pk %}">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="close">
+    <button type="submit" class="btn btn-sm">Close as Paid</button>
+  </form>
+</div>
+{% endif %}
+{% if travel_request.advance_amount or advance %}
+<div class="alert mb-6">
+  <span>
+    {% if advance %}
+    Advance of <strong>{{ advance.amount }} {{ advance.currency }}</strong> paid on {{ advance.created_at|date:"j M Y" }}. It is taken off the final payment.
+    {% elif travel_request.awaiting_advance %}
+    Advance of <strong>{{ travel_request.advance_amount }} {{ travel_request.advance_currency }}</strong> requested; waiting for finance to pay it.
+    {% else %}
+    The committee allows an advance of <strong>{{ travel_request.advance_amount }} {{ travel_request.advance_currency }}</strong> before the event{% if travel_request.state == 'approved' %}, once the request is accepted{% endif %}.
+    {% endif %}
+  </span>
+</div>
+{% endif %}
+{% endwith %}
 
 <div class="grid gap-6 lg:grid-cols-3">
   <div class="lg:col-span-2 flex flex-col gap-6">
@@ -169,6 +224,17 @@
             Amounts in another currency are filled in at the 90-day average rate. That rate is saved with
             the approval, so the requester sees what it is worth in their own currency.
           </p>
+          <div class="flex flex-wrap gap-3 items-end mb-3 p-3 bg-base-200 rounded-box">
+            <span class="text-sm flex-1">
+              Advance before the event (optional)
+              <span class="block opacity-70">For people who can't front the costs. Leave empty for none.</span>
+            </span>
+            <input type="number" name="advance_amount" step="0.01" min="0"
+                   class="input input-bordered input-sm w-32" placeholder="Amount">
+            <select name="advance_currency" class="select select-bordered select-sm w-24">
+              {% for code in payout_currencies %}<option value="{{ code }}">{{ code }}</option>{% endfor %}
+            </select>
+          </div>
           <script>
             document.querySelectorAll('[data-approval-line]').forEach(function (line) {
               var select = line.querySelector('[data-currency]');

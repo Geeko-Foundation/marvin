@@ -4,6 +4,11 @@
 
 {% block content %}
 <h1 class="text-2xl font-bold mb-6">{% if is_edit %}Edit {{ travel_request.reference }}{% else %}New Travel Support Request{% endif %}</h1>
+{% if needs_review_again %}
+<div class="alert alert-warning mb-6">
+  <span>This request is already approved. Saving changes sends it back to the committee, and the current approval{% if travel_request.advance_amount %} and advance{% endif %} will be replaced by their new decision.</span>
+</div>
+{% endif %}
 
 {% if show_account_check %}
 <div class="card bg-base-100 shadow-sm mb-6">

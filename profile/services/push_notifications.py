@@ -127,6 +127,9 @@ def notify_request_state_change(
     url = _request_url(travel_request)
     requester = travel_request.user
 
+    if from_state == RequestState.SUBMITTED_FOR_PAYMENT and to_state == RequestState.ACCEPTED:
+        # The requester took it back to edit; "accepted" would mislead them.
+        return
     if to_state == RequestState.SUBMITTED:
         send_push_to_group(
             GROUP_TSP,

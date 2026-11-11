@@ -2,9 +2,12 @@
 
 from decimal import Decimal
 
+from django.contrib.contenttypes.models import ContentType
+from django.db.models import Exists, OuterRef, Q
 from django.urls import reverse
 
 from payments.base import PayableAdapter, PaymentRequest
+from payments.models import PaymentRecord
 from tsp.models import RequestState, TravelRequest
 from tsp.services.state_machine import StateTransitionError, transition_request
 
@@ -21,10 +24,20 @@ class TravelRequestPayableAdapter(PayableAdapter):
     label = 'Travel Support Requests'
 
     def get_queue(self):
-        """Return travel requests awaiting reimbursement."""
+        """Travel requests awaiting reimbursement, or an advance before the event."""
+        open_advance = PaymentRecord.objects.filter(
+            content_type=ContentType.objects.get_for_model(TravelRequest),
+            object_id=OuterRef('pk'),
+            purpose='advance',
+        ).exclude(status__in=['failed', 'cancelled'])
         return TravelRequest.objects.filter(
-            state=RequestState.SUBMITTED_FOR_PAYMENT,
+            Q(state=RequestState.SUBMITTED_FOR_PAYMENT)
+            | Q(state=RequestState.ACCEPTED, advance_requested_at__isnull=False)
+            & ~Exists(open_advance)
         ).select_related('user', 'event', 'user__profile')
+
+    def payment_purpose(self, obj) -> str:
+        return 'advance' if obj.state == RequestState.ACCEPTED else 'payment'
 
     def get_object(self, object_id: int):
         """Load one travel request by primary key."""
@@ -37,7 +50,16 @@ class TravelRequestPayableAdapter(PayableAdapter):
         Includes Wise ``wise_account_id`` in metadata when the requestor is verified.
         """
         user = obj.user
-        totals = obj.totals_payable()
+        if self.payment_purpose(obj) == 'advance':
+            totals = [(obj.advance_currency, obj.advance_amount)]
+        else:
+            # Whatever the advance already paid comes off the settlement.
+            totals = obj.amounts_to_pay()
+            if not totals and obj.advance_payment():
+                raise ValueError(
+                    f'The advance already covers request #{obj.pk}. '
+                    'Close it from the request page instead of paying it.'
+                )
         if len(totals) > 1:
             # Taking the first expense's currency used to label the whole sum,
             # so a 3 USD line was paid as 3 EUR. One transfer moves one
@@ -68,6 +90,9 @@ class TravelRequestPayableAdapter(PayableAdapter):
 
     def on_payment_completed(self, obj, payment_record, user) -> None:
         """Transition the travel request to ``paid`` after a successful gateway payment."""
+        if payment_record.purpose == 'advance':
+            # The request carries on: the trip still has to happen.
+            return
         try:
             gateway_label = payment_record.method_label
             transition_request(
@@ -87,10 +112,23 @@ class TravelRequestPayableAdapter(PayableAdapter):
         """Extra template context for one item on the finance payment queue."""
         profile = getattr(obj.user, 'profile', None)
         wise_ready = bool(profile and profile.is_wise_recipient_ready())
+        name = obj.user.get_full_name() or obj.user.username
+        if self.payment_purpose(obj) == 'advance':
+            return {
+                'title': f'#{obj.pk} — {name} · Advance before the event',
+                'subtitle': f'{obj.event.name} ({obj.event.start_date:%d %b %Y}) · {obj.user.email}',
+                'totals': [(obj.advance_currency, obj.advance_amount)],
+                'banking': profile.banking_summary() if profile else 'Not configured',
+                'wise_ready': wise_ready,
+            }
+        advance = obj.advance_payment()
         return {
-            'title': f'#{obj.pk} — {obj.user.get_full_name() or obj.user.username}',
-            'subtitle': f'{obj.event.name} · {obj.user.email}',
-            'totals': obj.totals_payable(),
+            'title': f'#{obj.pk} — {name}',
+            'subtitle': (
+                f'{obj.event.name} · {obj.user.email}'
+                + (f' · advance of {advance.amount} {advance.currency} already paid' if advance else '')
+            ),
+            'totals': obj.amounts_to_pay(),
             'mixed_currencies': obj.has_mixed_currencies(),
             'banking': profile.banking_summary() if profile else 'Not configured',
             'wise_ready': wise_ready,
@@ -98,4 +136,6 @@ class TravelRequestPayableAdapter(PayableAdapter):
 
     def payment_reference(self, obj) -> str:
         """Gateway reference string, the same one shown on the request."""
+        if self.payment_purpose(obj) == 'advance':
+            return f'{obj.reference}-ADVANCE'
         return obj.reference

@@ -154,7 +154,7 @@ class ApprovalConversionTests(TestCase):
         self.client.force_login(self.committee)
         html = self.client.get(reverse('request_detail', args=[self.request.pk])).content.decode()
         self.assertIn('<option value="INR" data-amount="9000.00" selected>', html)
-        self.assertNotIn('value="EUR"', html)
+        self.assertNotIn('<option value="EUR" data-amount', html)
 
     def test_approving_in_another_currency_locks_the_average_rate(self):
         today = timezone.localdate()
