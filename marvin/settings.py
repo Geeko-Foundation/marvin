@@ -47,12 +47,17 @@ ALLOWED_HOSTS = env_list(
     'localhost,127.0.0.1,testserver',
 )
 
-# Behind Railway's HTTPS proxy: trust X-Forwarded-Proto and accept the public
-# origin for CSRF. Railway injects RAILWAY_PUBLIC_DOMAIN.
-CSRF_TRUSTED_ORIGINS = env_list('CSRF_TRUSTED_ORIGINS', '')
-_railway_domain = env('RAILWAY_PUBLIC_DOMAIN')
-if _railway_domain:
-    CSRF_TRUSTED_ORIGINS.append(f'https://{_railway_domain}')
+# Django checks the Origin header on POSTs and wants the scheme, which
+# ALLOWED_HOSTS does not carry. Assume https for every real host so a
+# deployment only has to set ALLOWED_HOSTS to be able to log in.
+CSRF_TRUSTED_ORIGINS = env_list('CSRF_TRUSTED_ORIGINS', '') or [
+    'https://' + ('*' + host if host.startswith('.') else host)
+    for host in ALLOWED_HOSTS
+    if host not in ('localhost', '127.0.0.1', 'testserver', '*')
+]
+
+# Railway terminates TLS at its proxy; trust X-Forwarded-Proto.
+if env('RAILWAY_PUBLIC_DOMAIN'):
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 
