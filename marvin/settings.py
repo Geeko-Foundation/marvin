@@ -211,6 +211,10 @@ WISE_API_PROFILE_ID = env('WISE_API_PROFILE_ID', '')
 WISE_API_SANDBOX = env_bool('WISE_API_SANDBOX', default=True)
 WISE_SOURCE_CURRENCY = env('WISE_SOURCE_CURRENCY', 'GBP')
 
+# Wise signs webhook bodies with an RSA key it publishes per environment.
+# Without the key nothing delivered can be trusted, so the endpoint refuses.
+WISE_WEBHOOK_PUBLIC_KEY = env('WISE_WEBHOOK_PUBLIC_KEY', '').replace('\\n', '\n')
+
 # Currencies the committee approves in, which are the ones finance pays from.
 PAYOUT_CURRENCIES = env_list('PAYOUT_CURRENCIES', 'EUR,USD,GBP')
 
@@ -266,6 +270,8 @@ LOGGING = {
 BRAND_APP_NAME = env('BRAND_APP_NAME', 'Marvin')
 BRAND_ORG_NAME = env('BRAND_ORG_NAME', 'Geeko Foundation')
 BRAND_TAGLINE = env('BRAND_TAGLINE', 'Travel Support Program')
+# Marvin's own joke. A fork sets this empty to drop the line.
+BRAND_STRAPLINE = env('BRAND_STRAPLINE', 'The Paranoid Android')
 
 # Any daisyUI theme name: https://daisyui.com/docs/themes/
 BRAND_THEME_LIGHT = env('BRAND_THEME_LIGHT', 'corporate')

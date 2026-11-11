@@ -24,11 +24,10 @@ class RequestState(models.TextChoices):
 class ExpenseCategory(models.TextChoices):
     """Expense line-item categories on a travel request."""
 
-    TRANSPORTATION = 'transportation', 'Transportation'
+    FLIGHT = 'flight', 'Flight'
+    TRAIN = 'train', 'Train or Bus'
     LODGING = 'lodging', 'Lodging'
-    MEALS = 'meals', 'Meals'
-    REGISTRATION = 'registration', 'Registration'
-    VISA = 'visa', 'Visa Fees'
+    # Local and public transport, and anything approved as a policy exception.
     OTHER = 'other', 'Other'
 
 

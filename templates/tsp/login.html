@@ -17,9 +17,11 @@
   <div class="hero-content flex-col lg:flex-row-reverse gap-12 max-w-5xl">
     <div class="text-center lg:text-left">
       <h1 class="text-5xl font-bold text-primary">{{ app_name }}</h1>
-      <h3 class="text-1xl font-normal text-primary">(The Paranoid Android)</h3>
+      {% if app_strapline %}
+      <h3 class="text-1xl font-normal text-primary">({{ app_strapline }})</h3>
+      {% endif %}
       <p class="py-4 text-lg opacity-70">
-        {{ app_tagline }} — manage travel sponsorship requests,
+        {{ app_tagline }}, manage travel sponsorship requests,
           approvals, and reimbursements for FOSS contributors.
       </p>
       <p class="text-sm opacity-60 mb-4">Provided by the {{ org_name }}.</p>
@@ -67,7 +69,7 @@
 
         <a href="{% url 'signup' %}" class="btn btn-outline w-full">Create a Requestor Account</a>
         <p class="text-xs text-center opacity-60 mt-2">
-          New contributors — sign up with our step-by-step wizard (account, profile, Wise banking)
+          New contributors, sign up with our step-by-step wizard (account, profile, Wise banking)
         </p>
       </div>
     </div>

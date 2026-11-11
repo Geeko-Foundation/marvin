@@ -159,7 +159,7 @@ class RequestAccessTests(TestCase):
         self.request.state = RequestState.SUBMITTED
         self.request.save()
         expense = Expense.objects.create(
-            request=self.request, category='transportation',
+            request=self.request, category='flight',
             description='Flight', estimated_amount=600,
         )
         self.client.force_login(self.committee)
@@ -462,7 +462,7 @@ class ActualCostTests(TestCase):
 
     def _expense(self, approved, actual=None, currency='EUR', actual_currency=None):
         return Expense.objects.create(
-            request=self.request, category='transportation', description='Flight',
+            request=self.request, category='flight', description='Flight',
             estimated_amount=approved, estimated_currency=currency,
             approved_amount=approved, approved_currency=currency,
             actual_amount=actual,

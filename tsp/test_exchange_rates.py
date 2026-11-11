@@ -129,7 +129,7 @@ class ApprovalConversionTests(TestCase):
             user=self.owner, event=make_event(), description='Talk', state=RequestState.SUBMITTED,
         )
         self.expense = Expense.objects.create(
-            request=self.request, category='transportation', description='Train',
+            request=self.request, category='flight', description='Train',
             estimated_amount=Decimal('9000'), estimated_currency='INR',
         )
 

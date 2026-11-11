@@ -17,7 +17,7 @@ class BatchReviewTests(TestCase):
                 description=f'Talk {i}', state=RequestState.SUBMITTED,
             )
             Expense.objects.create(
-                request=travel_request, category='transportation',
+                request=travel_request, category='flight',
                 description='Flight', estimated_amount=500 + i, estimated_currency='EUR',
             )
             self.requests.append(travel_request)
