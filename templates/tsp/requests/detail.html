@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% load tsp_tags %}
 
-{% block title %}Request #{{ travel_request.pk }}{% endblock %}
+{% block title %}{{ travel_request.reference }}{% endblock %}
 
 {% block content %}
 <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 mb-6">

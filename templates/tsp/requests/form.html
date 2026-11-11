@@ -3,7 +3,7 @@
 {% block title %}{% if is_edit %}Edit{% else %}New{% endif %} Request{% endblock %}
 
 {% block content %}
-<h1 class="text-2xl font-bold mb-6">{% if is_edit %}Edit Request #{{ travel_request.pk }}{% else %}New Travel Support Request{% endif %}</h1>
+<h1 class="text-2xl font-bold mb-6">{% if is_edit %}Edit {{ travel_request.reference }}{% else %}New Travel Support Request{% endif %}</h1>
 {% if needs_review_again %}
 <div class="alert alert-warning mb-6">
   <span>This request is already approved. Saving changes sends it back to the committee, and the current approval{% if travel_request.advance_amount %} and advance{% endif %} will be replaced by their new decision.</span>

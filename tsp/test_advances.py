@@ -174,7 +174,7 @@ class AdvanceTests(TestCase):
         advance = pay(travel_request, self.finance)
         travel_request.refresh_from_db()
         self.assertEqual((advance.purpose, advance.amount, advance.reference),
-                         ('advance', Decimal('200.00'), f'TSP-{travel_request.pk}-ADVANCE'))
+                         ('advance', Decimal('200.00'), f'{travel_request.reference}-ADVANCE'))
         self.assertEqual(travel_request.state, RequestState.ACCEPTED)
         self.assertFalse(PaymentService().get_queue().filter(pk=travel_request.pk).exists())
 

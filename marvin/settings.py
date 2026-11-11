@@ -9,7 +9,6 @@ Copy `.env.example` to `.env` and set production values there.
 from pathlib import Path
 import os
 import sys
-
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -48,6 +47,19 @@ ALLOWED_HOSTS = env_list(
     'localhost,127.0.0.1,testserver',
 )
 
+# Django checks the Origin header on POSTs and wants the scheme, which
+# ALLOWED_HOSTS does not carry. Assume https for every real host so a
+# deployment only has to set ALLOWED_HOSTS to be able to log in.
+CSRF_TRUSTED_ORIGINS = env_list('CSRF_TRUSTED_ORIGINS', '') or [
+    'https://' + ('*' + host if host.startswith('.') else host)
+    for host in ALLOWED_HOSTS
+    if host not in ('localhost', '127.0.0.1', 'testserver', '*')
+]
+
+# Railway terminates TLS at its proxy; trust X-Forwarded-Proto.
+if env('RAILWAY_PUBLIC_DOMAIN'):
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
 
 # --- Application ---
 
@@ -67,6 +79,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -141,6 +154,9 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+# Serve static files straight from app/static dirs; no collectstatic needed.
+WHITENOISE_USE_FINDERS = True
 
 MEDIA_URL = 'uploads/'
 MEDIA_ROOT = BASE_DIR / 'uploads'
