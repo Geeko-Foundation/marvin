@@ -211,6 +211,10 @@ WISE_API_PROFILE_ID = env('WISE_API_PROFILE_ID', '')
 WISE_API_SANDBOX = env_bool('WISE_API_SANDBOX', default=True)
 WISE_SOURCE_CURRENCY = env('WISE_SOURCE_CURRENCY', 'GBP')
 
+# Wise signs webhook bodies with an RSA key it publishes per environment.
+# Without the key nothing delivered can be trusted, so the endpoint refuses.
+WISE_WEBHOOK_PUBLIC_KEY = env('WISE_WEBHOOK_PUBLIC_KEY', '').replace('\\n', '\n')
+
 # Currencies the committee approves in, which are the ones finance pays from.
 PAYOUT_CURRENCIES = env_list('PAYOUT_CURRENCIES', 'EUR,USD,GBP')
 

@@ -1,3 +1,6 @@
+import json
+import logging
+
 from django.contrib import messages
 from django.conf import settings
 
@@ -6,6 +9,7 @@ from django.core.exceptions import PermissionDenied
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
+from django.views.decorators.csrf import csrf_exempt
 
 from payments.forms import ProcessPaymentForm
 from payments.models import PaymentRecord
@@ -15,6 +19,15 @@ from payments.registry import (
     get_gateway,
 )
 from payments.services import PaymentService
+from payments.webhooks import (
+    SIGNATURE_HEADER,
+    TEST_HEADER,
+    signing_key,
+    transfer_id_from,
+    verify_signature,
+)
+
+logger = logging.getLogger('marvin.wise')
 
 
 def _require_payment_permission(view_func):
@@ -148,3 +161,50 @@ def gateway_currencies(request, gateway_id):
     if gateway is None:
         return JsonResponse({'currencies': []})
     return JsonResponse({'currencies': gateway.supported_currencies()})
+
+
+@csrf_exempt
+@require_POST
+def wise_webhook(request):
+    """
+    Let Wise tell us a transfer changed, instead of waiting for a poll.
+
+    The event is only a prompt to look: the transfer's new state is read back
+    from Wise through the usual status refresh, so a delivery that is replayed
+    or forged cannot by itself mark a request paid.
+
+    Wise retries on any non-2xx, so an event we have no record for is still
+    answered 200. Only an unusable request is refused.
+    """
+    if signing_key() is None:
+        logger.error('Wise webhook received but WISE_WEBHOOK_PUBLIC_KEY is not set')
+        return JsonResponse({'error': 'Webhook signing key not configured.'}, status=503)
+
+    if not verify_signature(request.body, request.META.get(SIGNATURE_HEADER)):
+        logger.warning('Wise webhook rejected: bad signature')
+        return JsonResponse({'error': 'Invalid signature.'}, status=400)
+
+    if request.META.get(TEST_HEADER, '').lower() == 'true':
+        return JsonResponse({'status': 'test notification acknowledged'})
+
+    try:
+        event = json.loads(request.body)
+    except ValueError:
+        return JsonResponse({'error': 'Malformed JSON.'}, status=400)
+    if not isinstance(event, dict):
+        return JsonResponse({'error': 'Malformed JSON.'}, status=400)
+
+    transfer_id = transfer_id_from(event)
+    if transfer_id is None:
+        return JsonResponse({'status': 'ignored: not a transfer state change'})
+
+    record = PaymentRecord.objects.filter(
+        external_id=transfer_id, gateway_id='wise-api',
+    ).first()
+    if record is None:
+        # The same Wise profile is used for transfers made outside Marvin.
+        return JsonResponse({'status': f'ignored: no record for transfer {transfer_id}'})
+
+    record = PaymentService().refresh_status(record)
+    logger.info('Wise webhook: transfer %s is %s', transfer_id, record.status)
+    return JsonResponse({'status': record.status})
