@@ -101,7 +101,7 @@ def send_push_to_group(
 
 def _request_label(travel_request: TravelRequest) -> str:
     """Short human-readable label for push notification body text."""
-    return f'#{travel_request.pk} — {travel_request.event.name}'
+    return f'#{travel_request.pk} - {travel_request.event.name}'
 
 
 def _request_url(travel_request: TravelRequest) -> str:
@@ -151,11 +151,14 @@ def notify_request_state_change(
             url=url,
         )
     elif to_state == RequestState.ACCEPTED:
-        send_push_to_user(
-            requester,
+        # The requester accepts, so telling them is telling them what they
+        # just did. The committee is who needs to know the trip is confirmed.
+        send_push_to_group(
+            GROUP_TSP,
             head='Request accepted',
-            body=f'{label} is accepted — upload receipts and required documents.',
+            body=f'{label} was accepted by the requester.',
             url=url,
+            exclude_user=actor,
         )
     elif to_state == RequestState.SUBMITTED_FOR_PAYMENT:
         send_push_to_group(
