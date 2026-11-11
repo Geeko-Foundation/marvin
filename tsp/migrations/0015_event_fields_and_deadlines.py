@@ -5,6 +5,10 @@ from django.db import migrations, models
 
 class Migration(migrations.Migration):
 
+    # Was 0012_event_description_event_reimbursements_open_until_and_more. A database that already applied it under that name
+    # treats this as done rather than adding the same columns again.
+    replaces = [('tsp', '0012_event_description_event_reimbursements_open_until_and_more')]
+
     dependencies = [
         ('tsp', '0014_event_budget'),
     ]
