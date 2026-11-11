@@ -5,6 +5,10 @@ from django.db import migrations, models
 
 class Migration(migrations.Migration):
 
+    # Was 0012_advances. A database that already applied it under that name
+    # treats this as done rather than adding the same columns again.
+    replaces = [('tsp', '0012_advances')]
+
     dependencies = [
         ('tsp', '0012_expense_categories_follow_travel_policy'),
     ]
