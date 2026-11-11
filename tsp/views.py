@@ -21,6 +21,7 @@ from django.views.decorators.http import require_POST
 
 from django_tables2 import RequestConfig
 
+from profile.audit_log import record as audit
 from profile.decorators import get_profile
 from profile.forms import OnboardingPersonalForm, WiseRecipientForm
 from profile.groups import GROUP_FINANCE, GROUP_REQUESTER, GROUP_TSP
@@ -480,7 +481,11 @@ def event_create(request):
     if request.method == 'POST':
         form = EventForm(request.POST)
         if form.is_valid():
-            form.save()
+            event = form.save()
+            audit('event.created', user=request.user, target=event.name,
+                  detail=f'{event.start_date} to {event.end_date}'
+                         + (f', budget {event.budget} {event.budget_currency}'
+                            if event.budget else ''))
             messages.success(request, 'Event created successfully.')
             return redirect('event_list')
     else:
@@ -498,7 +503,9 @@ def event_edit(request, pk):
     if request.method == 'POST':
         form = EventForm(request.POST, instance=event)
         if form.is_valid():
-            form.save()
+            event = form.save()
+            audit('event.updated', user=request.user, target=event.name,
+                  detail=', '.join(form.changed_data) or 'no fields changed')
             messages.success(request, 'Event updated.')
             return redirect('event_list')
     else:
@@ -524,6 +531,8 @@ def event_delete(request, pk):
         return redirect('event_list')
 
     name = event.name
+    audit('event.deleted', user=request.user, target=event.name,
+          detail=f'{event.start_date} to {event.end_date}')
     event.delete()
     messages.success(request, f'{name} deleted.')
     return redirect('event_list')
@@ -1020,6 +1029,14 @@ def request_submit_for_payment(request, pk):
         messages.error(request, f'Missing required documents: {missing}')
         return redirect('request_detail', pk=pk)
 
+    if travel_request.event.reimbursement_window_closed():
+        messages.error(
+            request,
+            f'Claims for {travel_request.event.name} closed on '
+            f'{travel_request.event.reimbursement_deadline()}.',
+        )
+        return redirect('request_detail', pk=pk)
+
     # Finance pays the lesser of approved and actual, so the actual costs have
     # to be in before the request reaches them.
     if not travel_request.has_all_actual_amounts():
@@ -1183,6 +1200,8 @@ def request_document_delete(request, pk, travel_request, profile, doc_id):
     name = doc.original_name
     doc.file.delete(save=False)
     doc.delete()
+    audit('document.removed', user=request.user,
+          target=f'request {travel_request.pk}', detail=name)
     messages.success(request, f'Removed {name}.')
     return redirect('request_detail', pk=pk)
 

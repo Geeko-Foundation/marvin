@@ -162,3 +162,7 @@ class UserProfile(AuditModel):
             return 'Not configured'
         method_label = self.get_banking_method_display() if self.banking_method else 'Bank'
         return f'Wise recipient #{self.wise_account_id} ({self.banking_currency} · {method_label})'
+
+
+# Kept in its own module; imported here so Django picks up the model.
+from profile.audit_log import AuditLogEntry, record  # noqa: E402,F401
