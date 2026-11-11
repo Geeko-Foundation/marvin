@@ -102,6 +102,14 @@ class Event(AuditModel):
             return timezone.now().date() < self.requests_open_until
         return True
 
+    @classmethod
+    def open_for_requests(cls):
+        """The events is_open_for_requests() is true for, as a queryset."""
+        today = timezone.now().date()
+        return cls.objects.filter(accepting_requests=True, end_date__gte=today).filter(
+            models.Q(requests_open_until__isnull=True) | models.Q(requests_open_until__gt=today),
+        )
+
     def _live_requests(self):
         """Requests that still count against the budget."""
         return self.requests.exclude(

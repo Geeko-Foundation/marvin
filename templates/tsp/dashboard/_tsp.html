@@ -9,7 +9,7 @@
   </a>
   <a class="stat hover:bg-base-200" href="{% url 'reports' %}?status=approved">
     <div class="stat-title">Approved Funds</div>
-    <div class="stat-value text-success">{{ approved_total|floatformat:0 }} €</div>
+    <div class="stat-value text-success text-2xl">{% for currency, amount in approved_total %}<span class="whitespace-nowrap">{{ amount|floatformat:"0g" }} {{ currency }}</span>{% if not forloop.last %}<span class="opacity-40"> · </span>{% endif %}{% empty %}0{% endfor %}</div>
     <div class="stat-desc">Total approved amounts</div>
   </a>
 </div>

@@ -9,7 +9,7 @@
   </a>
   <a class="stat hover:bg-base-200" href="{% url 'reports' %}?status=paid">
     <div class="stat-title">Total Paid</div>
-    <div class="stat-value text-success">{{ paid_total|floatformat:0 }} €</div>
+    <div class="stat-value text-success text-2xl">{% for currency, amount in paid_total %}<span class="whitespace-nowrap">{{ amount|floatformat:"0g" }} {{ currency }}</span>{% if not forloop.last %}<span class="opacity-40"> · </span>{% endif %}{% empty %}0{% endfor %}</div>
     <div class="stat-desc">All processed payments</div>
   </a>
 </div>

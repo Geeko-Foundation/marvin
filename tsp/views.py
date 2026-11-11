@@ -10,6 +10,7 @@ from django.contrib.auth.models import User
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
+from django.db import transaction
 from django.db.models import Count, Sum, Value
 from django.db.models.functions import Coalesce, NullIf
 from django.db.models import Q
@@ -381,7 +382,10 @@ def _committee_sections(request):
             RequestState.SUBMITTED_FOR_PAYMENT, RequestState.PAID,
         ],
         approved_amount__isnull=False,
-    ).aggregate(total=Sum('approved_amount'))['total'] or 0
+    ).values('approved_currency').annotate(total=Sum('approved_amount')).order_by('-total')
+    # One figure per currency. Adding them together would show 9,000 INR
+    # and 90 EUR as 9,090 of something.
+    approved_total = [(row['approved_currency'], row['total']) for row in approved_total]
 
     return {
         'pending': _paginate(request, pending, 20, 'pending_page'),
@@ -402,9 +406,13 @@ def _finance_sections(request):
     ).select_related('user', 'event').prefetch_related('payments').order_by('-updated_at')
 
     travel_request_ct = ContentType.objects.get_for_model(TravelRequest)
-    paid_total = PaymentRecord.objects.filter(
-        content_type=travel_request_ct,
-    ).aggregate(total=Sum('amount'))['total'] or 0
+    # Only transfers that went through count as paid, one figure per currency.
+    paid_total = [
+        (row['currency'], row['total'])
+        for row in PaymentRecord.objects.filter(
+            content_type=travel_request_ct, status__in=('success', 'completed'),
+        ).values('currency').annotate(total=Sum('amount')).order_by('-total')
+    ]
 
     with_advance = TravelRequest.objects.filter(
         payments__purpose='advance', refund_settled_at__isnull=True,
@@ -475,6 +483,7 @@ def event_list(request):
 
 
 @login_required
+@group_required(GROUP_TSP)
 def event_create(request):
     """Create a new TSP event."""
     profile = get_profile(request.user)
@@ -799,58 +808,85 @@ def _set_advance(travel_request, data):
 def request_approve(request, pk):
     """Approve a submitted request and set per-expense approved amounts."""
     travel_request = get_object_or_404(TravelRequest, pk=pk)
+    if travel_request.user_id == request.user.id:
+        messages.error(request, 'You cannot review your own request. Another committee member has to.')
+        return redirect('request_detail', pk=pk)
     form = ApprovalForm(request.POST)
+    notes = form.cleaned_data.get('notes', '') if form.is_valid() else request.POST.get('notes', '')
 
+    error = None
+    # Everything below is undone if any check refuses the approval, so a
+    # refused approval leaves no amounts behind to skew the event budget.
+    with transaction.atomic():
+        error = _apply_approved_amounts(travel_request, request.POST)
+        if not error:
+            error = _set_advance(travel_request, request.POST)
+        if not error:
+            notes, error = _check_budget(travel_request, request.POST, notes)
+        if not error:
+            try:
+                transition_request(travel_request, RequestState.APPROVED, request.user, notes)
+            except StateTransitionError as exc:
+                error = str(exc)
+        if error:
+            transaction.set_rollback(True)
+
+    if error:
+        messages.error(request, error)
+    else:
+        messages.success(request, 'Request approved.')
+    return redirect('request_detail', pk=pk)
+
+
+def _apply_approved_amounts(travel_request, data):
+    """Save the approved amount and currency for each line. Returns an error or None."""
+    allowed = set(settings.PAYOUT_CURRENCIES)
     expenses = {str(e.pk): e for e in travel_request.expenses.all()}
     rate_end = exchange_rates.window_end_for(travel_request.event)
-    for eid in request.POST.getlist('expense_id'):
+    for eid in data.getlist('expense_id'):
         expense = expenses.get(eid)
-        try:
-            amount = Decimal(request.POST.get(f'approved_amount_{eid}', ''))
-        except InvalidOperation:
-            continue
         if expense is None:
             continue
+        try:
+            amount = Decimal(data.get(f'approved_amount_{eid}', ''))
+        except InvalidOperation:
+            continue
+        if not amount.is_finite() or amount < 0:
+            return 'Approved amounts have to be zero or more.'
+        currency = data.get(f'approved_currency_{eid}', '')
+        if currency not in allowed | {expense.estimated_currency}:
+            return 'Approve each line in one of the currencies offered for it.'
         expense.approved_amount = amount
-        expense.approved_currency = request.POST.get(f'approved_currency_{eid}', 'EUR')
-        if expense.approved_currency != expense.estimated_currency:
+        expense.approved_currency = currency
+        if currency != expense.estimated_currency:
             exchange_rates.ensure_recent()
         exchange_rates.lock_approval_rate(expense, rate_end)
         expense.save(update_fields=[
             'approved_amount', 'approved_currency', 'approval_rate', 'approval_rate_date',
         ])
+    return None
 
-    advance_error = _set_advance(travel_request, request.POST)
-    if advance_error:
-        messages.error(request, advance_error)
-        return redirect('request_detail', pk=pk)
 
-    notes = form.cleaned_data.get('notes', '') if form.is_valid() else request.POST.get('notes', '')
+def _check_budget(travel_request, data, notes):
+    """
+    Refuse an approval that takes the event past its budget, unless overridden.
 
-    # The event's budget is the committee's own limit, so going past it is
-    # allowed but has to be deliberate and is written into the history.
+    The budget is the committee's own limit, so going past it is allowed but
+    has to be deliberate, and the overage is written into the history.
+    Returns the notes to record and an error or None.
+    """
     event = travel_request.event
     remaining = event.budget_remaining()
-    override = request.POST.get('over_budget') == '1'
-    if remaining is not None and remaining < 0 and not override:
-        messages.error(
-            request,
+    if remaining is None or remaining >= 0:
+        return notes, None
+    if data.get('over_budget') != '1':
+        return notes, (
             f'Approving this would put {event.name} {abs(remaining)} '
             f'{event.budget_currency} over its budget. Approve again with the '
-            f'over-budget box ticked to go ahead anyway.',
+            f'over-budget box ticked to go ahead anyway.'
         )
-        return redirect('request_detail', pk=pk)
-    if remaining is not None and remaining < 0 and override:
-        notes = (notes + ' ' if notes else '') + (
-            f'[over budget by {abs(remaining)} {event.budget_currency}]'
-        )
-
-    try:
-        transition_request(travel_request, RequestState.APPROVED, request.user, notes)
-        messages.success(request, 'Request approved.')
-    except StateTransitionError as e:
-        messages.error(request, str(e))
-    return redirect('request_detail', pk=pk)
+    overage = f'[over budget by {abs(remaining)} {event.budget_currency}]'
+    return (f'{notes} {overage}' if notes else overage), None
 
 
 @login_required
@@ -874,32 +910,54 @@ def request_batch_review(request):
 
     selected = TravelRequest.objects.filter(
         pk__in=ids, state=RequestState.SUBMITTED,
-    ).prefetch_related('expenses')
+    ).select_related('event').prefetch_related('expenses')
 
-    reviewed = 0
+    reviewed, own, over_budget = 0, 0, []
     for travel_request in selected:
-        if action == 'approve':
-            # Approving in bulk means approving exactly what was asked for.
-            # Left unpriced, the request would reach finance worth nothing,
-            # since total_approved() counts a missing amount as zero.
-            for expense in travel_request.expenses.all():
-                if expense.approved_amount is None:
-                    expense.approved_amount = expense.estimated_amount
-                    expense.approved_currency = expense.estimated_currency
-                    expense.save(update_fields=['approved_amount', 'approved_currency'])
-            target = RequestState.APPROVED
-        else:
-            target = RequestState.REJECTED
-
-        try:
-            transition_request(travel_request, target, request.user, notes)
-            reviewed += 1
-        except StateTransitionError:
+        if travel_request.user_id == request.user.id:
+            own += 1
             continue
+        with transaction.atomic():
+            if action == 'approve':
+                # Approving in bulk means approving exactly what was asked for.
+                # Left unpriced, the request would reach finance worth nothing,
+                # since total_approved() counts a missing amount as zero.
+                for expense in travel_request.expenses.all():
+                    if expense.approved_amount is None:
+                        expense.approved_amount = expense.estimated_amount
+                        expense.approved_currency = expense.estimated_currency
+                        expense.save(update_fields=['approved_amount', 'approved_currency'])
+                remaining = travel_request.event.budget_remaining()
+                if remaining is not None and remaining < 0:
+                    # Going over budget needs a deliberate decision, which a
+                    # batch cannot record, so it waits for a single review.
+                    transaction.set_rollback(True)
+                    over_budget.append(travel_request.reference)
+                    continue
+                target = RequestState.APPROVED
+            else:
+                target = RequestState.REJECTED
+            try:
+                transition_request(travel_request, target, request.user, notes)
+                reviewed += 1
+            except StateTransitionError:
+                transaction.set_rollback(True)
 
     if reviewed:
         messages.success(request, f'{reviewed} request{"s" if reviewed != 1 else ""} {action}d.')
-    ignored = len(ids) - reviewed
+    if own:
+        messages.warning(
+            request,
+            f'{own} of the selected requests {"are" if own != 1 else "is"} your own, '
+            'so another committee member has to review it.',
+        )
+    if over_budget:
+        messages.warning(
+            request,
+            f'Not approved, as they would go over the event budget: {", ".join(over_budget)}. '
+            'Review them one at a time to approve over budget.',
+        )
+    ignored = len(ids) - reviewed - own - len(over_budget)
     if ignored:
         messages.warning(
             request,
@@ -915,6 +973,9 @@ def request_batch_review(request):
 def request_reject(request, pk):
     """Reject a submitted request with required notes."""
     travel_request = get_object_or_404(TravelRequest, pk=pk)
+    if travel_request.user_id == request.user.id:
+        messages.error(request, 'You cannot review your own request. Another committee member has to.')
+        return redirect('request_detail', pk=pk)
     form = RejectForm(request.POST)
     if form.is_valid():
         try:

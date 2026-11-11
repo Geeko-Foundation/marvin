@@ -60,6 +60,9 @@ class UserTable(tables.Table):
 
     class Meta:
         model = User
+        # Listing fields explicitly; without it every User column is shown,
+        # the password hash included.
+        fields = ('username', 'email')
         sequence = ('username', 'full_name', 'email', 'groups', 'country', 'staff')
         attrs = {
             'class': 'table table-zebra w-full',

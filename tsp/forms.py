@@ -1,6 +1,8 @@
 import os
+from decimal import Decimal
 
 from django import forms
+from django.core.validators import MinValueValidator
 from django.contrib.auth.forms import AuthenticationForm
 from django.contrib.auth.models import User
 
@@ -150,10 +152,19 @@ class EventForm(forms.ModelForm):
         """The currency only matters once a budget is set, so let it default."""
         super().__init__(*args, **kwargs)
         self.fields['budget_currency'].required = False
+        self.fields['budget'].validators.append(MinValueValidator(Decimal('0')))
 
     def clean_budget_currency(self):
         """Fall back to the model default when nothing was chosen."""
         return self.cleaned_data.get('budget_currency') or 'EUR'
+
+    def clean(self):
+        """An event cannot end before it starts."""
+        cleaned = super().clean()
+        start, end = cleaned.get('start_date'), cleaned.get('end_date')
+        if start and end and end < start:
+            self.add_error('end_date', 'The end date cannot be before the start date.')
+        return cleaned
 
 
 class TravelRequestForm(forms.ModelForm):
@@ -169,6 +180,19 @@ class TravelRequestForm(forms.ModelForm):
             'description': forms.Textarea(attrs={'class': 'textarea textarea-bordered w-full', 'rows': 4}),
         }
 
+    def __init__(self, *args, **kwargs):
+        """
+        Offer only events still taking requests.
+
+        A request already filed against an event that has since closed keeps
+        that event, so editing it does not force a different one.
+        """
+        super().__init__(*args, **kwargs)
+        events = Event.open_for_requests()
+        if self.instance.pk and self.instance.event_id:
+            events = events | Event.objects.filter(pk=self.instance.event_id)
+        self.fields['event'].queryset = events.distinct().order_by('start_date')
+
 
 class ExpenseForm(forms.ModelForm):
     """Single expense line item on a travel request."""
@@ -179,12 +203,17 @@ class ExpenseForm(forms.ModelForm):
         widgets = {
             'category': forms.Select(attrs={'class': 'select select-bordered w-full expense-category'}),
             'description': forms.TextInput(attrs={'class': 'input input-bordered w-full'}),
-            'estimated_amount': forms.NumberInput(attrs={'class': 'input input-bordered w-full', 'step': '0.01'}),
+            'estimated_amount': forms.NumberInput(attrs={'class': 'input input-bordered w-full', 'step': '0.01', 'min': '0.01'}),
             'estimated_currency': forms.Select(
                 choices=CURRENCY_CHOICES,
                 attrs={'class': 'select select-bordered w-full'},
             ),
         }
+
+    def __init__(self, *args, **kwargs):
+        """An estimate has to be more than zero, whatever the browser allowed."""
+        super().__init__(*args, **kwargs)
+        self.fields['estimated_amount'].validators.append(MinValueValidator(Decimal('0.01')))
 
 
 ExpenseFormSet = forms.inlineformset_factory(
@@ -218,6 +247,7 @@ class ExpenseActualForm(forms.ModelForm):
         """Default the currency to the one the line was approved in."""
         super().__init__(*args, **kwargs)
         self.fields['actual_amount'].required = True
+        self.fields['actual_amount'].validators.append(MinValueValidator(Decimal('0')))
         approved = self.instance.approved_currency if self.instance else None
         if approved and not self.instance.actual_currency:
             self.fields['actual_currency'].initial = approved
