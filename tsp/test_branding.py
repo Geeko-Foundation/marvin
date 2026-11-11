@@ -9,6 +9,7 @@ from tsp.tests import make_committee, make_event, make_requester
     BRAND_APP_NAME='Wanderer',
     BRAND_ORG_NAME='GNOME Foundation',
     BRAND_TAGLINE='Conference Travel Subsidy',
+    BRAND_STRAPLINE='',
     BRAND_THEME_LIGHT='emerald',
     BRAND_THEME_DARK='forest',
 )
@@ -21,6 +22,12 @@ class BrandingTests(TestCase):
         self.assertContains(response, 'GNOME Foundation')
         self.assertNotContains(response, 'Marvin')
         self.assertNotContains(response, 'Geeko')
+
+    def test_a_fork_can_drop_the_strapline(self):
+        response = self.client.get(reverse('login'))
+        self.assertNotContains(response, 'Paranoid')
+        # The whole heading goes, rather than rendering an empty pair of brackets.
+        self.assertNotContains(response, 'text-1xl')
 
     def test_the_signed_in_pages_use_them_too(self):
         self.client.force_login(make_committee('brandcommittee'))
