@@ -27,6 +27,36 @@ TRANSFER_STATUS_MAP = {
 }
 
 
+def settlement_details(transfer: dict, quote: dict | None = None) -> dict:
+    """
+    What Wise says actually happened, as opposed to what was asked for.
+
+    Patrick wanted "exactly how much has been spent and what the conversion
+    rate was and what the target currency was converted to". Those live on the
+    transfer, with the fee on the quote behind it.
+    """
+    details = {}
+    for key, field in (
+        ('source_amount', 'sourceValue'),
+        ('source_currency', 'sourceCurrency'),
+        ('target_amount', 'targetValue'),
+        ('target_currency', 'targetCurrency'),
+    ):
+        value = transfer.get(field)
+        if value not in (None, ''):
+            details[key] = str(value)
+
+    # The transfer's own rate is authoritative once it has settled; the
+    # quote's is what was offered beforehand.
+    rate = transfer.get('rate') or (quote or {}).get('rate')
+    if rate:
+        details['exchange_rate'] = str(rate)
+    fee = (quote or {}).get('fee')
+    if fee is not None:
+        details['fee'] = str(fee)
+    return details
+
+
 class WiseApiGateway(PaymentGateway):
     """
     Live Wise REST API gateway.
@@ -89,8 +119,8 @@ class WiseApiGateway(PaymentGateway):
                 external_id=str(transfer['id']),
                 metadata={
                     'wise_account_id': account_id,
-                    'exchange_rate': quote.get('rate'),
                     'transfer_status': transfer['status'],
+                    **settlement_details(transfer, quote),
                 },
             )
         except WiseApiError as exc:
@@ -110,7 +140,10 @@ class WiseApiGateway(PaymentGateway):
             return PaymentResult(
                 status=TRANSFER_STATUS_MAP.get(transfer['status'], transfer['status']),
                 external_id=external_id,
-                metadata={'transfer_status': transfer['status']},
+                metadata={
+                    'transfer_status': transfer['status'],
+                    **settlement_details(transfer),
+                },
             )
         except WiseApiError:
             return PaymentResult(status='unknown', external_id=external_id)

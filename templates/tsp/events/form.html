@@ -27,6 +27,54 @@
           {{ form.end_date }}
         </div>
       </div>
+      <div class="grid gap-4 md:grid-cols-2">
+        <div class="form-control">
+          <label class="label"><span class="label-text">Budget</span></label>
+          {{ form.budget }}
+          <label class="label">
+            <span class="label-text-alt">Leave blank for no limit</span>
+          </label>
+          {% for error in form.budget.errors %}
+          <span class="label-text-alt text-error">{{ error }}</span>
+          {% endfor %}
+        </div>
+        <div class="form-control">
+          <label class="label"><span class="label-text">Budget Currency</span></label>
+          {{ form.budget_currency }}
+        </div>
+      </div>
+      <p class="text-sm opacity-60">
+        Approvals for this event count against the budget. Going over it needs
+        the committee to confirm, and that is recorded on the request.
+      </p>
+      <div class="grid gap-4 md:grid-cols-2">
+        <div class="form-control">
+          <label class="label"><span class="label-text">Requests close on</span></label>
+          {{ form.requests_open_until }}
+          <label class="label">
+            <span class="label-text-alt">Leave blank to close it by hand</span>
+          </label>
+        </div>
+        <div class="form-control">
+          <label class="label"><span class="label-text">Claims close on</span></label>
+          {{ form.reimbursements_open_until }}
+          <label class="label">
+            <span class="label-text-alt">Defaults to 30 days after the event</span>
+          </label>
+        </div>
+      </div>
+      <div class="form-control">
+        <label class="label"><span class="label-text">Event URL</span></label>
+        {{ form.url }}
+      </div>
+      <div class="form-control">
+        <label class="label"><span class="label-text">Description</span></label>
+        {{ form.description }}
+      </div>
+      <label class="label cursor-pointer justify-start gap-3">
+        {{ form.visa_letters_offered }}
+        <span class="label-text">Visa letters offered</span>
+      </label>
       <label class="label cursor-pointer justify-start gap-3">
         {{ form.accepting_requests }}
         <span class="label-text">Accepting travel support requests</span>

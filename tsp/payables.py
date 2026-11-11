@@ -123,7 +123,7 @@ class TravelRequestPayableAdapter(PayableAdapter):
             }
         advance = obj.advance_payment()
         return {
-            'title': f'#{obj.pk} — {name}',
+            'title': f'#{obj.pk} - {name}',
             'subtitle': (
                 f'{obj.event.name} · {obj.user.email}'
                 + (f' · advance of {advance.amount} {advance.currency} already paid' if advance else '')

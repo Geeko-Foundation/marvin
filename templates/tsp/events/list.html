@@ -28,15 +28,54 @@
         <h2 class="card-title text-base">{{ event.name }}</h2>
         {% if event.is_past %}
         <span class="badge badge-neutral">Past</span>
-        {% elif event.accepting_requests %}
+        {% elif event.is_open_for_requests %}
         <span class="badge badge-success">Open</span>
         {% else %}
         <span class="badge badge-warning">Closed</span>
         {% endif %}
       </div>
       <p class="text-sm opacity-60">{{ event.location }}</p>
-      <p class="text-sm">{{ event.start_date }} — {{ event.end_date }}</p>
-      {% if event.accepting_requests and not event.is_past and profile.is_requester %}
+      <p class="text-sm">{{ event.start_date }} - {{ event.end_date }}</p>
+      {% if event.requests_open_until %}
+      <p class="text-xs opacity-60">Requests close {{ event.requests_open_until }}</p>
+      {% endif %}
+      <p class="text-xs opacity-60">Claims close {{ event.reimbursement_deadline }}</p>
+      {% if event.visa_letters_offered %}
+      <p class="text-xs">This event offers visa invitation letters</p>
+      {% endif %}
+      {% if event.url %}
+      <a href="{{ event.url }}" class="link link-primary text-xs" target="_blank" rel="noopener">Event website</a>
+      {% endif %}
+      {% if event.budget and profile.is_committee %}
+      <div class="mt-2 text-sm">
+        <div class="flex justify-between">
+          <span class="opacity-60">Budget</span>
+          <span>{{ event.budget }} {{ event.budget_currency }}</span>
+        </div>
+        <div class="flex justify-between">
+          <span class="opacity-60">Approved</span>
+          <span>{{ event.approved_against_budget }} {{ event.budget_currency }}</span>
+        </div>
+        {% for currency, amount in event.paid_by_currency %}
+        <div class="flex justify-between">
+          <span class="opacity-60">Paid out</span>
+          <span>{{ amount }} {{ currency }}</span>
+        </div>
+        {% endfor %}
+        <div class="flex justify-between font-semibold">
+          <span class="opacity-60">Remaining</span>
+          {% with left=event.budget_remaining %}
+          <span class="{% if left < 0 %}text-error{% endif %}">{{ left }} {{ event.budget_currency }}</span>
+          {% endwith %}
+        </div>
+        {% for currency, amount in event.approved_in_other_currencies %}
+        <div class="flex justify-between text-xs opacity-60">
+          <span>Also approved</span><span>{{ amount }} {{ currency }}</span>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+      {% if event.is_open_for_requests and profile.is_requester %}
       <div class="card-actions justify-end mt-2">
         <a href="{% url 'request_create' %}?event={{ event.pk }}" class="btn btn-primary btn-sm">Apply for Travel Support</a>
       </div>

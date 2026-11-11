@@ -21,6 +21,7 @@ from django.views.decorators.http import require_POST
 
 from django_tables2 import RequestConfig
 
+from profile.audit_log import record as audit
 from profile.decorators import get_profile
 from profile.forms import OnboardingPersonalForm, WiseRecipientForm
 from profile.groups import GROUP_FINANCE, GROUP_REQUESTER, GROUP_TSP
@@ -480,7 +481,11 @@ def event_create(request):
     if request.method == 'POST':
         form = EventForm(request.POST)
         if form.is_valid():
-            form.save()
+            event = form.save()
+            audit('event.created', user=request.user, target=event.name,
+                  detail=f'{event.start_date} to {event.end_date}'
+                         + (f', budget {event.budget} {event.budget_currency}'
+                            if event.budget else ''))
             messages.success(request, 'Event created successfully.')
             return redirect('event_list')
     else:
@@ -498,7 +503,9 @@ def event_edit(request, pk):
     if request.method == 'POST':
         form = EventForm(request.POST, instance=event)
         if form.is_valid():
-            form.save()
+            event = form.save()
+            audit('event.updated', user=request.user, target=event.name,
+                  detail=', '.join(form.changed_data) or 'no fields changed')
             messages.success(request, 'Event updated.')
             return redirect('event_list')
     else:
@@ -524,6 +531,8 @@ def event_delete(request, pk):
         return redirect('event_list')
 
     name = event.name
+    audit('event.deleted', user=request.user, target=event.name,
+          detail=f'{event.start_date} to {event.end_date}')
     event.delete()
     messages.success(request, f'{name} deleted.')
     return redirect('event_list')
@@ -817,6 +826,25 @@ def request_approve(request, pk):
         return redirect('request_detail', pk=pk)
 
     notes = form.cleaned_data.get('notes', '') if form.is_valid() else request.POST.get('notes', '')
+
+    # The event's budget is the committee's own limit, so going past it is
+    # allowed but has to be deliberate and is written into the history.
+    event = travel_request.event
+    remaining = event.budget_remaining()
+    override = request.POST.get('over_budget') == '1'
+    if remaining is not None and remaining < 0 and not override:
+        messages.error(
+            request,
+            f'Approving this would put {event.name} {abs(remaining)} '
+            f'{event.budget_currency} over its budget. Approve again with the '
+            f'over-budget box ticked to go ahead anyway.',
+        )
+        return redirect('request_detail', pk=pk)
+    if remaining is not None and remaining < 0 and override:
+        notes = (notes + ' ' if notes else '') + (
+            f'[over budget by {abs(remaining)} {event.budget_currency}]'
+        )
+
     try:
         transition_request(travel_request, RequestState.APPROVED, request.user, notes)
         messages.success(request, 'Request approved.')
@@ -1001,6 +1029,14 @@ def request_submit_for_payment(request, pk):
         messages.error(request, f'Missing required documents: {missing}')
         return redirect('request_detail', pk=pk)
 
+    if travel_request.event.reimbursement_window_closed():
+        messages.error(
+            request,
+            f'Claims for {travel_request.event.name} closed on '
+            f'{travel_request.event.reimbursement_deadline()}.',
+        )
+        return redirect('request_detail', pk=pk)
+
     # Finance pays the lesser of approved and actual, so the actual costs have
     # to be in before the request reaches them.
     if not travel_request.has_all_actual_amounts():
@@ -1136,6 +1172,40 @@ def request_document_upload(request, pk, travel_request, profile):
     return redirect('request_detail', pk=pk)
 
 
+# Once a request is with finance its documents back a payment, so they stay.
+LOCKED_DOCUMENT_STATES = {RequestState.SUBMITTED_FOR_PAYMENT, RequestState.PAID}
+
+
+@login_required
+@staff_or_owner
+@require_POST
+def request_document_delete(request, pk, travel_request, profile, doc_id):
+    """
+    Remove a document uploaded by mistake.
+
+    Only the requester clears their own, and only while the request is still
+    with them. Once it has gone to finance these files are the evidence for a
+    payment, so they stay.
+    """
+    if travel_request.user_id != request.user.id:
+        raise PermissionDenied
+    if travel_request.state in LOCKED_DOCUMENT_STATES:
+        messages.error(
+            request,
+            'Documents cannot be removed once the request has gone for payment.',
+        )
+        return redirect('request_detail', pk=pk)
+
+    doc = get_object_or_404(Document, pk=doc_id, request=travel_request)
+    name = doc.original_name
+    doc.file.delete(save=False)
+    doc.delete()
+    audit('document.removed', user=request.user,
+          target=f'request {travel_request.pk}', detail=name)
+    messages.success(request, f'Removed {name}.')
+    return redirect('request_detail', pk=pk)
+
+
 @login_required
 @staff_or_owner
 def request_form_printable(request, pk, travel_request, profile):
@@ -1179,6 +1249,15 @@ def reports(request):
             qs = qs.filter(event__end_date__lte=form.cleaned_data['date_to'])
         if form.cleaned_data.get('status'):
             qs = qs.filter(state=form.cleaned_data['status'])
+        query = (form.cleaned_data.get('q') or '').strip()
+        if query:
+            qs = qs.filter(
+                Q(user__first_name__icontains=query)
+                | Q(user__last_name__icontains=query)
+                | Q(user__username__icontains=query)
+                | Q(user__email__icontains=query)
+                | Q(event__name__icontains=query)
+            )
 
     requests_list = qs.order_by('-updated_at')
 

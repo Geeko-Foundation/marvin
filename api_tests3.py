@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Wise sandbox transfer test — thin wrapper around Marvin's integrated client.
+Wise sandbox transfer test - thin wrapper around Marvin's integrated client.
 
 Original functional test (V0.3) exercised the full quote → recipient → transfer
 → sandbox simulation flow. This script delegates to ``payments.gateways.wise_api``.
@@ -9,7 +9,7 @@ Usage:
     cd /path/to/marvin
     .venv/bin/python api_tests3.py
 
-Environment (optional — defaults match marvin/settings.py sandbox):
+Environment (optional - defaults match marvin/settings.py sandbox):
     WISE_API_TOKEN
     WISE_API_PROFILE_ID
     WISE_API_SANDBOX=true
@@ -54,7 +54,7 @@ def main(transfer_id: int | None = None) -> None:
     print(f'Using Wise {client.mode_label} API, profile {profile_id}')
 
     if transfer_id:
-        print(f'Resuming transfer {transfer_id} via sandbox simulation…')
+        print(f'Resuming transfer {transfer_id} via sandbox simulation...')
         transfer = client.advance_sandbox_transfer(transfer_id, delay_seconds=2.0)
         print(f'Transfer status: {transfer.get("status")}')
         return

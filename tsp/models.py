@@ -1,3 +1,4 @@
+from datetime import timedelta
 from decimal import Decimal
 
 from django.conf import settings
@@ -47,6 +48,15 @@ class Event(AuditModel):
     start_date = models.DateField()
     end_date = models.DateField()
     accepting_requests = models.BooleanField(default=True)
+    budget = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
+    budget_currency = models.CharField(max_length=3, default='EUR')
+    url = models.URLField(blank=True)
+    description = models.TextField(blank=True)
+    # Both deadlines are dates, and the cut-off is midnight UTC as that date
+    # starts, so an event closes everywhere at the same moment.
+    requests_open_until = models.DateField(blank=True, null=True)
+    reimbursements_open_until = models.DateField(blank=True, null=True)
+    visa_letters_offered = models.BooleanField(default=False)
 
     class Meta:
         ordering = ['-start_date']
@@ -58,6 +68,95 @@ class Event(AuditModel):
     def is_past(self):
         """True when the event end date is before today."""
         return self.end_date < timezone.now().date()
+
+    def reimbursement_deadline(self):
+        """
+        The last day a reimbursement can be submitted for this event.
+
+        Falls back to the organisation's window, which is settings
+        REIMBURSEMENT_WINDOW_DAYS after the event ends.
+        """
+        if self.reimbursements_open_until:
+            return self.reimbursements_open_until
+        window = getattr(settings, 'REIMBURSEMENT_WINDOW_DAYS', 30)
+        return self.end_date + timedelta(days=window)
+
+    def days_left_to_claim(self):
+        """Days remaining to submit a reimbursement; negative once it has passed."""
+        return (self.reimbursement_deadline() - timezone.now().date()).days
+
+    def reimbursement_window_closed(self):
+        """True when the deadline for claiming has gone by."""
+        return self.days_left_to_claim() < 0
+
+    def is_open_for_requests(self):
+        """
+        True when someone may still apply for support.
+
+        The checkbox is the committee's manual switch; the date closes the
+        event on its own so nobody has to remember to untick it.
+        """
+        if not self.accepting_requests or self.is_past:
+            return False
+        if self.requests_open_until:
+            return timezone.now().date() < self.requests_open_until
+        return True
+
+    def _live_requests(self):
+        """Requests that still count against the budget."""
+        return self.requests.exclude(
+            state__in=[RequestState.REJECTED, RequestState.CANCELLED],
+        ).prefetch_related('expenses')
+
+    def approved_against_budget(self):
+        """What has been approved in the budget's own currency."""
+        total = Decimal('0')
+        for travel_request in self._live_requests():
+            for currency, amount in travel_request.totals_approved():
+                if currency == self.budget_currency:
+                    total += amount
+        return total
+
+    def approved_in_other_currencies(self):
+        """
+        Approved amounts this budget cannot draw down, per currency.
+
+        Converting them needs a rate and a decision, so they are reported
+        beside the budget rather than folded into it.
+        """
+        totals = {}
+        for travel_request in self._live_requests():
+            for currency, amount in travel_request.totals_approved():
+                if currency != self.budget_currency:
+                    totals[currency] = totals.get(currency, Decimal('0')) + amount
+        return sorted(totals.items())
+
+    def paid_by_currency(self):
+        """
+        What has actually left the account for this event, per currency.
+
+        Read from the payment records rather than the request state, so a
+        request marked paid by hand without a payment behind it does not
+        count as money spent.
+        """
+        from django.contrib.contenttypes.models import ContentType
+        from payments.models import PaymentRecord
+
+        content_type = ContentType.objects.get_for_model(TravelRequest)
+        records = PaymentRecord.objects.filter(
+            content_type=content_type,
+            object_id__in=self.requests.values_list('pk', flat=True),
+        )
+        totals = {}
+        for record in records:
+            totals[record.currency] = totals.get(record.currency, Decimal('0')) + record.amount
+        return sorted(totals.items())
+
+    def budget_remaining(self):
+        """What is left of the budget, or None when none is set."""
+        if self.budget is None:
+            return None
+        return self.budget - self.approved_against_budget()
 
 
 class TravelRequest(AuditModel):
@@ -103,7 +202,7 @@ class TravelRequest(AuditModel):
         ordering = ['-updated_at']
 
     def __str__(self):
-        return f'Request #{self.pk} — {self.event.name}'
+        return f'Request #{self.pk} - {self.event.name}'
 
     @property
     def is_editable_by_requester(self):
@@ -451,4 +550,4 @@ class Document(AuditModel):
         ordering = ['-created_at']
 
     def __str__(self):
-        return f'{self.get_kind_display()} — {self.original_name}'
+        return f'{self.get_kind_display()} - {self.original_name}'
