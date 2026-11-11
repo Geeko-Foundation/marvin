@@ -9,5 +9,6 @@ urlpatterns = [
     path('process/', views.process_payment, name='process'),
     path('batch-export/', views.batch_export, name='batch_export'),
     path('<int:pk>/status/', views.payment_status, name='status'),
+    path('webhooks/wise/', views.wise_webhook, name='wise_webhook'),
     path('gateways/<str:gateway_id>/currencies/', views.gateway_currencies, name='gateway_currencies'),
 ]
