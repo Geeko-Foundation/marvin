@@ -87,7 +87,17 @@
                 <td>{{ expense.description }}</td>
                 <td>{{ expense.estimated_amount }} {{ expense.estimated_currency }}</td>
                 {% if travel_request.state != 'draft' and travel_request.state != 'submitted' %}
-                <td>{% if expense.approved_amount %}{{ expense.approved_amount }} {{ expense.approved_currency }}{% else %}—{% endif %}</td>
+                <td>
+                  {% if expense.approved_amount %}{{ expense.approved_amount }} {{ expense.approved_currency }}{% else %}—{% endif %}
+                  {% with approx=expense.approved_in_requested_currency %}
+                  {% if approx %}
+                  <span class="block text-xs opacity-70"
+                        title="90-day average rate up to {{ expense.approval_rate_date|date:'j M Y' }}: 1 {{ expense.approved_currency }} = {{ expense.approval_rate|floatformat:4 }} {{ expense.estimated_currency }}">
+                    ≈ {{ approx|floatformat:"2g" }} {{ expense.estimated_currency }}
+                  </span>
+                  {% endif %}
+                  {% endwith %}
+                </td>
                 {% endif %}
                 {% if travel_request.total_actual %}
                 <td>{% if expense.actual_amount %}{{ expense.actual_amount }} {{ expense.actual_currency }}{% else %}—{% endif %}</td>
