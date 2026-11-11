@@ -17,7 +17,7 @@ class PaymentStatusTests(TestCase):
         self.request = TravelRequest.objects.create(
             user=self.owner, event=make_event(), state=RequestState.SUBMITTED_FOR_PAYMENT,
         )
-        Expense.objects.create(request=self.request, category='transportation',
+        Expense.objects.create(request=self.request, category='flight',
             estimated_amount=100, approved_amount=100, approved_currency='EUR',
             actual_amount=75, actual_currency='EUR')
         self.service = PaymentService()
