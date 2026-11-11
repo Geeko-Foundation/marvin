@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('tsp', '0011_exchange_rates'),
+        ('tsp', '0012_expense_categories_follow_travel_policy'),
     ]
 
     operations = [

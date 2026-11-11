@@ -16,7 +16,7 @@ def make_request(owner, state, amount='500', actual=None, currency='EUR'):
         user=owner, event=make_event(), description='Talk', state=state,
     )
     Expense.objects.create(
-        request=travel_request, category='transportation', description='Train',
+        request=travel_request, category='flight', description='Train',
         estimated_amount=Decimal(amount), estimated_currency=currency,
         approved_amount=Decimal(amount) if state != RequestState.SUBMITTED else None,
         approved_currency=currency if state != RequestState.SUBMITTED else None,
@@ -96,7 +96,7 @@ class ChangeAmountsTests(TestCase):
             'event': self.request.event.pk, 'description': 'Talk',
             'expenses-TOTAL_FORMS': '1', 'expenses-INITIAL_FORMS': '1',
             'expenses-MIN_NUM_FORMS': '0', 'expenses-MAX_NUM_FORMS': '1000',
-            'expenses-0-id': str(expense.pk), 'expenses-0-category': 'transportation',
+            'expenses-0-id': str(expense.pk), 'expenses-0-category': 'flight',
             'expenses-0-description': 'Train', 'expenses-0-estimated_amount': amount,
             'expenses-0-estimated_currency': 'EUR',
         })
