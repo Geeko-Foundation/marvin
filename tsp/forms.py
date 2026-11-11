@@ -116,7 +116,9 @@ class EventForm(forms.ModelForm):
     class Meta:
         model = Event
         fields = ['name', 'location', 'start_date', 'end_date', 'accepting_requests',
-                  'budget', 'budget_currency']
+                  'budget', 'budget_currency', 'url', 'description',
+                  'requests_open_until', 'reimbursements_open_until',
+                  'visa_letters_offered']
         widgets = {
             'name': forms.TextInput(attrs={'class': 'input input-bordered w-full'}),
             'location': forms.TextInput(attrs={'class': 'input input-bordered w-full'}),
@@ -131,6 +133,17 @@ class EventForm(forms.ModelForm):
                 choices=CURRENCY_CHOICES,
                 attrs={'class': 'select select-bordered w-full'},
             ),
+            'url': forms.URLInput(attrs={'class': 'input input-bordered w-full'}),
+            'description': forms.Textarea(attrs={
+                'class': 'textarea textarea-bordered w-full', 'rows': 3,
+            }),
+            'requests_open_until': forms.DateInput(attrs={
+                'class': 'input input-bordered w-full', 'type': 'date',
+            }),
+            'reimbursements_open_until': forms.DateInput(attrs={
+                'class': 'input input-bordered w-full', 'type': 'date',
+            }),
+            'visa_letters_offered': forms.CheckboxInput(attrs={'class': 'checkbox'}),
         }
 
     def __init__(self, *args, **kwargs):

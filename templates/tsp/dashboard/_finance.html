@@ -2,16 +2,16 @@
 <h2 class="text-2xl font-bold mb-6">Finance</h2>
 
 <div class="stats stats-vertical lg:stats-horizontal shadow w-full mb-6 bg-base-100">
-  <div class="stat">
+  <a class="stat hover:bg-base-200" href="{% url 'reports' %}?status=submitted_for_payment">
     <div class="stat-title">Awaiting Payment</div>
     <div class="stat-value text-warning">{{ payment_queue.count }}</div>
     <div class="stat-desc">Submitted for payment</div>
-  </div>
-  <div class="stat">
+  </a>
+  <a class="stat hover:bg-base-200" href="{% url 'reports' %}?status=paid">
     <div class="stat-title">Total Paid</div>
     <div class="stat-value text-success">{{ paid_total|floatformat:0 }} €</div>
     <div class="stat-desc">All processed payments</div>
-  </div>
+  </a>
 </div>
 
 <div class="flex gap-2 mb-6">

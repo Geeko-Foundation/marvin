@@ -2,6 +2,7 @@
 
 from django.utils import timezone
 
+from profile.audit_log import record
 from tsp.models import RequestState, StateHistory, TravelRequest
 
 
@@ -54,6 +55,13 @@ def transition_request(travel_request, to_state, user, notes=''):
         travel_request.accepted_by = user
 
     travel_request.save()
+
+    record(
+        'request.state_change',
+        user=user,
+        target=f'request {travel_request.pk}',
+        detail=f'{from_state} -> {to_state}' + (f': {notes}' if notes else ''),
+    )
 
     StateHistory.objects.create(
         request=travel_request,

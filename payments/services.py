@@ -7,6 +7,7 @@ from django.db import transaction
 
 from payments.base import PaymentRequest
 from payments.models import PaymentRecord
+from profile.audit_log import record as audit
 from payments.registry import get_adapter, get_gateway, get_default_adapter
 
 
@@ -86,6 +87,12 @@ class PaymentService:
 
         if record.status in {'success', 'completed'}:
             self.adapter.on_payment_completed(obj, record, user)
+        audit(
+            'payment.processed',
+            user=user,
+            target=f'{gateway_id} {record.reference}',
+            detail=f'{record.amount} {record.currency}, status {record.status}',
+        )
         return record
 
     def export_batch(self, gateway_id: str) -> tuple[str | bytes, str, str]:
