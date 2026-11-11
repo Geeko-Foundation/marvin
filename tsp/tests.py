@@ -1055,3 +1055,30 @@ class EventAuditTests(TestCase):
             'file': SimpleUploadedFile('r.pdf', b'%PDF-1.4 x'),
         })
         self.assertNotIn('document.uploaded', self._actions())
+
+
+class DisplayFilterTests(TestCase):
+    """Dates and states read the way a person would write them."""
+
+    def test_a_range_within_a_month_names_the_month_once(self):
+        from tsp.templatetags.tsp_tags import date_range
+        self.assertEqual(date_range(date(2026, 5, 1), date(2026, 5, 3)), '1 to 3 May 2026')
+
+    def test_a_range_across_months_names_both(self):
+        from tsp.templatetags.tsp_tags import date_range
+        self.assertEqual(date_range(date(2026, 4, 30), date(2026, 5, 3)), '30 Apr to 3 May 2026')
+
+    def test_a_range_across_years_names_both_years(self):
+        from tsp.templatetags.tsp_tags import date_range
+        self.assertEqual(date_range(date(2026, 12, 30), date(2027, 1, 2)), '30 Dec 2026 to 2 Jan 2027')
+
+    def test_a_single_day_is_one_date(self):
+        from tsp.templatetags.tsp_tags import date_range
+        self.assertEqual(date_range(date(2026, 5, 1), date(2026, 5, 1)), '1 May 2026')
+        self.assertEqual(date_range(date(2026, 5, 1), None), '1 May 2026')
+
+    def test_a_stored_state_shows_its_name(self):
+        from tsp.templatetags.tsp_tags import state_label
+        self.assertEqual(state_label('submitted_for_payment'), 'Submitted for Payment')
+        self.assertEqual(state_label('approved'), 'Approved')
+        self.assertEqual(state_label('something_new'), 'Something new')

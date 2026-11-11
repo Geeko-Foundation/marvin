@@ -50,7 +50,7 @@
             <option value="{{ gateway.gateway_id }}">{{ gateway.label }}</option>
             {% endfor %}
           </select>
-          <button type="submit" class="btn btn-primary btn-sm" {% if not item.wise_ready %}disabled title="Requestor must complete Wise onboarding first"{% endif %}>Process Payment</button>
+          <button type="submit" class="btn btn-primary btn-sm" {% if not item.wise_ready %}disabled title="The requester must finish setting up Wise first"{% endif %}>Process Payment</button>
           {% if item.detail_url %}
           <a href="{{ item.detail_url }}" class="btn btn-ghost btn-sm">Details</a>
           {% endif %}

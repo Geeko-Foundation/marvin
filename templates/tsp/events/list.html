@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load tsp_tags %}
 
 {% block title %}Events{% endblock %}
 
@@ -37,7 +38,7 @@
         {% endif %}
       </div>
       <p class="text-sm opacity-60">{{ event.location }}</p>
-      <p class="text-sm">{{ event.start_date }} - {{ event.end_date }}</p>
+      <p class="text-sm">{{ event.start_date|date_range:event.end_date }}</p>
       {% if event.requests_open_until %}
       <p class="text-xs opacity-60">Requests close {{ event.requests_open_until }}</p>
       {% endif %}

@@ -202,7 +202,7 @@ class WiseRecipientForm(forms.Form):
             if profile.banking_currency:
                 self.fields['banking_currency'].initial = profile.banking_currency
         self.fields['bank_swift'].help_text = (
-            'Optional for many SEPA transfers - IBAN alone is usually enough within the EU.'
+            'Optional for most SEPA transfers, where the IBAN alone is usually enough.'
         )
 
     def clean(self):

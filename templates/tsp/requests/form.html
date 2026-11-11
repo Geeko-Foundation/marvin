@@ -18,7 +18,7 @@
         <h2 class="card-title text-lg">Payment Account</h2>
         <p class="text-sm opacity-60">
           Reimbursements are sent to your Wise recipient account.
-          Bank details are held by Wise - {{ app_name }} stores only the recipient ID.
+          Bank details are held by Wise. {{ app_name }} stores only the recipient ID.
         </p>
       </div>
       <button type="button" id="check-account-btn" class="btn btn-outline btn-primary">
@@ -143,9 +143,10 @@
               {{ expense_form.estimated_currency }}
             </div>
             {% if expense_form.DELETE %}
-            <label class="label cursor-pointer gap-1 pb-2">
+            <label class="label cursor-pointer gap-1 pb-2"
+                   title="Tick to remove this expense when you save the request">
               {{ expense_form.DELETE }}
-              <span class="label-text text-xs">Del</span>
+              <span class="label-text text-xs whitespace-nowrap">Remove</span>
             </label>
             {% endif %}
           </div>

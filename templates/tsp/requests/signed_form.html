@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load tsp_tags %}
 
 {% block title %}Reimbursement Agreement{% endblock %}
 
@@ -14,7 +15,7 @@
     <p><strong>Requester:</strong> {{ travel_request.user.get_full_name|default:travel_request.user.username }}</p>
     <p><strong>Event:</strong> {{ travel_request.event.name }}</p>
     <p><strong>Location:</strong> {{ travel_request.event.location }}</p>
-    <p><strong>Dates:</strong> {{ travel_request.event.start_date }} - {{ travel_request.event.end_date }}</p>
+    <p><strong>Dates:</strong> {{ travel_request.event.start_date|date_range:travel_request.event.end_date }}</p>
     {% if travel_request.approved_at %}
     <p><strong>Approved:</strong> {{ travel_request.approved_at|date:"F d, Y" }}</p>
     {% endif %}

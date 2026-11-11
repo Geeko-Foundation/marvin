@@ -210,7 +210,7 @@ class TravelRequest(AuditModel):
         ordering = ['-updated_at']
 
     def __str__(self):
-        return f'Request #{self.pk} - {self.event.name}'
+        return f'{self.reference} · {self.event.name}'
 
     @property
     def is_editable_by_requester(self):
@@ -558,4 +558,4 @@ class Document(AuditModel):
         ordering = ['-created_at']
 
     def __str__(self):
-        return f'{self.get_kind_display()} - {self.original_name}'
+        return f'{self.get_kind_display()}: {self.original_name}'

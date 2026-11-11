@@ -30,7 +30,7 @@ class Command(BaseCommand):
             call_command('flush', '--noinput', verbosity=0)
         elif User.objects.exists():
             self.stdout.write(self.style.WARNING(
-                'Users already exist - skipping fixture load. '
+                'Users already exist, so the fixture was not loaded. '
                 'Pass --force to flush and reload demo data.'
             ))
             self._set_demo_passwords()
