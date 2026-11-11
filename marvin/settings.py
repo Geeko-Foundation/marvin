@@ -47,6 +47,14 @@ ALLOWED_HOSTS = env_list(
     'localhost,127.0.0.1,testserver',
 )
 
+# Behind Railway's HTTPS proxy: trust X-Forwarded-Proto and accept the public
+# origin for CSRF. Railway injects RAILWAY_PUBLIC_DOMAIN.
+CSRF_TRUSTED_ORIGINS = env_list('CSRF_TRUSTED_ORIGINS', '')
+_railway_domain = env('RAILWAY_PUBLIC_DOMAIN')
+if _railway_domain:
+    CSRF_TRUSTED_ORIGINS.append(f'https://{_railway_domain}')
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
 
 # --- Application ---
 
@@ -66,6 +74,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -140,6 +149,9 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+# Serve static files straight from app/static dirs; no collectstatic needed.
+WHITENOISE_USE_FINDERS = True
 
 MEDIA_URL = 'uploads/'
 MEDIA_ROOT = BASE_DIR / 'uploads'
