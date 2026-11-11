@@ -266,6 +266,8 @@ LOGGING = {
 BRAND_APP_NAME = env('BRAND_APP_NAME', 'Marvin')
 BRAND_ORG_NAME = env('BRAND_ORG_NAME', 'Geeko Foundation')
 BRAND_TAGLINE = env('BRAND_TAGLINE', 'Travel Support Program')
+# Marvin's own joke. A fork sets this empty to drop the line.
+BRAND_STRAPLINE = env('BRAND_STRAPLINE', 'The Paranoid Android')
 
 # Any daisyUI theme name: https://daisyui.com/docs/themes/
 BRAND_THEME_LIGHT = env('BRAND_THEME_LIGHT', 'corporate')
