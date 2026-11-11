@@ -4,9 +4,17 @@ from decimal import Decimal
 from django.test import TestCase
 from django.urls import reverse
 
+from django.apps import apps
+
 from profile.groups import GROUP_FINANCE, GROUP_REQUESTER
-from tsp.models import Event, Expense, RequestState, TravelRequest
-from tsp.tests import make_user
+from tsp.models import (
+    Event,
+    Expense,
+    ExpenseCategory,
+    RequestState,
+    TravelRequest,
+)
+from tsp.tests import make_event, make_user
 
 
 class MixedCurrencyTests(TestCase):
@@ -25,7 +33,7 @@ class MixedCurrencyTests(TestCase):
 
     def _expense(self, amount, currency):
         return Expense.objects.create(
-            request=self.request, category='transportation', description='plane',
+            request=self.request, category='flight', description='plane',
             estimated_amount=amount, estimated_currency=currency,
             approved_amount=amount, approved_currency=currency,
         )
@@ -110,3 +118,61 @@ class MixedCurrencyTests(TestCase):
         csv = self.client.get(reverse('reports'), {'format': 'csv'})
         self.assertEqual(csv.status_code, 200)
         self.assertIn('250.00 EUR; 20.00 USD', csv.content.decode())
+
+
+class ExpenseCategoryTests(TestCase):
+    """The categories follow the travel policy, which pays for travel only."""
+
+    def test_only_what_the_policy_covers_is_offered(self):
+        self.assertEqual(
+            [value for value, _ in ExpenseCategory.choices],
+            ['flight', 'train', 'lodging', 'other'])
+
+    def test_a_retired_line_keeps_what_it_was_for(self):
+        from importlib import import_module
+
+        migration = import_module(
+            'tsp.migrations.0012_expense_categories_follow_travel_policy')
+        request = TravelRequest.objects.create(
+            user=make_user('retiredcat', [GROUP_REQUESTER]), event=make_event())
+        lines = {
+            'transportation': 'Flight to Nuremberg',
+            'meals': 'Dinner',
+            'visa': 'Schengen application',
+            'registration': 'Conference ticket',
+        }
+        created = {
+            value: Expense.objects.create(
+                request=request, category=value, description=description,
+                estimated_amount=20, estimated_currency='EUR')
+            for value, description in lines.items()
+        }
+
+        migration.move_retired_categories(apps, None)
+
+        for expense in created.values():
+            expense.refresh_from_db()
+        self.assertEqual(created['transportation'].description,
+                         'Transportation: Flight to Nuremberg')
+        self.assertEqual(created['meals'].description, 'Meals: Dinner')
+        self.assertEqual(created['visa'].description, 'Visa Fees: Schengen application')
+        self.assertEqual(created['registration'].description,
+                         'Registration: Conference ticket')
+        self.assertEqual({e.category for e in created.values()}, {'other'})
+
+    def test_lodging_is_left_alone(self):
+        from importlib import import_module
+
+        migration = import_module(
+            'tsp.migrations.0012_expense_categories_follow_travel_policy')
+        request = TravelRequest.objects.create(
+            user=make_user('lodgingkeeper', [GROUP_REQUESTER]), event=make_event())
+        stay = Expense.objects.create(
+            request=request, category='lodging', description='Hostel',
+            estimated_amount=60, estimated_currency='EUR')
+
+        migration.move_retired_categories(apps, None)
+
+        stay.refresh_from_db()
+        self.assertEqual(stay.category, 'lodging')
+        self.assertEqual(stay.description, 'Hostel')
