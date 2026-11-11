@@ -47,6 +47,15 @@ ALLOWED_HOSTS = env_list(
     'localhost,127.0.0.1,testserver',
 )
 
+# Django checks the Origin header on POSTs and wants the scheme, which
+# ALLOWED_HOSTS does not carry. Assume https for every real host so a
+# deployment only has to set ALLOWED_HOSTS to be able to log in.
+CSRF_TRUSTED_ORIGINS = env_list('CSRF_TRUSTED_ORIGINS', '') or [
+    'https://' + ('*' + host if host.startswith('.') else host)
+    for host in ALLOWED_HOSTS
+    if host not in ('localhost', '127.0.0.1', 'testserver', '*')
+]
+
 
 # --- Application ---
 
