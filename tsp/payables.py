@@ -8,8 +8,13 @@ from django.urls import reverse
 
 from payments.base import PayableAdapter, PaymentRequest
 from payments.models import PaymentRecord
+from profile.groups import GROUP_FINANCE
 from tsp.models import RequestState, TravelRequest
-from tsp.services.state_machine import StateTransitionError, transition_request
+from tsp.services.state_machine import (
+    StateTransitionError,
+    reopen_for_payment,
+    transition_request,
+)
 
 
 class TravelRequestPayableAdapter(PayableAdapter):
@@ -94,15 +99,32 @@ class TravelRequestPayableAdapter(PayableAdapter):
             # The request carries on: the trip still has to happen.
             return
         try:
-            gateway_label = payment_record.method_label
+            # A sandbox transfer moves no money, so the history must not read as paid for real.
+            sandbox = ' (sandbox, no money sent)' if payment_record.metadata.get('sandbox') else ''
             transition_request(
                 obj,
                 RequestState.PAID,
                 user,
-                notes=f'Payment via {gateway_label}',
+                notes=f'Payment via {payment_record.method_label}{sandbox}',
             )
         except StateTransitionError:
             pass
+
+    def on_payment_returned(self, obj, payment_record) -> None:
+        """Back to the payment queue, with finance told why, when the money came back."""
+        from profile.services.push_notifications import send_push_to_group
+
+        message = (
+            f'Wise returned the {payment_record.amount} {payment_record.currency} sent for '
+            f'{obj.reference} ({payment_record.metadata.get("transfer_status", "failed")}). '
+            'The requester has not been paid. Check their bank details and pay them again.'
+        )
+        if payment_record.purpose != 'advance' and payment_record.processed_by:
+            try:
+                reopen_for_payment(obj, payment_record.processed_by, message)
+            except StateTransitionError:
+                pass
+        send_push_to_group(GROUP_FINANCE, head='Payment returned', body=message, url=self.get_detail_url(obj))
 
     def get_detail_url(self, obj) -> str:
         """URL name for linking from the finance payment dashboard."""

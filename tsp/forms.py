@@ -2,7 +2,11 @@ import os
 from decimal import Decimal
 
 from django import forms
-from django.contrib.auth.forms import AuthenticationForm
+from django.contrib.auth.forms import (
+    AuthenticationForm,
+    PasswordResetForm,
+    SetPasswordForm,
+)
 from django.contrib.auth.models import User
 from django.core.validators import MinValueValidator
 
@@ -370,7 +374,8 @@ class CommentForm(forms.ModelForm):
             'body': forms.Textarea(attrs={
                 'class': 'textarea textarea-bordered w-full',
                 'rows': 3,
-                'placeholder': 'Add a comment...',
+                'placeholder': 'Add a comment',
+                'aria-label': 'Comment',
             }),
             'internal': forms.CheckboxInput(attrs={'class': 'checkbox checkbox-sm checkbox-warning'}),
         }
@@ -479,3 +484,20 @@ restrict(EventForm, name=line(200), location=line(200), description=text(5000))
 restrict(CommentForm, body=text(5000))
 restrict(ApprovalForm, notes=text(2000))
 restrict(RejectForm, notes=text(2000))
+
+
+class PasswordResetRequestForm(PasswordResetForm):
+    """Django's reset form, styled like the rest of the site."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['email'].widget.attrs.update({'class': INPUT_CLASS, 'autocomplete': 'email'})
+
+
+class NewPasswordForm(SetPasswordForm):
+    """Django's new-password form, styled like the rest of the site."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            field.widget.attrs.update({'class': INPUT_CLASS, 'autocomplete': 'new-password'})
