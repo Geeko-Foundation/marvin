@@ -43,4 +43,5 @@ urlpatterns = [
     path('requests/<int:pk>/form/', views.request_form_printable, name='request_form'),
     path('documents/<int:doc_id>/download/', views.document_download, name='document_download'),
     path('reports/', views.reports, name='reports'),
+    path('audit-log/', views.audit_log, name='audit_log'),
 ]

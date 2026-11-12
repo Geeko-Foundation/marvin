@@ -24,7 +24,7 @@ from django.views.decorators.http import require_POST
 from django_tables2 import RequestConfig
 
 from marvin.validators import spreadsheet_safe
-from profile.audit_log import record as audit
+from profile.audit_log import AuditLogEntry, record as audit
 from profile.decorators import get_profile
 from profile.forms import OnboardingPersonalForm, WiseRecipientForm
 from profile.groups import GROUP_FINANCE, GROUP_REQUESTER, GROUP_TSP
@@ -1497,4 +1497,21 @@ def search(request):
         'event_table': event_table,
         'user_table': user_table,
         'show_users': request.user.is_staff,
+    })
+
+
+@login_required
+@group_required(GROUP_TSP, GROUP_FINANCE)
+def audit_log(request):
+    """The append-only record of what everyone did, newest first, for staff to read."""
+    entries = AuditLogEntry.objects.select_related('user')
+    query = request.GET.get('q', '').strip()
+    if query:
+        entries = entries.filter(
+            Q(action__icontains=query) | Q(target__icontains=query)
+            | Q(detail__icontains=query) | Q(user__username__icontains=query)
+        )
+    return render(request, 'tsp/audit_log.html', {
+        'entries': _paginate(request, entries, 50),
+        'query': query,
     })

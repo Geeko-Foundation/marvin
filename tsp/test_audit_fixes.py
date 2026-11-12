@@ -418,3 +418,26 @@ class ApprovalPercentRecordTests(TestCase):
         self.client.post(reverse('request_batch_review'), {'request_ids': [self.req.pk], 'action': 'approve'})
         self.req.refresh_from_db()
         self.assertEqual(self.req.approval_percent, 69)
+
+
+class AuditLogPageTests(TestCase):
+    """Committee and finance can read the trail; requesters cannot."""
+
+    def setUp(self):
+        from profile.audit_log import record
+        self.finance = make_user('auditfinance', [GROUP_FINANCE])
+        record('payment.processed', user=self.finance, target='wise-api TSP9', detail='10.00 EUR')
+        record('event.updated', user=self.finance, target='Asia Summit', detail='budget')
+
+    def test_staff_see_entries_and_can_search_them(self):
+        self.client.force_login(self.finance)
+        html = self.client.get(reverse('audit_log')).content.decode()
+        self.assertIn('wise-api TSP9', html)
+        self.assertIn('Asia Summit', html)
+        html = self.client.get(reverse('audit_log'), {'q': 'TSP9'}).content.decode()
+        self.assertIn('wise-api TSP9', html)
+        self.assertNotIn('Asia Summit', html)
+
+    def test_requesters_are_refused(self):
+        self.client.force_login(make_user('auditrequester', [GROUP_REQUESTER]))
+        self.assertEqual(self.client.get(reverse('audit_log')).status_code, 403)
