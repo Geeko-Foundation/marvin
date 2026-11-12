@@ -170,7 +170,21 @@
 {% endblock %}
 
 {% block extra_js %}
+{{ event_categories|json_script:"event-categories" }}
 <script>
+  // Each event offers its own categories, so the choices follow the chosen event.
+  const categoriesByEvent = JSON.parse(document.getElementById('event-categories').textContent);
+  function showEventCategories() {
+    const choices = categoriesByEvent[document.querySelector('[name="event"]')?.value];
+    if (!choices) return;
+    document.querySelectorAll('#expense-rows .expense-category').forEach(select => {
+      const current = select.value;
+      select.replaceChildren(new Option('Choose', ''), ...choices.map(([value, label]) => new Option(label, value)));
+      select.value = choices.some(([value]) => value === current) ? current : '';
+    });
+  }
+  document.querySelector('[name="event"]')?.addEventListener('change', showEventCategories);
+
   document.getElementById('add-expense')?.addEventListener('click', function() {
     const totalForms = document.querySelector('[name$="-TOTAL_FORMS"]');
     const count = parseInt(totalForms.value);
@@ -265,6 +279,7 @@
     const eventSelect = document.querySelector('[name="event"]');
     if (eventSelect) eventSelect.value = eventId;
   }
+  showEventCategories();
 
   const checkBtn = document.getElementById('check-account-btn');
   const recreatePanel = document.getElementById('recreate-account-panel');

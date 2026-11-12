@@ -7,7 +7,7 @@ from django.urls import reverse
 from payments.models import PaymentRecord
 from profile.groups import GROUP_FINANCE, GROUP_REQUESTER, GROUP_TSP
 from tsp.models import Event, Expense, RequestState, TravelRequest
-from tsp.tests import make_event, make_user
+from tsp.tests import make_event, make_requester, make_user
 
 
 class ReviewTests(TestCase):
@@ -512,3 +512,44 @@ class ReportQueryTests(TestCase):
         few = self.queries_for_csv()
         self.add_requests(8)
         self.assertEqual(self.queries_for_csv(), few)
+
+
+class EventCategoryTests(TestCase):
+    """An event can cover costs the policy leaves out, and requesters see exactly those."""
+
+    def setUp(self):
+        self.committee = make_user('categorycommittee', [GROUP_TSP])
+        self.owner = make_requester('categoryowner')
+        self.event = make_event()
+
+    def save_event(self, **extra):
+        self.client.force_login(self.committee)
+        self.client.post(reverse('event_edit', args=[self.event.pk]), {
+            'name': self.event.name, 'location': 'Prague', 'start_date': '2027-06-14',
+            'end_date': '2027-06-16', 'approval_percent': '100', 'accepting_requests': 'on', **extra})
+        self.event.refresh_from_db()
+
+    def test_ticked_and_custom_categories_are_stored(self):
+        self.save_event(offered_categories=['visa'], custom_categories='Childcare,  childcare , Flight,')
+        self.assertEqual(self.event.extra_expense_categories, ['visa', 'Childcare'])
+        self.assertIn(('visa', 'Visa fees'), self.event.expense_categories())
+
+    def test_a_category_name_cannot_carry_markup(self):
+        self.save_event(custom_categories='<script>')
+        self.assertEqual(self.event.extra_expense_categories, [])
+
+    def request_with(self, category):
+        self.client.force_login(self.owner)
+        self.client.post(reverse('request_create'), {
+            'event': self.event.pk, 'description': 'Talk',
+            'expenses-TOTAL_FORMS': '1', 'expenses-INITIAL_FORMS': '0',
+            'expenses-0-category': category, 'expenses-0-description': 'Fee',
+            'expenses-0-estimated_amount': '60', 'expenses-0-estimated_currency': 'EUR',
+        })
+        return Expense.objects.filter(request__user=self.owner, category=category).first()
+
+    def test_requesters_can_claim_what_the_event_covers_and_nothing_else(self):
+        self.assertIsNone(self.request_with('visa'))
+        self.save_event(offered_categories=['visa'], custom_categories='Childcare')
+        self.assertEqual(self.request_with('visa').get_category_display(), 'Visa fees')
+        self.assertEqual(self.request_with('Childcare').get_category_display(), 'Childcare')

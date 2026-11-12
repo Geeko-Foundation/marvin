@@ -33,6 +33,13 @@ class ExpenseCategory(models.TextChoices):
     OTHER = 'other', 'Other'
 
 
+# Costs the travel policy leaves out, which an event can choose to cover.
+OPTIONAL_EXPENSE_CATEGORIES = [
+    ('visa', 'Visa fees'),
+    ('registration', 'Registration fee'),
+]
+
+
 class DocumentKind(models.TextChoices):
     """Required and optional document types attached to a request."""
 
@@ -49,6 +56,8 @@ class Event(AuditModel):
     start_date = models.DateField()
     end_date = models.DateField()
     accepting_requests = models.BooleanField(default=True)
+    # Optional category values, or names the event added, on top of the policy's.
+    extra_expense_categories = models.JSONField(default=list, blank=True)
     budget = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
     budget_currency = models.CharField(max_length=3, default='EUR')
     # Share of each requested amount, in percent, that reviews start from.
@@ -164,6 +173,13 @@ class Event(AuditModel):
         for record in records:
             totals[record.currency] = totals.get(record.currency, Decimal('0')) + record.amount
         return sorted(totals.items())
+
+    def expense_categories(self):
+        """The categories requesters for this event can claim, as (value, label)."""
+        optional = dict(OPTIONAL_EXPENSE_CATEGORIES)
+        return ExpenseCategory.choices + [
+            (value, optional.get(value, value)) for value in self.extra_expense_categories
+        ]
 
     def share_of(self, amount):
         """The part of a requested amount this event normally covers."""
@@ -432,7 +448,8 @@ class Expense(AuditModel):
     """One estimated (and optionally approved) expense line on a travel request."""
 
     request = models.ForeignKey(TravelRequest, on_delete=models.CASCADE, related_name='expenses')
-    category = models.CharField(max_length=20, choices=ExpenseCategory.choices)
+    # Not limited to ExpenseCategory: an event can add its own, see Event.expense_categories.
+    category = models.CharField(max_length=60)
     description = models.TextField()
     estimated_amount = models.DecimalField(max_digits=10, decimal_places=2)
     estimated_currency = models.CharField(max_length=3, default='EUR')
@@ -448,6 +465,10 @@ class Expense(AuditModel):
 
     class Meta:
         ordering = ['id']
+
+    def get_category_display(self):
+        labels = dict(ExpenseCategory.choices + OPTIONAL_EXPENSE_CATEGORIES)
+        return labels.get(self.category, self.category)
 
     def __str__(self):
         return f'{self.get_category_display()}: {self.estimated_amount} {self.estimated_currency}'

@@ -2,14 +2,14 @@ import os
 from decimal import Decimal
 
 from django import forms
-from django.core.validators import MinValueValidator
-
-from marvin.validators import NAME, line, restrict, text
 from django.contrib.auth.forms import AuthenticationForm
 from django.contrib.auth.models import User
+from django.core.validators import MinValueValidator
 
+from marvin.validators import NAME, line, restrict, single_line, text
 from profile.models import UserProfile
 from tsp.models import (
+    OPTIONAL_EXPENSE_CATEGORIES,
     Comment,
     Document,
     DocumentKind,
@@ -153,11 +153,40 @@ class EventForm(forms.ModelForm):
             'visa_letters_offered': forms.CheckboxInput(attrs={'class': 'checkbox'}),
         }
 
+    offered_categories = forms.MultipleChoiceField(
+        choices=OPTIONAL_EXPENSE_CATEGORIES, required=False, widget=forms.CheckboxSelectMultiple(attrs={'class': 'checkbox checkbox-sm'}),
+    )
+    custom_categories = forms.CharField(
+        required=False, max_length=300,
+        widget=forms.TextInput(attrs={
+            'class': 'input input-bordered w-full', 'placeholder': 'For example: Childcare, Accessibility support',
+        }),
+    )
+
     def __init__(self, *args, **kwargs):
         """The currency only matters once a budget is set, so let it default."""
         super().__init__(*args, **kwargs)
         self.fields['budget_currency'].required = False
         self.fields['budget'].validators.append(MinValueValidator(Decimal('0')))
+        optional = dict(OPTIONAL_EXPENSE_CATEGORIES)
+        extra = self.instance.extra_expense_categories or []
+        self.fields['offered_categories'].initial = [c for c in extra if c in optional]
+        self.fields['custom_categories'].initial = ', '.join(c for c in extra if c not in optional)
+
+    def clean_custom_categories(self):
+        """Comma-separated names, each a short single line not already offered."""
+        taken = {label.lower() for _, label in ExpenseCategory.choices + OPTIONAL_EXPENSE_CATEGORIES}
+        names = []
+        for name in self.cleaned_data['custom_categories'].split(','):
+            name = ' '.join(name.split())
+            if not name or name.lower() in taken:
+                continue
+            taken.add(name.lower())
+            if len(name) > 60:
+                raise forms.ValidationError(f'Keep each category under 60 characters: "{name[:20]}…"')
+            single_line(name)
+            names.append(name)
+        return names
 
     def clean_budget_currency(self):
         """Fall back to the model default when nothing was chosen."""
@@ -169,6 +198,9 @@ class EventForm(forms.ModelForm):
         start, end = cleaned.get('start_date'), cleaned.get('end_date')
         if start and end and end < start:
             self.add_error('end_date', 'The end date cannot be before the start date.')
+        self.instance.extra_expense_categories = (
+            list(cleaned.get('offered_categories') or []) + list(cleaned.get('custom_categories') or [])
+        )
         return cleaned
 
 
@@ -215,12 +247,16 @@ class ExpenseForm(forms.ModelForm):
             ),
         }
 
-    def __init__(self, *args, **kwargs):
-        """An estimate has to be more than zero, whatever the browser allowed."""
+    def __init__(self, *args, event=None, **kwargs):
+        """Offer the event's categories, and an estimate above zero whatever the browser allowed."""
         super().__init__(*args, **kwargs)
-        self.fields['category'].choices = [('', 'Choose')] + [
-            c for c in self.fields['category'].choices if c[0]
-        ]
+        if event is None and self.instance.request_id:
+            event = self.instance.request.event
+        choices = event.expense_categories() if event else ExpenseCategory.choices
+        self.fields['category'] = forms.ChoiceField(
+            choices=[('', 'Choose')] + choices,
+            widget=forms.Select(attrs={'class': 'select select-bordered w-full expense-category'}),
+        )
         self.fields['estimated_amount'].validators.append(MinValueValidator(Decimal('0.01')))
 
 

@@ -633,8 +633,9 @@ def request_create(request):
         return redirect('request_detail', pk=owing.pk)
     if request.method == 'POST':
         form = TravelRequestForm(request.POST)
-        formset = ExpenseFormSet(request.POST)
-        if form.is_valid() and formset.is_valid():
+        form_is_valid = form.is_valid()
+        formset = ExpenseFormSet(request.POST, form_kwargs={'event': form.cleaned_data.get('event')})
+        if form_is_valid and formset.is_valid():
             travel_request = form.save(commit=False)
             travel_request.user = request.user
             travel_request.state = RequestState.DRAFT
@@ -651,6 +652,7 @@ def request_create(request):
     return render(request, 'tsp/requests/form.html', {
         'form': form,
         'formset': formset,
+        'event_categories': _categories_by_event(form),
         'profile': profile,
         'is_edit': False,
         'show_account_check': profile.is_requester,
@@ -750,6 +752,11 @@ def request_detail(request, pk, travel_request, profile):
     })
 
 
+def _categories_by_event(form):
+    """Each selectable event's expense categories, for the form to switch between."""
+    return {str(event.pk): event.expense_categories() for event in form.fields['event'].queryset}
+
+
 def _send_back_for_review(travel_request, user):
     """New amounts mean the old approval, and any advance it allowed, no longer apply."""
     travel_request.expenses.update(
@@ -782,8 +789,10 @@ def request_edit(request, pk):
 
     if request.method == 'POST':
         form = TravelRequestForm(request.POST, instance=travel_request)
-        formset = ExpenseFormSet(request.POST, instance=travel_request)
-        if form.is_valid() and formset.is_valid():
+        form_is_valid = form.is_valid()
+        event = form.cleaned_data.get('event') or travel_request.event
+        formset = ExpenseFormSet(request.POST, instance=travel_request, form_kwargs={'event': event})
+        if form_is_valid and formset.is_valid():
             form.save()
             formset.save()
             if needs_review_again:
@@ -799,6 +808,7 @@ def request_edit(request, pk):
     return render(request, 'tsp/requests/form.html', {
         'form': form,
         'formset': formset,
+        'event_categories': _categories_by_event(form),
         'profile': profile,
         'travel_request': travel_request,
         'is_edit': True,
