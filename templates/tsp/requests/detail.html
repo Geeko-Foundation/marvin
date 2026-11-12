@@ -60,6 +60,22 @@
   </div>
 </div>
 
+{% with paid=travel_request.payment %}
+{% if paid and paid.purpose != 'advance' and paid.status != 'failed' %}
+<div class="alert alert-success mb-6">
+  <span>
+    {% if paid.status == 'success' or paid.status == 'completed' %}Paid{% else %}Sending{% endif %}
+    <strong>{{ paid.amount|floatformat:"2g" }} {{ paid.currency }}</strong> on {{ paid.created_at|date:"j M Y" }}.
+    {% with m=paid.metadata %}
+    {% if m.fee %}Wise fee {{ m.fee }} {{ m.fee_currency|default:paid.currency }}.{% endif %}
+    {% if m.target_currency and m.target_currency != paid.currency %}
+    Converted at 1 {{ paid.currency }} = {{ m.exchange_rate }} {{ m.target_currency }}, so {{ m.target_amount }} {{ m.target_currency }} reaches the account.
+    {% endif %}
+    {% endwith %}
+  </span>
+</div>
+{% endif %}
+{% endwith %}
 {% with owed=travel_request.amount_owed_back advance=travel_request.advance_payment %}
 {% if owed %}
 <div class="alert alert-error mb-6 flex flex-wrap justify-between">
@@ -190,6 +206,16 @@
         <div class="divider">Committee review</div>
         <form method="post" action="{% url 'request_approve' travel_request.pk %}">
           {% csrf_token %}
+          <label class="flex flex-wrap items-center gap-3 mb-3 p-3 bg-base-200 rounded-box text-sm">
+            <span class="flex-1">
+              Share of the request covered
+              <span class="block opacity-70">Starts at {{ travel_request.event.approval_percent }}%, the usual share for {{ travel_request.event.name }}. Changing it refills every line below.</span>
+            </span>
+            <span class="flex items-center gap-1">
+              <input type="number" min="1" max="100" step="1" value="{{ travel_request.event.approval_percent }}"
+                     class="input input-bordered input-sm w-20" data-percent> %
+            </span>
+          </label>
           {% for line in review_lines %}
           {% with expense=line.expense %}
           <input type="hidden" name="expense_id" value="{{ expense.pk }}">
@@ -204,7 +230,7 @@
                      class="input input-bordered input-sm w-32" placeholder="Amount" data-amount>
               <select name="approved_currency_{{ expense.pk }}" class="select select-bordered select-sm w-24" data-currency>
                 {% for option in line.options %}
-                <option value="{{ option.code }}" data-amount="{{ option.amount }}"{% if option.selected %} selected{% endif %}>{{ option.code }}</option>
+                <option value="{{ option.code }}" data-amount="{{ option.amount }}" data-full="{{ option.full }}"{% if option.selected %} selected{% endif %}>{{ option.code }}</option>
                 {% endfor %}
               </select>
             </div>
@@ -239,10 +265,18 @@
             </select>
           </div>
           <script>
-            document.querySelectorAll('[data-approval-line]').forEach(function (line) {
+            var percent = document.querySelector('[data-percent]');
+            var lines = document.querySelectorAll('[data-approval-line]');
+            function fill(line) {
+              var full = parseFloat(line.querySelector('[data-currency]').selectedOptions[0].dataset.full);
+              var share = Math.min(Math.max(parseFloat(percent.value) || 0, 0), 100);
+              line.querySelector('[data-amount]').value = (Math.round(full * share) / 100).toFixed(2);
+            }
+            percent.addEventListener('input', function () { lines.forEach(fill); });
+            lines.forEach(function (line) {
               var select = line.querySelector('[data-currency]');
               select.addEventListener('change', function () {
-                line.querySelector('[data-amount]').value = select.selectedOptions[0].dataset.amount;
+                fill(line);
                 line.querySelectorAll('[data-rate-for]').forEach(function (hint) {
                   hint.classList.toggle('hidden', hint.dataset.rateFor !== select.value);
                 });

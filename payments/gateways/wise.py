@@ -55,9 +55,15 @@ def settlement_details(transfer: dict, quote: dict | None = None) -> dict:
     rate = transfer.get('rate') or (quote or {}).get('rate')
     if rate:
         details['exchange_rate'] = str(rate)
-    fee = (quote or {}).get('fee')
+    quote = quote or {}
+    fee = quote.get('fee')
+    # A v3 quote prices each way of paying; a transfer is funded from the balance.
+    for option in quote.get('paymentOptions') or ():
+        if option.get('payIn') == 'BALANCE' and option.get('payOut') == 'BANK_TRANSFER':
+            fee = (option.get('fee') or {}).get('total', fee)
     if fee is not None:
         details['fee'] = str(fee)
+        details['fee_currency'] = quote.get('sourceCurrency') or details.get('source_currency', '')
     return details
 
 

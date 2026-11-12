@@ -120,7 +120,7 @@ class EventForm(forms.ModelForm):
     class Meta:
         model = Event
         fields = ['name', 'location', 'start_date', 'end_date', 'accepting_requests',
-                  'budget', 'budget_currency', 'url', 'description',
+                  'budget', 'budget_currency', 'approval_percent', 'url', 'description',
                   'requests_open_until', 'reimbursements_open_until',
                   'visa_letters_offered']
         widgets = {
@@ -129,6 +129,9 @@ class EventForm(forms.ModelForm):
             'start_date': forms.DateInput(attrs={'class': 'input input-bordered w-full', 'type': 'date'}),
             'end_date': forms.DateInput(attrs={'class': 'input input-bordered w-full', 'type': 'date'}),
             'accepting_requests': forms.CheckboxInput(attrs={'class': 'checkbox'}),
+            'approval_percent': forms.NumberInput(attrs={
+                'class': 'input input-bordered w-full', 'min': '1', 'max': '100', 'step': '1',
+            }),
             'budget': forms.NumberInput(attrs={
                 'class': 'input input-bordered w-full', 'step': '0.01', 'min': '0',
                 'placeholder': 'Leave blank for no limit',

@@ -680,16 +680,18 @@ def _review_lines(travel_request):
     lines = []
     for expense in travel_request.expenses.all():
         source = expense.estimated_currency
+        share = travel_request.event.share_of(expense.estimated_amount)
         options = []
         for code in dict.fromkeys(payout + [source]):
-            option = {'code': code, 'amount': expense.estimated_amount, 'rates': None}
+            option = {'code': code, 'amount': share, 'full': expense.estimated_amount, 'rates': None}
             if code != source:
                 # The same way round as the rate locked at approval, and the
                 # readable way too: 1 USD = 95.27 INR.
                 rates = exchange_rates.summary(code, source, end)
                 if rates is None:
                     continue
-                option['amount'] = (expense.estimated_amount / rates.average).quantize(Decimal('0.01'))
+                option['amount'] = (share / rates.average).quantize(Decimal('0.01'))
+                option['full'] = (expense.estimated_amount / rates.average).quantize(Decimal('0.01'))
                 option['rates'] = rates
             options.append(option)
         default = source if source in payout or len(options) == 1 else options[0]['code']
@@ -957,12 +959,12 @@ def request_batch_review(request):
             continue
         with transaction.atomic():
             if action == 'approve':
-                # Approving in bulk means approving exactly what was asked for.
-                # Left unpriced, the request would reach finance worth nothing,
-                # since a missing approved amount counts for nothing.
+                # Approving in bulk approves the event's usual share of what was
+                # asked for. Left unpriced, the request would reach finance worth
+                # nothing, since a missing approved amount counts for nothing.
                 for expense in travel_request.expenses.all():
                     if expense.approved_amount is None:
-                        expense.approved_amount = expense.estimated_amount
+                        expense.approved_amount = travel_request.event.share_of(expense.estimated_amount)
                         expense.approved_currency = expense.estimated_currency
                         expense.save(update_fields=['approved_amount', 'approved_currency'])
                 remaining = travel_request.event.budget_remaining()

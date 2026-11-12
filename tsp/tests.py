@@ -340,6 +340,7 @@ class EventManagementTests(TestCase):
         self.client.post(reverse('event_edit', args=[self.event.pk]), {
             'name': 'Renamed', 'location': 'Prague',
             'start_date': '2027-06-14', 'end_date': '2027-06-16',
+            'approval_percent': '100',
         })
         self.event.refresh_from_db()
         self.assertEqual(self.event.name, 'Renamed')
@@ -1032,7 +1033,7 @@ class EventAuditTests(TestCase):
         self.client.post(reverse('event_create'), {
             'name': 'Audited Summit', 'location': 'Berlin',
             'start_date': '2099-05-01', 'end_date': '2099-05-03',
-            'budget': '500.00', 'budget_currency': 'EUR'})
+            'budget': '500.00', 'budget_currency': 'EUR', 'approval_percent': '100'})
         entry = self.entries.objects.filter(action='event.created').first()
         self.assertIsNotNone(entry)
         self.assertEqual(entry.user, self.committee)
@@ -1045,7 +1046,7 @@ class EventAuditTests(TestCase):
             start_date=date(2099, 5, 1), end_date=date(2099, 5, 3))
         self.client.post(reverse('event_edit', args=[event.pk]), {
             'name': 'Renamed Summit', 'location': 'Berlin',
-            'start_date': '2099-05-01', 'end_date': '2099-05-03'})
+            'start_date': '2099-05-01', 'end_date': '2099-05-03', 'approval_percent': '100'})
         entry = self.entries.objects.filter(action='event.updated').first()
         self.assertIsNotNone(entry)
         self.assertIn('name', entry.detail)

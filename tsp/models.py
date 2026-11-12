@@ -3,6 +3,7 @@ from decimal import Decimal
 
 from django.conf import settings
 from django.contrib.contenttypes.fields import GenericRelation
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils import timezone
 
@@ -50,6 +51,10 @@ class Event(AuditModel):
     accepting_requests = models.BooleanField(default=True)
     budget = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
     budget_currency = models.CharField(max_length=3, default='EUR')
+    # Share of each requested amount the committee starts from, as in 69 for 69%.
+    approval_percent = models.PositiveSmallIntegerField(
+        default=100, validators=[MinValueValidator(1), MaxValueValidator(100)],
+    )
     url = models.URLField(blank=True)
     description = models.TextField(blank=True)
     # Both deadlines are dates, and the cut-off is midnight UTC as that date
@@ -159,6 +164,10 @@ class Event(AuditModel):
         for record in records:
             totals[record.currency] = totals.get(record.currency, Decimal('0')) + record.amount
         return sorted(totals.items())
+
+    def share_of(self, amount):
+        """The part of a requested amount this event normally covers."""
+        return (amount * self.approval_percent / 100).quantize(Decimal('0.01'))
 
     def budget_remaining(self):
         """What is left of the budget, or None when none is set."""

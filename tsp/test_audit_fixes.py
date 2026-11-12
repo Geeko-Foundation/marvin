@@ -335,3 +335,58 @@ class HistoryVisibilityTests(TestCase):
         html = self.page(make_user('historytsp', [GROUP_TSP]))
         self.assertIn('historyfinance', html)
         self.assertIn('over budget by 40 EUR', html)
+
+
+class ApprovalShareTests(TestCase):
+    """An event that covers part of each request starts every review there."""
+
+    def setUp(self):
+        self.event = make_event()
+        self.event.approval_percent = 69
+        self.event.save()
+        self.owner = make_user('shareowner', [GROUP_REQUESTER])
+        self.committee = make_user('sharecommittee', [GROUP_TSP])
+        self.req = TravelRequest.objects.create(
+            user=self.owner, event=self.event, state=RequestState.SUBMITTED, description='T')
+        self.expense = Expense.objects.create(
+            request=self.req, category='flight', description='F',
+            estimated_amount=Decimal('200'), estimated_currency='EUR')
+
+    def test_the_review_form_starts_at_the_events_share(self):
+        self.client.force_login(self.committee)
+        html = self.client.get(reverse('request_detail', args=[self.req.pk])).content.decode()
+        self.assertIn('value="138.00"', html)
+        self.assertIn('data-full="200', html)
+        self.assertIn('value="69"', html)
+
+    def test_batch_approval_applies_the_share(self):
+        self.client.force_login(self.committee)
+        self.client.post(reverse('request_batch_review'), {'request_ids': [self.req.pk], 'action': 'approve'})
+        self.expense.refresh_from_db()
+        self.assertEqual(self.expense.approved_amount, Decimal('138.00'))
+
+    def test_the_share_cannot_exceed_everything(self):
+        from django.core.exceptions import ValidationError
+        self.event.approval_percent = 101
+        with self.assertRaises(ValidationError):
+            self.event.full_clean()
+
+
+class PaymentSummaryTests(TestCase):
+    """The requester sees what Wise charged and what reached their account."""
+
+    def test_fee_and_conversion_are_shown_to_the_requester(self):
+        from django.contrib.contenttypes.models import ContentType
+        owner = make_user('summaryowner', [GROUP_REQUESTER])
+        req = TravelRequest.objects.create(
+            user=owner, event=make_event(), state=RequestState.PAID, description='T')
+        PaymentRecord.objects.create(
+            content_type=ContentType.objects.get_for_model(req), object_id=req.pk,
+            gateway_id='wise-api', amount=Decimal('10.00'), currency='EUR', status='completed',
+            reference=req.reference, recipient_name='x', recipient_email='x@example.org',
+            metadata={'fee': '0.57', 'fee_currency': 'EUR', 'exchange_rate': '103.722',
+                      'target_amount': '978.09', 'target_currency': 'INR'})
+        self.client.force_login(owner)
+        html = self.client.get(reverse('request_detail', args=[req.pk])).content.decode()
+        self.assertIn('Wise fee 0.57 EUR', html)
+        self.assertIn('978.09 INR reaches the account', html)
