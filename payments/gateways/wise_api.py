@@ -198,7 +198,9 @@ class WiseApiClient:
         if not profiles:
             raise WiseApiError('No Wise profiles returned for this API token.')
 
-        business = next((p for p in profiles if p.get('type') == 'business'), None)
+        # The v2 API writes the type in capitals, as in BUSINESS. A personal
+        # profile cannot fund payments through the API, so prefer the business one.
+        business = next((p for p in profiles if str(p.get('type', '')).lower() == 'business'), None)
         chosen = business or profiles[0]
         self._resolved_profile_id = str(chosen['id'])
         self.profile_id = self._resolved_profile_id
