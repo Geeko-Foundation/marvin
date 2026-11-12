@@ -18,6 +18,7 @@ simulation endpoints (see Wise Simulation API docs).
 
 from __future__ import annotations
 
+import base64
 import time
 import uuid
 from decimal import Decimal
@@ -32,6 +33,21 @@ from payments.gateways.wise_logging import log_wise_request
 TIMEOUT = (5, 30)
 
 WISE_LIVE_BASE_URL = 'https://api.transferwise.com'
+
+
+def sign_one_time_token(token: str, private_key_pem: str) -> str:
+    """
+    Sign Wise's one-time token for Strong Customer Authentication.
+
+    Wise checks the signature against the public key uploaded to the account,
+    which proves the request comes from whoever holds the private key.
+    """
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import padding
+
+    key = serialization.load_pem_private_key(private_key_pem.encode(), password=None)
+    signature = key.sign(token.encode('ascii'), padding.PKCS1v15(), hashes.SHA256())
+    return base64.b64encode(signature).decode('ascii')
 WISE_SANDBOX_BASE_URL = 'https://api.wise-sandbox.com'
 
 SUPPORTED_CURRENCIES = [
@@ -76,11 +92,13 @@ class WiseApiClient:
         profile_id: str | None = None,
         *,
         sandbox: bool = True,
+        sca_private_key: str = '',
     ):
         if not api_token:
             raise WiseApiError('WISE_API_TOKEN is not configured.')
 
         self.api_token = api_token
+        self.sca_private_key = (sca_private_key or '').strip()
         self.profile_id = str(profile_id) if profile_id else ''
         self.sandbox = sandbox
         self.base_url = WISE_SANDBOX_BASE_URL if sandbox else WISE_LIVE_BASE_URL
@@ -429,9 +447,16 @@ class WiseApiClient:
             if approval == 'APPROVED' and ott:
                 response = self._send('POST', path, json=body, headers={'One-Time-Token': ott})
                 log_wise_request('POST', path, response.status_code, mode=self.mode_label)
+            elif ott and self.sca_private_key:
+                response = self._send('POST', path, json=body, headers={
+                    'x-2fa-approval': ott,
+                    'X-Signature': sign_one_time_token(ott, self.sca_private_key),
+                })
+                log_wise_request('POST', path, response.status_code, mode=self.mode_label)
             elif ott:
                 raise WiseApiError(
-                    f'SCA required. Complete Wise challenges for OTT={ott} and retry with One-Time-Token.',
+                    'Wise needs this payment signed, and WISE_SCA_PRIVATE_KEY is not set. '
+                    'Fund the transfer in Wise, or configure the signing key.',
                     status_code=403,
                 )
             else:
@@ -643,6 +668,7 @@ def get_wise_client(**kwargs) -> WiseApiClient:
     if django_settings:
         kwargs.setdefault('api_token', getattr(django_settings, 'WISE_API_TOKEN', None))
         kwargs.setdefault('profile_id', getattr(django_settings, 'WISE_API_PROFILE_ID', None))
+        kwargs.setdefault('sca_private_key', getattr(django_settings, 'WISE_SCA_PRIVATE_KEY', ''))
         if 'sandbox' not in kwargs:
             kwargs['sandbox'] = getattr(django_settings, 'WISE_API_SANDBOX', True)
 

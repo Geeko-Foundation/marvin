@@ -146,3 +146,54 @@ class WiseClientNetworkTests(TestCase):
         with mock.patch.object(wise._session, 'request', side_effect=requests.Timeout('slow')):
             with self.assertRaises(WiseApiError):
                 wise.get_transfer(1)
+
+
+class StrongCustomerAuthenticationTests(TestCase):
+    """Live funding needs the one-time token signed with the account's key."""
+
+    def setUp(self):
+        from cryptography.hazmat.primitives import serialization
+        from cryptography.hazmat.primitives.asymmetric import rsa
+        self.key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        self.pem = self.key.private_bytes(
+            serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
+            serialization.NoEncryption()).decode()
+
+    def wise(self, key=''):
+        from payments.gateways.wise_api import WiseApiClient
+        return WiseApiClient(api_token='t', profile_id='1', sandbox=False, sca_private_key=key)
+
+    def challenge_then(self, final_status=200):
+        challenge = mock.Mock(status_code=403, headers={
+            'x-2fa-approval-result': 'REJECTED', 'x-2fa-approval': 'one-time-token-123'})
+        challenge.json.return_value = {}
+        done = mock.Mock(status_code=final_status, headers={})
+        done.json.return_value = {'status': 'COMPLETED'}
+        return [challenge, done]
+
+    def test_the_token_is_signed_and_wise_can_verify_it(self):
+        import base64
+        from cryptography.hazmat.primitives import hashes
+        from cryptography.hazmat.primitives.asymmetric import padding
+        wise = self.wise(self.pem)
+        with mock.patch.object(wise._session, 'request', side_effect=self.challenge_then()) as sent:
+            self.assertEqual(wise.fund_transfer(42), {'status': 'COMPLETED'})
+        retry = sent.call_args_list[1].kwargs['headers']
+        self.assertEqual(retry['x-2fa-approval'], 'one-time-token-123')
+        # Raises if the signature does not match the public key.
+        self.key.public_key().verify(
+            base64.b64decode(retry['X-Signature']), b'one-time-token-123',
+            padding.PKCS1v15(), hashes.SHA256())
+
+    def test_without_a_key_the_error_says_what_to_configure(self):
+        wise = self.wise('')
+        with mock.patch.object(wise._session, 'request', side_effect=self.challenge_then()):
+            with self.assertRaises(WiseApiError) as raised:
+                wise.fund_transfer(42)
+        self.assertIn('WISE_SCA_PRIVATE_KEY', str(raised.exception))
+
+    def test_a_refused_signature_is_reported_not_treated_as_paid(self):
+        wise = self.wise(self.pem)
+        with mock.patch.object(wise._session, 'request', side_effect=self.challenge_then(403)):
+            with self.assertRaises(WiseApiError):
+                wise.fund_transfer(42)

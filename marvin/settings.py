@@ -216,6 +216,10 @@ WISE_SOURCE_CURRENCY = env('WISE_SOURCE_CURRENCY', 'GBP')
 # Without the key nothing delivered can be trusted, so the endpoint refuses.
 WISE_WEBHOOK_PUBLIC_KEY = env('WISE_WEBHOOK_PUBLIC_KEY', '').replace('\\n', '\n')
 
+# Private key whose public half is uploaded to the Wise account. Wise asks for
+# a signature with it before funding a transfer on the live API.
+WISE_SCA_PRIVATE_KEY = env('WISE_SCA_PRIVATE_KEY', '').replace('\\n', '\n')
+
 # Currencies the committee approves in, which are the ones finance pays from.
 PAYOUT_CURRENCIES = env_list('PAYOUT_CURRENCIES', 'EUR,USD,GBP')
 
