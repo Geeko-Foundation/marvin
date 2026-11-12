@@ -389,7 +389,7 @@ class PaymentSummaryTests(TestCase):
                       'target_amount': '978.09', 'target_currency': 'INR'})
         self.client.force_login(owner)
         html = self.client.get(reverse('request_detail', args=[req.pk])).content.decode()
-        self.assertIn('Wise fee 0.57 EUR', html)
+        self.assertIn("Wise's fee of 0.57 EUR was paid by the foundation.", html)
         self.assertIn('978.09 INR reaches the account', html)
         self.assertIn(f'Wise transfer 2149871408 · reference {req.reference}', html)
 

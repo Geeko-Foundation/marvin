@@ -64,16 +64,24 @@ class TransactionIdTests(TestCase):
 
 
 class AccountCurrencyTests(TestCase):
-    """An account in another currency gets exactly the approved sum, converted by Wise."""
+    """The requester receives the whole approved sum; the foundation pays Wise's fee on top."""
 
-    def test_euros_are_sent_and_wise_converts_into_the_account_currency(self):
+    def test_the_approved_amounts_worth_arrives_in_the_account_currency(self):
         client = wise_client()
+        client.get_rate.return_value = Decimal('104.245')
         request = payment('100.00', 'EUR')
         request.metadata['account_currency'] = 'INR'
         gateway_with(client).initiate_payment(request)
+        client.get_rate.assert_called_once_with('EUR', 'INR')
         client.create_quote.assert_called_once_with(
             source_currency='EUR', target_currency='INR',
-            source_amount=Decimal('100.00'), target_account=704030890)
+            target_amount=Decimal('10424.50'), target_account=704030890)
+
+    def test_currencies_without_cents_are_rounded_to_whole_units(self):
+        from payments.gateways.wise import converted
+        client = mock.Mock()
+        client.get_rate.return_value = Decimal('163.4567')
+        self.assertEqual(converted(client, Decimal('10.00'), 'EUR', 'JPY'), Decimal('1635'))
 
     def test_a_matching_account_still_receives_the_exact_amount(self):
         client = wise_client()
@@ -244,8 +252,12 @@ class BatchExportTests(TestCase):
     def test_the_file_converts_into_the_recipients_account_currency(self):
         self.owner.profile.banking_currency = 'INR'
         self.owner.profile.save()
-        content, _, _ = self.service.export_batch('wise-csv', self.finance)
-        self.assertIn(',EUR,90.00,EUR,INR,BANK_TRANSFER', content)
+        wise = mock.Mock()
+        wise.get_rate.return_value = Decimal('100')
+        with mock.patch('payments.gateways.wise.get_wise_client', return_value=wise):
+            content, _, _ = self.service.export_batch('wise-csv', self.finance)
+        # The INR amount is what arrives, so Wise's fee is added to the foundation's side.
+        self.assertIn(',INR,9000.00,EUR,INR,BANK_TRANSFER', content)
 
     def test_the_file_uses_the_requests_own_reference(self):
         content, _, _ = self.service.export_batch('wise-csv', self.finance)
