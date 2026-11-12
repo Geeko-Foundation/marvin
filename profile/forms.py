@@ -59,7 +59,6 @@ class ProfileForm(forms.ModelForm):
             'state',
             'country',
             'postal_code',
-            'push_notifications_enabled',
         ]
         widgets = {
             'phone': forms.TextInput(attrs={'class': INPUT_CLASS}),
@@ -71,7 +70,6 @@ class ProfileForm(forms.ModelForm):
                 choices=[('', 'Select your country')] + list(COUNTRIES),
             ),
             'postal_code': forms.TextInput(attrs={'class': INPUT_CLASS}),
-            'push_notifications_enabled': forms.CheckboxInput(attrs={'class': 'checkbox'}),
         }
 
     def __init__(self, *args, **kwargs):

@@ -15,10 +15,6 @@
     .print-only { display: none; }
   </style>
   {% block extra_head %}{% endblock %}
-  {% if user.is_authenticated %}
-  {% load webpush_notifications %}
-  {% webpush_header %}
-  {% endif %}
 </head>
 <body class="min-h-screen bg-base-200">
   {% if user.is_authenticated %}

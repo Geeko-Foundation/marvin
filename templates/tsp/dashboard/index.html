@@ -3,6 +3,28 @@
 {% block title %}Dashboard{% endblock %}
 
 {% block content %}
+{% if not user.webpush_info.exists %}
+<div class="alert mb-6 flex flex-wrap justify-between" data-alerts-prompt hidden>
+  <span>Want an alert when your request moves on or a payment is sent?</span>
+  <span class="flex gap-2">
+    <a href="{% url 'profile' %}#alerts" class="btn btn-primary btn-sm">Turn on alerts</a>
+    <button type="button" class="btn btn-ghost btn-sm" data-alerts-dismiss>Not now</button>
+  </span>
+</div>
+<script>
+  (function () {
+    var prompt = document.querySelector('[data-alerts-prompt]');
+    var key = 'marvin-alerts-prompt-dismissed';
+    try { if (localStorage.getItem(key)) return; } catch (e) {}
+    if (!('PushManager' in window)) return;
+    prompt.hidden = false;
+    prompt.querySelector('[data-alerts-dismiss]').addEventListener('click', function () {
+      prompt.hidden = true;
+      try { localStorage.setItem(key, '1'); } catch (e) {}
+    });
+  })();
+</script>
+{% endif %}
 {% if profile.is_requester %}
 {% include "tsp/dashboard/_requester.html" %}
 {% endif %}

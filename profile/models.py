@@ -41,10 +41,6 @@ class UserProfile(AuditModel):
     banking_currency = models.CharField(max_length=3, default='EUR')
     wise_account_id = models.PositiveIntegerField(blank=True, null=True)
     wise_recipient_verified_at = models.DateTimeField(blank=True, null=True)
-    push_notifications_enabled = models.BooleanField(
-        default=False,
-        help_text='Receive browser push notifications for TSP activity.',
-    )
 
     class Meta:
         db_table = 'tsp_userprofile'
