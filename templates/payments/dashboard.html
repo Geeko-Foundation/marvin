@@ -12,18 +12,6 @@
 </div>
 {% endif %}
 
-{% if batch_gateways %}
-<div class="flex flex-wrap gap-2 mb-6">
-  {% for gateway in batch_gateways %}
-  <form method="post" action="{% url 'payments:batch_export' %}">
-    {% csrf_token %}
-    <input type="hidden" name="gateway_id" value="{{ gateway.gateway_id }}">
-    <button type="submit" class="btn btn-outline btn-sm">Export {{ gateway.label }}</button>
-  </form>
-  {% endfor %}
-</div>
-{% endif %}
-
 {% if queue_items %}
 <div class="grid gap-4">
   {% for item in queue_items %}
@@ -52,7 +40,8 @@
           {% csrf_token %}
           <input type="hidden" name="object_id" value="{{ item.object_id }}">
           {% if item.sending %}
-          <span class="text-sm opacity-70 max-w-md">Sent {{ item.sending.created_at|date:"j M, H:i" }}. Waiting for Wise to confirm ({{ item.sending.get_status_display }}).
+          <span class="text-sm opacity-70 max-w-md" aria-live="polite"
+                data-payment-status="{% url 'payments:status' item.sending.pk %}">Sent {{ item.sending.created_at|date:"j M, H:i" }}. Waiting for Wise to confirm ({{ item.sending.get_status_display }}).
             {% if item.sending.metadata.error %}<span class="block text-warning">Wise is holding it: {{ item.sending.metadata.error }}</span>{% endif %}</span>
           {% elif item.in_batch %}
           <span class="text-sm opacity-70">In the batch file exported {{ item.in_batch.created_at|date:"j M Y" }}</span>
@@ -66,15 +55,35 @@
           </select>
           <button type="submit" class="btn btn-primary btn-sm" {% if not item.wise_ready %}disabled title="The requester must finish setting up Wise first"{% endif %}>Process Payment</button>
           {% endif %}
-          {% if item.detail_url %}
-          <a href="{{ item.detail_url }}" class="btn btn-ghost btn-sm">Details</a>
-          {% endif %}
         </form>
       </div>
+      {% if item.details_template %}
+      <details class="collapse collapse-arrow bg-base-200 mt-2">
+        <summary class="collapse-title text-sm font-medium">Expenses and documents</summary>
+        <div class="collapse-content">
+          {% include item.details_template with travel_request=item.object %}
+          {% if item.detail_url %}<a href="{{ item.detail_url }}" class="link text-sm mt-2 inline-block">Open the full request</a>{% endif %}
+        </div>
+      </details>
+      {% elif item.detail_url %}
+      <a href="{{ item.detail_url }}" class="btn btn-ghost btn-sm">Details</a>
+      {% endif %}
     </div>
   </div>
   {% endfor %}
 </div>
+{% if batch_gateways %}
+<div class="flex flex-wrap items-center gap-2 mt-6">
+  <span class="text-sm opacity-70">Pay everything above at once by uploading a batch file to Wise:</span>
+  {% for gateway in batch_gateways %}
+  <form method="post" action="{% url 'payments:batch_export' %}" data-download>
+    {% csrf_token %}
+    <input type="hidden" name="gateway_id" value="{{ gateway.gateway_id }}">
+    <button type="submit" class="btn btn-outline btn-sm">Export {{ gateway.label }}</button>
+  </form>
+  {% endfor %}
+</div>
+{% endif %}
 {% else %}
 <div class="hero bg-base-100 rounded-box py-16">
   <div class="hero-content text-center">
@@ -82,4 +91,29 @@
   </div>
 </div>
 {% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  // Wise reports progress in the background, so keep each waiting payment's
+  // status current without a reload, and stop once it has an answer.
+  document.querySelectorAll('[data-payment-status]').forEach(function (status) {
+    var timer = setInterval(check, 10000);
+    function check() {
+      if (document.hidden) return;
+      fetch(status.dataset.paymentStatus, {headers: {'Accept': 'application/json'}})
+        .then(function (response) { return response.ok ? response.json() : null; })
+        .then(function (data) {
+          if (!data) return;
+          status.textContent = data.message;
+          if (data.final) {
+            clearInterval(timer);
+            status.classList.remove('opacity-70');
+            status.classList.add(data.paid ? 'text-success' : 'text-error');
+          }
+        })
+        .catch(function () {});
+    }
+  });
+</script>
 {% endblock %}

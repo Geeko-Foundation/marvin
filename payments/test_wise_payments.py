@@ -423,3 +423,44 @@ class QueueChoicesTests(TestCase):
         html = self.page()
         self.assertIn('Mark Batch Paid', html)
         self.assertIn('name="gateway_id" value="wise-csv"', html)
+
+
+class PaymentQueuePageTests(TestCase):
+    """The queue keeps a waiting payment's status current and shows what is being paid."""
+
+    setUp = PaymentMessageTests.setUp
+    pay = PaymentMessageTests.pay
+
+    def status_json(self, result):
+        from django.urls import reverse
+        self.pay(self.PaymentResult(status='processing', external_id='1'))
+        record = PaymentRecord.objects.get(object_id=self.req.pk)
+        with mock.patch('payments.services.get_gateway') as get_gateway:
+            get_gateway.return_value.get_status.return_value = result
+            return self.client.get(reverse('payments:status', args=[record.pk])).json()
+
+    def test_the_status_says_when_wise_has_paid(self):
+        data = self.status_json(self.PaymentResult(status='success', external_id='1'))
+        self.assertEqual((data['final'], data['paid']), (True, True))
+        self.assertIn('Paid', data['message'])
+
+    def test_the_status_says_why_wise_is_holding_a_payment(self):
+        held = 'please ensure profile is verified'
+        data = self.status_json(self.PaymentResult(status='processing', external_id='1', metadata={'error': held}))
+        self.assertFalse(data['final'])
+        self.assertIn(held, data['message'])
+
+    def test_a_refused_transfer_is_final_and_says_it_was_not_paid(self):
+        data = self.status_json(self.PaymentResult(status='failed', external_id='1',
+                                                   metadata={'transfer_status': 'bounced_back'}))
+        self.assertEqual((data['final'], data['paid']), (True, False))
+        self.assertIn('bounced_back', data['message'])
+
+    def test_each_row_shows_its_expenses_and_the_batch_export_comes_after_the_queue(self):
+        from django.urls import reverse
+        self.client.force_login(self.finance)
+        html = self.client.get(reverse('payments:dashboard')).content.decode()
+        self.assertIn('Expenses and documents', html)
+        self.assertIn('Open the full request', html)
+        self.assertIn('90.00 EUR', html)
+        self.assertLess(html.index(self.req.reference + ' ·'), html.index('Export Wise Batch CSV'))

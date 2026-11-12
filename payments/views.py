@@ -179,10 +179,24 @@ def payment_status(request, pk):
     record = get_object_or_404(PaymentRecord, pk=pk)
     service = PaymentService()
     record = service.refresh_status(record)
+    paid = record.status in ('success', 'completed')
+    failed = record.status in ('failed', 'cancelled')
+    if paid:
+        message = f'Paid. Wise confirmed the transfer for {record.reference}.'
+    elif failed:
+        reason = record.metadata.get('error') or record.metadata.get('transfer_status') or record.status
+        message = f'Not paid: {reason}. Reload the page to pay it again.'
+    elif record.metadata.get('error'):
+        message = f'Waiting for Wise. Wise is holding it: {record.metadata["error"]}'
+    else:
+        message = f'Waiting for Wise to confirm ({record.get_status_display()}).'
     return JsonResponse({
         'id': record.pk,
         'external_id': record.external_id,
         'status': record.status,
+        'paid': paid,
+        'final': paid or failed,
+        'message': message,
     })
 
 
