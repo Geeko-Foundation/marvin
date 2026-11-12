@@ -72,7 +72,7 @@ ZERO_DECIMAL_CURRENCIES = {'JPY', 'KRW'}
 
 
 def converted(client, amount: Decimal, source: str, target: str) -> Decimal:
-    """``amount`` of ``source`` in ``target`` at Wise's current rate, rounded as Wise pays it."""
+    """``amount`` of ``source`` in ``target`` at Wise's current rate, to the units Wise pays in."""
     places = Decimal('1') if target in ZERO_DECIMAL_CURRENCIES else Decimal('0.01')
     return (amount * client.get_rate(source, target)).quantize(places)
 
