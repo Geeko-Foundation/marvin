@@ -3,8 +3,7 @@
 from django.utils import timezone
 
 from profile.audit_log import record
-from tsp.models import RequestState, StateHistory, TravelRequest
-
+from tsp.models import RequestState, StateHistory
 
 TERMINAL_STATES = {
     RequestState.REJECTED,

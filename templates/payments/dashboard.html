@@ -29,7 +29,7 @@
           {% if item.subtitle %}<p class="text-sm opacity-60">{{ item.subtitle }}</p>{% endif %}
           {% if item.totals %}
           <p class="text-sm">To pay:
-            {% for currency, amount in item.totals %}<strong>{{ amount }} {{ currency }}</strong>{% if not forloop.last %}, {% endif %}{% endfor %}
+            {% for currency, amount in item.totals %}<strong>{{ amount|floatformat:"2g" }} {{ currency }}</strong>{% if not forloop.last %}, {% endif %}{% endfor %}
           </p>
           {% if item.mixed_currencies %}
           <p class="text-xs text-warning">Mixed currencies. Each one has to be paid separately.</p>
@@ -45,12 +45,18 @@
         <form method="post" action="{% url 'payments:process' %}" class="flex flex-wrap gap-2 items-end">
           {% csrf_token %}
           <input type="hidden" name="object_id" value="{{ item.object_id }}">
+          {% if item.in_batch %}
+          <span class="text-sm opacity-70">In the batch file exported {{ item.in_batch.created_at|date:"j M Y" }}</span>
+          <input type="hidden" name="gateway_id" value="{{ item.in_batch.gateway_id }}">
+          <button type="submit" class="btn btn-primary btn-sm">Mark Batch Paid</button>
+          {% else %}
           <select name="gateway_id" class="select select-bordered select-sm">
             {% for gateway in gateways %}
             <option value="{{ gateway.gateway_id }}">{{ gateway.label }}</option>
             {% endfor %}
           </select>
-          <button type="submit" class="btn btn-primary btn-sm" {% if not item.wise_ready %}disabled title="Requestor must complete Wise onboarding first"{% endif %}>Process Payment</button>
+          <button type="submit" class="btn btn-primary btn-sm" {% if not item.wise_ready %}disabled title="The requester must finish setting up Wise first"{% endif %}>Process Payment</button>
+          {% endif %}
           {% if item.detail_url %}
           <a href="{{ item.detail_url }}" class="btn btn-ghost btn-sm">Details</a>
           {% endif %}

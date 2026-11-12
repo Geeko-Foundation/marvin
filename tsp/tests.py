@@ -10,10 +10,23 @@ from django.test import RequestFactory, TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from profile.groups import GROUP_FINANCE, GROUP_REQUESTER, GROUP_TSP, assign_user_to_group
+from profile.groups import (
+    GROUP_FINANCE,
+    GROUP_REQUESTER,
+    GROUP_TSP,
+    assign_user_to_group,
+)
 from profile.models import UserProfile
 from tsp.forms import MAX_DOCUMENT_BYTES, DocumentUploadForm
-from tsp.models import Comment, Document, Event, Expense, RequestState, StateHistory, TravelRequest
+from tsp.models import (
+    Comment,
+    Document,
+    Event,
+    Expense,
+    RequestState,
+    StateHistory,
+    TravelRequest,
+)
 from tsp.services.state_machine import (
     StateTransitionError,
     can_transition,
@@ -203,8 +216,9 @@ class DocumentUploadFormTests(TestCase):
 
     def test_rejected_upload_is_not_saved(self):
         owner = make_requester('uploader')
+        # Accepted, so the only thing that can refuse it is the file itself.
         travel_request = TravelRequest.objects.create(
-            user=owner, event=make_event(), description='Talk',
+            user=owner, event=make_event(), description='Talk', state=RequestState.ACCEPTED,
         )
         self.client.force_login(owner)
         self.client.post(
@@ -339,6 +353,7 @@ class EventManagementTests(TestCase):
         self.client.post(reverse('event_edit', args=[self.event.pk]), {
             'name': 'Renamed', 'location': 'Prague',
             'start_date': '2027-06-14', 'end_date': '2027-06-16',
+            'approval_percent': '100',
         })
         self.event.refresh_from_db()
         self.assertEqual(self.event.name, 'Renamed')
@@ -382,6 +397,8 @@ class EventManagementTests(TestCase):
         response = self.client.get(reverse('event_list'))
         self.assertContains(response, reverse('event_delete', args=[self.event.pk]))
         self.assertNotContains(response, reverse('event_delete', args=[busy.pk]))
+
+
 class InternalNotesTests(TestCase):
     PUBLIC = 'Looks fine to me'
     INTERNAL = 'Hotel estimate is well above our usual cap'
@@ -474,12 +491,12 @@ class ActualCostTests(TestCase):
     def test_spending_less_than_approved_pays_the_lower_figure(self):
         expense = self._expense(600, 400)
         self.assertEqual(expense.payable_amount(), 400)
-        self.assertEqual(self.request.total_payable(), 400)
+        self.assertEqual(self.request.totals_payable(), [('EUR', 400)])
 
     def test_spending_more_than_approved_still_pays_the_approved_figure(self):
         expense = self._expense(600, 800)
         self.assertEqual(expense.payable_amount(), 600)
-        self.assertEqual(self.request.total_payable(), 600)
+        self.assertEqual(self.request.totals_payable(), [('EUR', 600)])
 
     def test_the_lesser_is_taken_line_by_line(self):
         # Approved 300 + 300, spent 400 + 100. Per line that is 300 + 100 = 400.
@@ -487,9 +504,9 @@ class ActualCostTests(TestCase):
         # line be covered by an underspend on another.
         self._expense(300, 400)
         self._expense(300, 100)
-        self.assertEqual(self.request.total_approved(), 600)
+        self.assertEqual(self.request.totals_approved(), [('EUR', 600)])
         self.assertEqual(self.request.total_actual(), 500)
-        self.assertEqual(self.request.total_payable(), 400)
+        self.assertEqual(self.request.totals_payable(), [('EUR', 400)])
 
     def test_nothing_reported_yet_falls_back_to_approved(self):
         expense = self._expense(600)
@@ -502,6 +519,26 @@ class ActualCostTests(TestCase):
         # 400 USD is not necessarily less than 600 EUR, so it is not guessed at.
         self.assertEqual(expense.payable_amount(), 600)
         self.assertEqual(self.request.expenses_needing_a_decision(), [expense])
+
+    def test_a_receipt_in_the_requested_currency_uses_the_locked_rate(self):
+        expense = Expense.objects.create(
+            request=self.request, category='flight', description='Flight',
+            estimated_amount=10000, estimated_currency='INR',
+            approved_amount=Decimal('73.62'), approved_currency='EUR', approval_rate=Decimal('108.68'),
+            actual_amount=7000, actual_currency='INR',
+        )
+        self.assertFalse(expense.has_currency_mismatch())
+        # 7000 INR at 108.68 is 64.41 EUR, less than the 73.62 approved.
+        self.assertEqual(expense.payable_amount(), Decimal('64.41'))
+
+    def test_the_receipt_currency_is_the_requested_or_the_approved_one(self):
+        from tsp.forms import ExpenseActualForm
+        expense = Expense(estimated_currency='INR', approved_currency='EUR', approved_amount=1)
+        form = ExpenseActualForm(instance=expense)
+        self.assertEqual([c for c, _ in form.fields['actual_currency'].choices], ['INR', 'EUR'])
+        self.assertEqual(form.fields['actual_currency'].initial, 'INR')
+        self.assertFalse(ExpenseActualForm({'actual_amount': '5', 'actual_currency': 'USD'},
+                                           instance=expense).is_valid())
 
     def test_finance_is_asked_to_pay_the_payable_total(self):
         from tsp.payables import TravelRequestPayableAdapter
@@ -542,7 +579,7 @@ class ActualCostTests(TestCase):
         self.assertRedirects(response, reverse('request_detail', args=[self.request.pk]))
         expense.refresh_from_db()
         self.assertEqual(expense.actual_amount, Decimal('425.50'))
-        self.assertEqual(self.request.total_payable(), Decimal('425.50'))
+        self.assertEqual(self.request.totals_payable(), [('EUR', Decimal('425.50'))])
 
     def test_only_the_owner_can_report_them(self):
         self._expense(600)
@@ -866,6 +903,7 @@ class ClaimReminderTests(TestCase):
 
     def _run(self, **kwargs):
         from io import StringIO
+
         from django.core.management import call_command
 
         out = StringIO()
@@ -879,10 +917,18 @@ class ClaimReminderTests(TestCase):
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn('7 day(s) left', mail.outbox[0].subject)
 
-    def test_nothing_is_sent_on_an_ordinary_day(self):
-        self._request_closing_in(9)
+    def test_nothing_is_sent_before_the_first_reminder_is_due(self):
+        self._request_closing_in(20)
         self._run()
         self.assertEqual(len(mail.outbox), 0)
+
+    def test_running_twice_or_late_never_repeats_a_reminder(self):
+        self._request_closing_in(9)
+        self._run()
+        self._run()
+        # The 14-day reminder was missed, so it goes out once, late.
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn('9 day(s) left', mail.outbox[0].subject)
 
     def test_a_dry_run_sends_nothing(self):
         self._request_closing_in(7)
@@ -908,6 +954,7 @@ class EventSpendTests(TestCase):
 
     def _paid_request(self, approved, paid=None, currency='EUR'):
         from django.contrib.contenttypes.models import ContentType
+
         from payments.models import PaymentRecord
 
         req = TravelRequest.objects.create(
@@ -943,7 +990,7 @@ class EventSpendTests(TestCase):
 
 
 class AuditLogTests(TestCase):
-    """Patrick asked for every action logged, and the log not alterable."""
+    """Every action is logged, and the log cannot be altered."""
 
     def setUp(self):
         from profile.audit_log import AuditLogEntry
@@ -997,6 +1044,7 @@ class AuditLogTests(TestCase):
 
     def test_logging_never_breaks_the_action_it_records(self):
         from unittest import mock
+
         from tsp.services.state_machine import transition_request
 
         with mock.patch('profile.audit_log.AuditLogEntry.objects.create',
@@ -1023,7 +1071,7 @@ class EventAuditTests(TestCase):
         self.client.post(reverse('event_create'), {
             'name': 'Audited Summit', 'location': 'Berlin',
             'start_date': '2099-05-01', 'end_date': '2099-05-03',
-            'budget': '500.00', 'budget_currency': 'EUR'})
+            'budget': '500.00', 'budget_currency': 'EUR', 'approval_percent': '100'})
         entry = self.entries.objects.filter(action='event.created').first()
         self.assertIsNotNone(entry)
         self.assertEqual(entry.user, self.committee)
@@ -1036,7 +1084,7 @@ class EventAuditTests(TestCase):
             start_date=date(2099, 5, 1), end_date=date(2099, 5, 3))
         self.client.post(reverse('event_edit', args=[event.pk]), {
             'name': 'Renamed Summit', 'location': 'Berlin',
-            'start_date': '2099-05-01', 'end_date': '2099-05-03'})
+            'start_date': '2099-05-01', 'end_date': '2099-05-03', 'approval_percent': '100'})
         entry = self.entries.objects.filter(action='event.updated').first()
         self.assertIsNotNone(entry)
         self.assertIn('name', entry.detail)
@@ -1055,3 +1103,30 @@ class EventAuditTests(TestCase):
             'file': SimpleUploadedFile('r.pdf', b'%PDF-1.4 x'),
         })
         self.assertNotIn('document.uploaded', self._actions())
+
+
+class DisplayFilterTests(TestCase):
+    """Dates and states read the way a person would write them."""
+
+    def test_a_range_within_a_month_names_the_month_once(self):
+        from tsp.templatetags.tsp_tags import date_range
+        self.assertEqual(date_range(date(2026, 5, 1), date(2026, 5, 3)), '1 to 3 May 2026')
+
+    def test_a_range_across_months_names_both(self):
+        from tsp.templatetags.tsp_tags import date_range
+        self.assertEqual(date_range(date(2026, 4, 30), date(2026, 5, 3)), '30 Apr to 3 May 2026')
+
+    def test_a_range_across_years_names_both_years(self):
+        from tsp.templatetags.tsp_tags import date_range
+        self.assertEqual(date_range(date(2026, 12, 30), date(2027, 1, 2)), '30 Dec 2026 to 2 Jan 2027')
+
+    def test_a_single_day_is_one_date(self):
+        from tsp.templatetags.tsp_tags import date_range
+        self.assertEqual(date_range(date(2026, 5, 1), date(2026, 5, 1)), '1 May 2026')
+        self.assertEqual(date_range(date(2026, 5, 1), None), '1 May 2026')
+
+    def test_a_stored_state_shows_its_name(self):
+        from tsp.templatetags.tsp_tags import state_label
+        self.assertEqual(state_label('submitted_for_payment'), 'Submitted for Payment')
+        self.assertEqual(state_label('approved'), 'Approved')
+        self.assertEqual(state_label('something_new'), 'Something new')

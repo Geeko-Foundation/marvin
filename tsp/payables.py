@@ -57,16 +57,15 @@ class TravelRequestPayableAdapter(PayableAdapter):
             totals = obj.amounts_to_pay()
             if not totals and obj.advance_payment():
                 raise ValueError(
-                    f'The advance already covers request #{obj.pk}. '
+                    f'The advance already covers {obj.reference}. '
                     'Close it from the request page instead of paying it.'
                 )
         if len(totals) > 1:
-            # Taking the first expense's currency used to label the whole sum,
-            # so a 3 USD line was paid as 3 EUR. One transfer moves one
-            # currency, so this needs a person, not a guess.
+            # One transfer moves one currency, so a mixed request needs a
+            # person, not a guess at which currency to label the sum with.
             mixed = ', '.join(f'{amount} {code}' for code, amount in totals)
             raise ValueError(
-                f'Request #{obj.pk} mixes currencies ({mixed}). '
+                f'{obj.reference} mixes currencies ({mixed}). '
                 'Pay each currency separately or re-approve it in one currency.'
             )
         currency, amount = totals[0] if totals else ('EUR', Decimal('0'))
@@ -78,6 +77,7 @@ class TravelRequestPayableAdapter(PayableAdapter):
             metadata['banking_method'] = profile.banking_method or ''
             if profile.wise_account_id:
                 metadata['wise_account_id'] = profile.wise_account_id
+            metadata['account_currency'] = profile.banking_currency
 
         return PaymentRequest(
             amount=Decimal(str(amount)),
@@ -115,7 +115,7 @@ class TravelRequestPayableAdapter(PayableAdapter):
         name = obj.user.get_full_name() or obj.user.username
         if self.payment_purpose(obj) == 'advance':
             return {
-                'title': f'#{obj.pk} — {name} · Advance before the event',
+                'title': f'{obj.reference} · {name} · Advance before the event',
                 'subtitle': f'{obj.event.name} ({obj.event.start_date:%d %b %Y}) · {obj.user.email}',
                 'totals': [(obj.advance_currency, obj.advance_amount)],
                 'banking': profile.banking_summary() if profile else 'Not configured',
@@ -123,7 +123,7 @@ class TravelRequestPayableAdapter(PayableAdapter):
             }
         advance = obj.advance_payment()
         return {
-            'title': f'#{obj.pk} - {name}',
+            'title': f'{obj.reference} · {name}',
             'subtitle': (
                 f'{obj.event.name} · {obj.user.email}'
                 + (f' · advance of {advance.amount} {advance.currency} already paid' if advance else '')

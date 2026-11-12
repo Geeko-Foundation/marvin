@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load tsp_tags %}
 
 {% block title %}Reimbursement Agreement{% endblock %}
 
@@ -14,9 +15,9 @@
     <p><strong>Requester:</strong> {{ travel_request.user.get_full_name|default:travel_request.user.username }}</p>
     <p><strong>Event:</strong> {{ travel_request.event.name }}</p>
     <p><strong>Location:</strong> {{ travel_request.event.location }}</p>
-    <p><strong>Dates:</strong> {{ travel_request.event.start_date }} - {{ travel_request.event.end_date }}</p>
+    <p><strong>Dates:</strong> {{ travel_request.event.start_date|date_range:travel_request.event.end_date }}</p>
     {% if travel_request.approved_at %}
-    <p><strong>Approved:</strong> {{ travel_request.approved_at|date:"F d, Y" }}</p>
+    <p><strong>Approved:</strong> {{ travel_request.approved_at|date }}</p>
     {% endif %}
   </div>
 
@@ -30,14 +31,14 @@
       <tr>
         <td>{{ expense.get_category_display }}</td>
         <td>{{ expense.description }}</td>
-        <td>{% if expense.approved_amount %}{{ expense.approved_amount }} {{ expense.approved_currency }}{% else %}-{% endif %}</td>
+        <td>{% if expense.approved_amount %}{{ expense.approved_amount|floatformat:"2g" }} {{ expense.approved_currency }}{% else %}-{% endif %}</td>
       </tr>
       {% endfor %}
     </tbody>
     <tfoot>
       <tr class="font-bold">
         <td colspan="2">Total Approved</td>
-        <td>{% for currency, amount in travel_request.totals_approved %}{{ amount }} {{ currency }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
+        <td>{% for currency, amount in travel_request.totals_approved %}{{ amount|floatformat:"2g" }} {{ currency }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
       </tr>
     </tfoot>
   </table>
@@ -57,7 +58,7 @@
       <p class="text-sm">Printed Name</p>
     </div>
     <div>
-      <div class="border-b border-base-content pb-1 mb-2">{% for currency, amount in travel_request.totals_approved %}{{ amount }} {{ currency }}{% if not forloop.last %}, {% endif %}{% endfor %}</div>
+      <div class="border-b border-base-content pb-1 mb-2">{% for currency, amount in travel_request.totals_approved %}{{ amount|floatformat:"2g" }} {{ currency }}{% if not forloop.last %}, {% endif %}{% endfor %}</div>
       <p class="text-sm">Total Amount</p>
     </div>
     <div>

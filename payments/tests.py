@@ -1,7 +1,5 @@
 from django.test import TestCase
 
-# Create your tests here.
-
 
 class SettlementDetailTests(TestCase):
     """Finance needs what Wise actually did, not what was asked for."""
@@ -19,6 +17,16 @@ class SettlementDetailTests(TestCase):
         self.assertEqual(details['target_amount'], '28.0')
         self.assertEqual(details['target_currency'], 'EUR')
         self.assertEqual(details['fee'], '0.54')
+
+    def test_the_fee_comes_from_the_balance_option_of_a_v3_quote(self):
+        from payments.gateways.wise import settlement_details
+
+        quote = {'rate': 103.7, 'sourceCurrency': 'EUR', 'paymentOptions': [
+            {'payIn': 'BANK_TRANSFER', 'payOut': 'BANK_TRANSFER', 'fee': {'total': 2.10}},
+            {'payIn': 'BALANCE', 'payOut': 'BANK_TRANSFER', 'fee': {'total': 0.57}},
+        ]}
+        details = settlement_details({'sourceCurrency': 'EUR'}, quote)
+        self.assertEqual((details['fee'], details['fee_currency']), ('0.57', 'EUR'))
 
     def test_the_transfer_rate_wins_over_the_quoted_one(self):
         from payments.gateways.wise import settlement_details

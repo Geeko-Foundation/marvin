@@ -11,7 +11,8 @@ pays out is set by its own quote at payment time.
 
 import logging
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta, timezone as dt_timezone
+from datetime import date, datetime, timedelta
+from datetime import timezone as dt_timezone
 from decimal import Decimal
 
 import requests

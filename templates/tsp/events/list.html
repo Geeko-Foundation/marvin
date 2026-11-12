@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load tsp_tags %}
 
 {% block title %}Events{% endblock %}
 
@@ -8,94 +9,42 @@
     <h1 class="text-2xl font-bold">Events</h1>
     <p class="text-sm opacity-60">Conferences and events accepting travel support requests</p>
   </div>
+  {% if profile.is_tsp %}
   <a href="{% url 'event_create' %}" class="btn btn-primary btn-sm">New Event</a>
+  {% endif %}
 </div>
 
-<form method="get" class="flex flex-wrap gap-3 mb-6">
-  <input type="date" name="from" value="{{ date_from }}" class="input input-bordered input-sm">
-  <input type="date" name="to" value="{{ date_to }}" class="input input-bordered input-sm">
+<form method="get" class="flex flex-wrap items-end gap-3 mb-6">
+  <label class="form-control">
+    <span class="label-text text-xs mb-1">From</span>
+    <input type="date" name="from" value="{{ date_from }}" class="input input-bordered input-sm">
+  </label>
+  <label class="form-control">
+    <span class="label-text text-xs mb-1">To</span>
+    <input type="date" name="to" value="{{ date_to }}" class="input input-bordered input-sm">
+  </label>
   <button type="submit" class="btn btn-sm btn-outline">Filter</button>
   {% if date_from or date_to %}
   <a href="{% url 'event_list' %}" class="btn btn-sm btn-ghost">Clear</a>
   {% endif %}
 </form>
 
+{% if upcoming or not past %}
 <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-  {% for event in events %}
-  <div class="card bg-base-100 shadow-sm {% if event.is_past %}opacity-60{% endif %}">
-    <div class="card-body">
-      <div class="flex justify-between items-start">
-        <h2 class="card-title text-base">{{ event.name }}</h2>
-        {% if event.is_past %}
-        <span class="badge badge-neutral">Past</span>
-        {% elif event.is_open_for_requests %}
-        <span class="badge badge-success">Open</span>
-        {% else %}
-        <span class="badge badge-warning">Closed</span>
-        {% endif %}
-      </div>
-      <p class="text-sm opacity-60">{{ event.location }}</p>
-      <p class="text-sm">{{ event.start_date }} - {{ event.end_date }}</p>
-      {% if event.requests_open_until %}
-      <p class="text-xs opacity-60">Requests close {{ event.requests_open_until }}</p>
-      {% endif %}
-      <p class="text-xs opacity-60">Claims close {{ event.reimbursement_deadline }}</p>
-      {% if event.visa_letters_offered %}
-      <p class="text-xs">This event offers visa invitation letters</p>
-      {% endif %}
-      {% if event.url %}
-      <a href="{{ event.url }}" class="link link-primary text-xs" target="_blank" rel="noopener">Event website</a>
-      {% endif %}
-      {% if event.budget and profile.is_committee %}
-      <div class="mt-2 text-sm">
-        <div class="flex justify-between">
-          <span class="opacity-60">Budget</span>
-          <span>{{ event.budget }} {{ event.budget_currency }}</span>
-        </div>
-        <div class="flex justify-between">
-          <span class="opacity-60">Approved</span>
-          <span>{{ event.approved_against_budget }} {{ event.budget_currency }}</span>
-        </div>
-        {% for currency, amount in event.paid_by_currency %}
-        <div class="flex justify-between">
-          <span class="opacity-60">Paid out</span>
-          <span>{{ amount }} {{ currency }}</span>
-        </div>
-        {% endfor %}
-        <div class="flex justify-between font-semibold">
-          <span class="opacity-60">Remaining</span>
-          {% with left=event.budget_remaining %}
-          <span class="{% if left < 0 %}text-error{% endif %}">{{ left }} {{ event.budget_currency }}</span>
-          {% endwith %}
-        </div>
-        {% for currency, amount in event.approved_in_other_currencies %}
-        <div class="flex justify-between text-xs opacity-60">
-          <span>Also approved</span><span>{{ amount }} {{ currency }}</span>
-        </div>
-        {% endfor %}
-      </div>
-      {% endif %}
-      {% if event.is_open_for_requests and profile.is_requester %}
-      <div class="card-actions justify-end mt-2">
-        <a href="{% url 'request_create' %}?event={{ event.pk }}" class="btn btn-primary btn-sm">Apply for Travel Support</a>
-      </div>
-      {% endif %}
-      {% if profile.is_tsp %}
-      <div class="card-actions justify-end mt-2">
-        <a href="{% url 'event_edit' event.pk %}" class="btn btn-ghost btn-sm">Edit</a>
-        {% if not event.request_count %}
-        <form method="post" action="{% url 'event_delete' event.pk %}"
-              onsubmit="return confirm('Delete {{ event.name|escapejs }}? This cannot be undone.');">
-          {% csrf_token %}
-          <button type="submit" class="btn btn-ghost btn-sm text-error">Delete</button>
-        </form>
-        {% endif %}
-      </div>
-      {% endif %}
-    </div>
-  </div>
+  {% for event in upcoming %}
+  {% include "tsp/events/_card.html" %}
   {% empty %}
-  <div class="col-span-full text-center py-12 opacity-60">No events found.</div>
+  <div class="col-span-full text-center py-12 opacity-60">No upcoming events{% if date_from or date_to %} in these dates{% endif %}.</div>
   {% endfor %}
 </div>
+{% endif %}
+
+{% if past %}
+<h2 class="text-lg font-semibold mt-10 mb-4">Past events</h2>
+<div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+  {% for event in past %}
+  {% include "tsp/events/_card.html" %}
+  {% endfor %}
+</div>
+{% endif %}
 {% endblock %}

@@ -43,6 +43,16 @@
           {{ form.budget_currency }}
         </div>
       </div>
+      <div class="form-control md:w-1/2">
+        <label class="label"><span class="label-text">Share of each request covered (%)</span></label>
+        {{ form.approval_percent }}
+        <label class="label">
+          <span class="label-text-alt">Reviews start from this share of what was asked for. Reviewers can still change any line.</span>
+        </label>
+        {% for error in form.approval_percent.errors %}
+        <span class="label-text-alt text-error">{{ error }}</span>
+        {% endfor %}
+      </div>
       <p class="text-sm opacity-60">
         Approvals for this event count against the budget. Going over it needs
         the committee to confirm, and that is recorded on the request.
@@ -71,6 +81,18 @@
         <label class="label"><span class="label-text">Description</span></label>
         {{ form.description }}
       </div>
+      <fieldset class="form-control gap-2">
+        <legend class="label-text mb-2">Extra costs this event covers</legend>
+        <p class="text-sm opacity-60">Flights, trains, lodging and other costs are always offered. Tick anything more this event pays for, and requesters will see it as a category.</p>
+        {% for choice in form.offered_categories %}
+        <label class="label cursor-pointer justify-start gap-3 py-1">
+          {{ choice.tag }}<span class="label-text">{{ choice.choice_label }}</span>
+        </label>
+        {% endfor %}
+        <label class="label pb-1"><span class="label-text">Other categories, separated by commas</span></label>
+        {{ form.custom_categories }}
+        {% for error in form.custom_categories.errors %}<span class="label-text-alt text-error">{{ error }}</span>{% endfor %}
+      </fieldset>
       <label class="label cursor-pointer justify-start gap-3">
         {{ form.visa_letters_offered }}
         <span class="label-text">Visa letters offered</span>

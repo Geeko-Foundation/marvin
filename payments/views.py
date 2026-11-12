@@ -1,15 +1,13 @@
 import json
 import logging
 
-from django.contrib import messages
 from django.conf import settings
-
-from tsp.decorators import login_required
+from django.contrib import messages
 from django.core.exceptions import PermissionDenied
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
-from django.views.decorators.http import require_POST
 from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_POST
 
 from payments.forms import ProcessPaymentForm
 from payments.models import PaymentRecord
@@ -26,6 +24,7 @@ from payments.webhooks import (
     transfer_id_from,
     verify_signature,
 )
+from tsp.decorators import login_required
 
 logger = logging.getLogger('marvin.wise')
 
@@ -65,14 +64,17 @@ def dashboard(request):
         ctx['object'] = obj
         ctx['object_id'] = obj.pk
         ctx['detail_url'] = adapter.get_detail_url(obj)
+        ctx['in_batch'] = service._payments_under_way(obj).filter(status='exported').first()
         queue_items.append(ctx)
 
     batch_gateways = [gw for gw in get_all_gateways() if gw.supports_batch_export]
+    # A batch gateway is confirmed per row only once the row is in a file.
+    single_gateways = [gw for gw in get_all_gateways() if not gw.supports_batch_export]
 
     return render(request, 'payments/dashboard.html', {
         'adapter': adapter,
         'queue_items': queue_items,
-        'gateways': get_all_gateways(),
+        'gateways': single_gateways,
         'batch_gateways': batch_gateways,
         'process_form': ProcessPaymentForm(),
     })
@@ -101,7 +103,18 @@ def process_payment(request):
         )
         gateway = get_gateway(record.gateway_id)
         label = gateway.label if gateway else record.gateway_id
-        messages.success(request, f'Payment processed via {label}.')
+        # Say what actually happened: a refused transfer is not a payment.
+        if record.status in ('success', 'completed'):
+            messages.success(request, f'Paid {record.reference} via {label}.')
+        elif record.status == 'failed':
+            reason = record.metadata.get('error') or 'no reason was given'
+            messages.error(request, f'{record.reference} was not paid. {label} refused it: {reason}')
+        else:
+            messages.info(
+                request,
+                f'{record.reference} was sent via {label} and is waiting to settle. '
+                'It leaves the queue once Wise confirms the transfer.',
+            )
     except Exception as exc:
         messages.error(request, str(exc))
 
@@ -124,7 +137,12 @@ def batch_export(request):
 
     service = PaymentService()
     try:
-        content, content_type, filename = service.export_batch(gateway_id)
+        content, content_type, filename = service.export_batch(gateway_id, request.user)
+        messages.info(
+            request,
+            'Batch file downloaded. Once Wise has processed it, mark each request paid '
+            'with Wise Batch CSV. Requests in this file are left out of the next export.',
+        )
         response = HttpResponse(content, content_type=content_type)
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
         return response

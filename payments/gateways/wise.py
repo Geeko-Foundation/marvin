@@ -4,20 +4,25 @@ from __future__ import annotations
 
 import csv
 import io
-import time
+import uuid
 from decimal import Decimal
 
+import requests
 from django.conf import settings
 
+from marvin.validators import spreadsheet_safe
 from payments.base import (
     BatchExportResult,
     PaymentGateway,
     PaymentRequest,
     PaymentResult,
 )
-from payments.gateways.wise_api import SUPPORTED_CURRENCIES, WiseApiError, get_wise_client
+from payments.gateways.wise_api import (
+    SUPPORTED_CURRENCIES,
+    WiseApiError,
+    get_wise_client,
+)
 
-# Map Wise transfer lifecycle states to internal PaymentRecord status values.
 TRANSFER_STATUS_MAP = {
     'incoming_payment_waiting': 'processing',
     'processing': 'processing',
@@ -31,9 +36,8 @@ def settlement_details(transfer: dict, quote: dict | None = None) -> dict:
     """
     What Wise says actually happened, as opposed to what was asked for.
 
-    Patrick wanted "exactly how much has been spent and what the conversion
-    rate was and what the target currency was converted to". Those live on the
-    transfer, with the fee on the quote behind it.
+    Finance needs what was spent, the rate and what it was converted to. Those
+    live on the transfer, with the fee on the quote behind it.
     """
     details = {}
     for key, field in (
@@ -51,10 +55,33 @@ def settlement_details(transfer: dict, quote: dict | None = None) -> dict:
     rate = transfer.get('rate') or (quote or {}).get('rate')
     if rate:
         details['exchange_rate'] = str(rate)
-    fee = (quote or {}).get('fee')
+    quote = quote or {}
+    fee = quote.get('fee')
+    # A v3 quote prices each way of paying; a transfer is funded from the balance.
+    for option in quote.get('paymentOptions') or ():
+        if option.get('payIn') == 'BALANCE' and option.get('payOut') == 'BANK_TRANSFER':
+            fee = (option.get('fee') or {}).get('total', fee)
     if fee is not None:
         details['fee'] = str(fee)
+        details['fee_currency'] = quote.get('sourceCurrency') or details.get('source_currency', '')
     return details
+
+
+def transaction_id_for(payment_request: PaymentRequest, account_id: int) -> str:
+    """
+    The same payment always gets the same id, so a retry cannot make a second transfer.
+
+    Wise returns the transfer it already has when it sees an id again. The id
+    covers who is paid, how much and in which currency, so a changed amount or
+    account makes a new transfer instead of reusing the old one. The site's
+    address keeps two instances that share a Wise account apart.
+    """
+    amount = Decimal(str(payment_request.amount)).quantize(Decimal('0.01'))
+    key = '|'.join((
+        settings.SITE_BASE_URL, payment_request.reference, str(account_id),
+        str(amount), payment_request.currency,
+    ))
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, key))
 
 
 class WiseApiGateway(PaymentGateway):
@@ -82,6 +109,7 @@ class WiseApiGateway(PaymentGateway):
         """
         metadata = payment_request.metadata
         client = self._client
+        transfer = None
 
         try:
             account_id = metadata.get('wise_account_id')
@@ -97,22 +125,34 @@ class WiseApiGateway(PaymentGateway):
                 )
             account_id = int(account_id)
 
-            quote = client.create_quote(
-                source_currency=metadata.get(
-                    'source_currency',
-                    getattr(settings, 'WISE_SOURCE_CURRENCY', 'GBP'),
-                ),
-                target_currency=payment_request.currency,
-                target_amount=payment_request.amount,
-                target_account=account_id,
-            )
+            account_currency = metadata.get('account_currency') or payment_request.currency
+            if account_currency == payment_request.currency:
+                quote = client.create_quote(
+                    source_currency=metadata.get(
+                        'source_currency',
+                        getattr(settings, 'WISE_SOURCE_CURRENCY', 'GBP'),
+                    ),
+                    target_currency=payment_request.currency,
+                    target_amount=payment_request.amount,
+                    target_account=account_id,
+                )
+            else:
+                # The account only takes its own currency. Send exactly what was
+                # approved and let Wise convert, so the cost is the approved sum.
+                quote = client.create_quote(
+                    source_currency=payment_request.currency,
+                    target_currency=account_currency,
+                    source_amount=payment_request.amount,
+                    target_account=account_id,
+                )
             transfer = client.create_transfer(
                 quote_id=quote['id'],
                 target_account=account_id,
                 reference=payment_request.reference,
+                customer_transaction_id=transaction_id_for(payment_request, account_id),
             )
-            client.fund_or_advance_transfer(transfer['id'])
-            transfer = client.get_transfer(transfer['id'])
+            funded = client.fund_or_advance_transfer(transfer['id'])
+            transfer = funded.get('transfer') or client.get_transfer(transfer['id'])
 
             return PaymentResult(
                 status=TRANSFER_STATUS_MAP.get(transfer['status'], 'processing'),
@@ -123,10 +163,17 @@ class WiseApiGateway(PaymentGateway):
                     **settlement_details(transfer, quote),
                 },
             )
-        except WiseApiError as exc:
+        except (WiseApiError, requests.RequestException) as exc:
+            error = {'error': str(exc), 'status_code': getattr(exc, 'status_code', 0)}
+            if transfer is None:
+                return PaymentResult(status='failed', metadata=error)
+            # The transfer exists, so the money may already have gone. Keep its
+            # id and leave it processing: the status refresh and the webhook
+            # settle it, and the duplicate check refuses a second payment.
             return PaymentResult(
-                status='failed',
-                metadata={'error': str(exc), 'status_code': exc.status_code},
+                status='processing',
+                external_id=str(transfer['id']),
+                metadata={'wise_account_id': account_id, **error},
             )
 
     def get_status(self, external_id: str) -> PaymentResult:
@@ -188,8 +235,9 @@ class WiseCsvGateway(PaymentGateway):
         """
         Build a Wise Send-by-email CSV from the current payment queue.
 
-        Each row includes recipient details and a unique payment reference
-        suffix to avoid collisions on repeated exports.
+        Each row uses the request's own reference, as on its page and the bank
+        statement. Repeat exports are prevented by the service, not by making
+        references unique, since unique references would hide a duplicate.
         """
         output = io.StringIO()
         writer = csv.writer(output)
@@ -198,18 +246,17 @@ class WiseCsvGateway(PaymentGateway):
             'amountCurrency', 'amount', 'sourceCurrency', 'targetCurrency', 'type',
         ])
         for req in payment_requests:
-            reference = f'{req.reference}-{int(time.time())}'
-            writer.writerow([
+            writer.writerow(spreadsheet_safe([
                 req.recipient_name,
                 req.recipient_email,
-                reference,
+                req.reference,
                 'PERSON',
                 req.currency,
                 req.amount,
                 'EUR',
-                req.currency,
+                req.metadata.get('account_currency') or req.currency,
                 'BANK_TRANSFER',
-            ])
+            ]))
         return BatchExportResult(
             content=output.getvalue(),
             content_type='text/csv',

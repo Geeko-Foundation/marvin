@@ -2,7 +2,6 @@ from decimal import Decimal
 
 from django.test import TestCase
 from django.urls import reverse
-from django.utils import timezone
 
 from payments.models import PaymentRecord
 from payments.services import PaymentService

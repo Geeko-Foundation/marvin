@@ -38,11 +38,11 @@
   </div>
   <div class="stat">
     <div class="stat-title">Total Approved</div>
-    <div class="stat-value text-lg">{% for currency, amount in total_approved %}{{ amount|floatformat:0 }} {{ currency }}{% if not forloop.last %}<br>{% endif %}{% empty %}0{% endfor %}</div>
+    <div class="stat-value text-lg">{% for currency, amount in total_approved %}{{ amount|floatformat:"0g" }} {{ currency }}{% if not forloop.last %}<br>{% endif %}{% empty %}0{% endfor %}</div>
   </div>
   <div class="stat">
     <div class="stat-title">Total Paid</div>
-    <div class="stat-value text-lg">{% for currency, amount in total_paid %}{{ amount|floatformat:0 }} {{ currency }}{% if not forloop.last %}<br>{% endif %}{% empty %}0{% endfor %}</div>
+    <div class="stat-value text-lg">{% for currency, amount in total_paid %}{{ amount|floatformat:"0g" }} {{ currency }}{% if not forloop.last %}<br>{% endif %}{% empty %}0{% endfor %}</div>
   </div>
 </div>
 
@@ -52,9 +52,8 @@
       <table class="table table-zebra">
         <thead>
           <tr>
-            <th>Date</th>
+            <th>Updated</th>
             <th>Event</th>
-            <th>Location</th>
             <th>Recipient</th>
             <th>Country</th>
             <th>Status</th>
@@ -66,18 +65,17 @@
         <tbody>
           {% for req in requests_list %}
           <tr>
-            <td>{{ req.updated_at|date:"Y-m-d" }}</td>
-            <td><a href="{% url 'request_detail' req.pk %}" class="link link-primary">{{ req.event.name }}</a></td>
-            <td>{{ req.event.location }}</td>
+            <td class="whitespace-nowrap">{{ req.updated_at|date }}</td>
+            <td><a href="{% url 'request_detail' req.pk %}" class="link link-primary font-medium">{{ req.reference }}</a> <span class="whitespace-nowrap">{{ req.event.name }}</span><div class="text-xs opacity-60">{{ req.event.location }}</div></td>
             <td>{{ req.user.get_full_name|default:req.user.username }}</td>
             <td>{{ req.user.profile.country|default:"-" }}</td>
             <td><span class="badge {{ req.state|state_badge }} badge-sm whitespace-nowrap">{{ req.get_state_display }}</span></td>
-            <td>{% for currency, amount in req.totals_approved %}{{ amount }} {{ currency }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
-            <td>{% if req.payment %}{{ req.payment.amount }}{% else %}-{% endif %}</td>
+            <td class="whitespace-nowrap">{% for currency, amount in req.totals_approved %}{{ amount|floatformat:"2g" }} {{ currency }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
+            <td class="whitespace-nowrap">{% if req.payment %}{{ req.payment.amount|floatformat:"2g" }} {{ req.payment.currency }}{% else %}-{% endif %}</td>
             <td>{% if req.payment %}{{ req.payment.method_label }}{% else %}-{% endif %}</td>
           </tr>
           {% empty %}
-          <tr><td colspan="9" class="text-center opacity-60">No results.</td></tr>
+          <tr><td colspan="8" class="text-center opacity-60 py-8">No requests match these filters.</td></tr>
           {% endfor %}
         </tbody>
       </table>

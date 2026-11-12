@@ -64,7 +64,7 @@
         <span class="text-sm">Account ID: {{ profile.wise_account_id }}</span>
       </div>
       <p class="text-sm opacity-60 mt-2">
-        Verified on {{ profile.wise_recipient_verified_at|date:"F d, Y" }}.
+        Verified on {{ profile.wise_recipient_verified_at|date }}.
         {{ profile.banking_summary }}
       </p>
       <p class="text-xs opacity-50 mt-1">Account numbers are stored with Wise, not in {{ app_name }}.</p>
@@ -80,7 +80,7 @@
   <div class="card bg-base-100 shadow-sm mb-6">
     <div class="card-body">
       <h2 class="card-title text-lg">Banking Preferences</h2>
-      <p class="text-sm opacity-60 mb-4">Currency and method metadata only - no account numbers stored locally.</p>
+      <p class="text-sm opacity-60 mb-4">Only the currency and payout method are stored here. Account numbers stay with Wise.</p>
       <div class="grid gap-4 md:grid-cols-2">
         <div class="form-control">
           <label class="label"><span class="label-text">Banking Method</span></label>
