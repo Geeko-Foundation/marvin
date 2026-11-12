@@ -100,15 +100,15 @@
           {{ form.event }}
         </div>
         <div class="form-control">
-          <label class="label"><span class="label-text">Talk Title</span></label>
+          <label class="label"><span class="label-text">Talk title</span><span class="label-text-alt opacity-60">Optional</span></label>
           {{ form.talk_title }}
         </div>
         <div class="form-control">
-          <label class="label"><span class="label-text">Talk URL</span></label>
+          <label class="label"><span class="label-text">Talk link</span><span class="label-text-alt opacity-60">Optional</span></label>
           {{ form.talk_url }}
         </div>
         <div class="form-control">
-          <label class="label"><span class="label-text">Description</span></label>
+          <label class="label"><span class="label-text">Why you are going</span></label>
           {{ form.description }}
         </div>
       </div>
@@ -119,31 +119,31 @@
     <div class="card-body">
       <div class="flex justify-between items-center mb-4">
         <h2 class="card-title text-lg">Expenses</h2>
-        <button type="button" id="add-expense" class="btn btn-sm btn-outline">Add Row</button>
+        <button type="button" id="add-expense" class="btn btn-sm btn-outline">Add Expense</button>
       </div>
       <div id="expense-rows" class="flex flex-col gap-4">
         {% for expense_form in formset %}
-        <div class="expense-row grid gap-3 md:grid-cols-5 items-end border border-base-300 rounded-box p-4">
+        <div class="expense-row grid gap-3 md:grid-cols-12 items-end border border-base-300 rounded-box p-4">
           {% for hidden in expense_form.hidden_fields %}{{ hidden }}{% endfor %}
-          <div class="form-control">
+          <div class="form-control md:col-span-3">
             <label class="label py-0"><span class="label-text text-xs">Category</span></label>
             {{ expense_form.category }}
           </div>
-          <div class="form-control md:col-span-2">
+          <div class="form-control md:col-span-4">
             <label class="label py-0"><span class="label-text text-xs">Description</span></label>
             {{ expense_form.description }}
           </div>
-          <div class="form-control">
+          <div class="form-control md:col-span-2">
             <label class="label py-0"><span class="label-text text-xs">Amount</span></label>
             {{ expense_form.estimated_amount }}
           </div>
-          <div class="form-control flex flex-row gap-2 items-end">
+          <div class="form-control md:col-span-3 flex flex-row gap-2 items-end">
             <div class="flex-1">
               <label class="label py-0"><span class="label-text text-xs">Currency</span></label>
               {{ expense_form.estimated_currency }}
             </div>
-            {% if expense_form.DELETE %}
-            <label class="label cursor-pointer gap-1 pb-2"
+            {% if expense_form.DELETE and expense_form.instance.pk %}
+            <label data-remove-line class="label cursor-pointer gap-1 pb-2"
                    title="Tick to remove this expense when you save the request">
               {{ expense_form.DELETE }}
               <span class="label-text text-xs whitespace-nowrap">Remove</span>
@@ -153,6 +153,7 @@
         </div>
         {% endfor %}
       </div>
+      <p class="text-sm mt-4 text-right" aria-live="polite">Total <strong id="expense-total" class="ml-2">0.00</strong></p>
     </div>
   </div>
 
@@ -173,6 +174,7 @@
     if (!firstRow) return;
     const prefix = totalForms.name.replace('-TOTAL_FORMS', '');
     const newRow = firstRow.cloneNode(true);
+    newRow.querySelector('[data-remove-line]')?.remove();
     newRow.querySelectorAll('input, select').forEach(el => {
       el.name = el.name.replace(new RegExp(`${prefix}-\\d+-`), `${prefix}-${count}-`);
       el.id = el.id.replace(new RegExp(`${prefix}-\\d+-`), `${prefix}-${count}-`);
@@ -183,6 +185,26 @@
     container.appendChild(newRow);
     totalForms.value = count + 1;
   });
+
+  // A running total per currency, so nobody adds up mixed currencies by hand.
+  const totalEl = document.getElementById('expense-total');
+  function updateTotal() {
+    const sums = {};
+    document.querySelectorAll('#expense-rows .expense-row').forEach(row => {
+      const removed = row.querySelector('[name$="-DELETE"]')?.checked;
+      const amount = parseFloat(row.querySelector('[name$="-estimated_amount"]')?.value);
+      const currency = row.querySelector('[name$="-estimated_currency"]')?.value;
+      if (removed || !(amount > 0) || !currency) return;
+      sums[currency] = (sums[currency] || 0) + amount;
+    });
+    const parts = Object.entries(sums).map(([c, a]) =>
+      a.toLocaleString('en', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' ' + c);
+    totalEl.textContent = parts.length ? parts.join(' · ') : '0.00';
+  }
+  document.getElementById('expense-rows')?.addEventListener('input', updateTotal);
+  document.getElementById('expense-rows')?.addEventListener('change', updateTotal);
+  document.getElementById('add-expense')?.addEventListener('click', updateTotal);
+  if (totalEl) updateTotal();
 
   // Pre-select event from query param
   const params = new URLSearchParams(window.location.search);

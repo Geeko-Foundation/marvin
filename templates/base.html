@@ -5,15 +5,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}{{ app_name }}{% endblock %} · {{ app_tagline }}</title>
-  <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.14/dist/full.min.css" rel="stylesheet" type="text/css" />
-  <script src="https://cdn.tailwindcss.com"></script>
-  <style>
-    @media print {
-      .no-print { display: none !important; }
-      .print-only { display: block !important; }
-    }
-    .print-only { display: none; }
-  </style>
+  {% include "partials/head_assets.html" %}
   {% block extra_head %}{% endblock %}
   {% if user.is_authenticated %}
   {% load webpush_notifications %}
@@ -33,15 +25,13 @@
           </label>
         </div>
         <div class="flex-1 flex items-center gap-3">
-          <span class="text-lg font-bold">{{ app_name }}</span>
-          <span class="text-sm opacity-60 ml-2 hidden sm:inline">{{ app_tagline }}</span>
+          <span class="text-lg font-bold lg:hidden">{{ app_name }}</span>
           <form method="get" action="{% url 'search' %}" class="hidden md:flex flex-1 max-w-xs ml-4">
             <input type="search" name="q" value="{{ request.GET.q }}" placeholder="Search..." class="input input-bordered input-sm w-full" aria-label="Search">
           </form>
         </div>
         <div class="flex-none gap-2">
           {% include "partials/theme_toggle.html" %}
-          <div class="badge badge-outline">{{ profile.role_label|default:"User" }}</div>
           <div class="dropdown dropdown-end">
             <div tabindex="0" role="button" class="btn btn-ghost btn-circle avatar placeholder">
               <div class="bg-primary text-primary-content rounded-full w-10">
@@ -49,9 +39,9 @@
               </div>
             </div>
             <ul tabindex="0" class="menu menu-sm dropdown-content mt-3 z-[1] p-2 shadow bg-base-100 rounded-box w-52">
-              <li class="menu-title">{{ user.get_full_name|default:user.username }}</li>
+              <li class="menu-title flex flex-col gap-0.5"><span>{{ user.get_full_name|default:user.username }}</span><span class="font-normal normal-case opacity-70">{{ profile.role_label|default:"User" }}</span></li>
               <li><a href="{% url 'profile' %}">Profile</a></li>
-              <li><a href="{% url 'logout' %}">Logout</a></li>
+              <li><a href="{% url 'logout' %}">Sign out</a></li>
             </ul>
           </div>
         </div>
@@ -61,7 +51,7 @@
       {% if messages %}
       <div class="px-4 lg:px-6 pt-4">
         {% for message in messages %}
-        <div class="alert alert-{% if message.tags == 'error' %}error{% elif message.tags == 'success' %}success{% else %}info{% endif %} mb-2">
+        <div class="alert alert-{% if message.tags == 'error' %}error{% elif message.tags == 'success' %}success{% elif message.tags == 'warning' %}warning{% else %}info{% endif %} mb-2">
           <span>{{ message }}</span>
         </div>
         {% endfor %}
@@ -80,7 +70,7 @@
       <aside class="bg-base-100 w-64 min-h-full">
         <div class="p-4 border-b border-base-300">
           <h2 class="text-xl font-bold text-primary">{{ app_name }}</h2>
-          <p class="text-xs opacity-60">TSP Dashboard</p>
+          <p class="text-xs opacity-60">{{ app_tagline }}</p>
         </div>
         <ul class="menu p-4 gap-1">
           <li><a href="{% url 'dashboard' %}" class="{% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
@@ -127,6 +117,19 @@
   </div>
   {% block auth_content %}{% endblock %}
   {% endif %}
+  <dialog id="confirm-dialog" class="modal" aria-labelledby="confirm-dialog-title">
+    <div class="modal-box max-w-md">
+      <h3 id="confirm-dialog-title" class="font-semibold text-lg" data-confirm-title></h3>
+      <p class="py-3 text-sm opacity-70" data-confirm-detail hidden></p>
+      <div class="modal-action">
+        <form method="dialog"><button class="btn btn-ghost">Keep it</button></form>
+        <button type="button" class="btn btn-error" data-confirm-accept>Confirm</button>
+      </div>
+    </div>
+    <form method="dialog" class="modal-backdrop"><button aria-label="Close">close</button></form>
+  </dialog>
+  {% load static %}
+  <script src="{% static 'js/confirm.js' %}"></script>
   {% include "partials/theme_scripts.html" %}
   {% block extra_js %}{% endblock %}
 </body>

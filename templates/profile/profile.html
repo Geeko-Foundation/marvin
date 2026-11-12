@@ -62,7 +62,7 @@
         <span class="text-sm">Account ID: {{ profile.wise_account_id }}</span>
       </div>
       <p class="text-sm opacity-60 mt-2">
-        Verified on {{ profile.wise_recipient_verified_at|date:"F d, Y" }}.
+        Verified on {{ profile.wise_recipient_verified_at|date }}.
         {{ profile.banking_summary }}
       </p>
       <p class="text-xs opacity-50 mt-1">Account numbers are stored with Wise, not in {{ app_name }}.</p>

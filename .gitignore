@@ -5,3 +5,5 @@ __pycache__/
 uploads/
 .env
 staticfiles/
+
+node_modules/

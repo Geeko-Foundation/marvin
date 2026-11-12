@@ -32,7 +32,7 @@
       <p class="text-sm opacity-60">{{ req.event.location }}</p>
       <p class="text-sm">{{ req.event.start_date|date_range:req.event.end_date }}</p>
       <div class="flex justify-between items-center mt-2">
-        <span class="text-sm font-medium">Est. {% for currency, amount in req.totals_estimated %}{{ amount }} {{ currency }}{% if not forloop.last %}, {% endif %}{% endfor %}</span>
+        <span class="text-sm font-medium">Est. {% for currency, amount in req.totals_estimated %}{{ amount|floatformat:"2g" }} {{ currency }}{% if not forloop.last %}, {% endif %}{% endfor %}</span>
         {% if req.state == 'approved' %}
         <a href="{% url 'request_accept_page' req.pk %}" class="btn btn-warning btn-sm">Accept</a>
         {% elif req.state == 'accepted' %}

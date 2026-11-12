@@ -14,9 +14,15 @@
   {% endif %}
 </div>
 
-<form method="get" class="flex flex-wrap gap-3 mb-6">
-  <input type="date" name="from" value="{{ date_from }}" class="input input-bordered input-sm">
-  <input type="date" name="to" value="{{ date_to }}" class="input input-bordered input-sm">
+<form method="get" class="flex flex-wrap items-end gap-3 mb-6">
+  <label class="form-control">
+    <span class="label-text text-xs mb-1">From</span>
+    <input type="date" name="from" value="{{ date_from }}" class="input input-bordered input-sm">
+  </label>
+  <label class="form-control">
+    <span class="label-text text-xs mb-1">To</span>
+    <input type="date" name="to" value="{{ date_to }}" class="input input-bordered input-sm">
+  </label>
   <button type="submit" class="btn btn-sm btn-outline">Filter</button>
   {% if date_from or date_to %}
   <a href="{% url 'event_list' %}" class="btn btn-sm btn-ghost">Clear</a>
@@ -53,27 +59,27 @@
       <div class="mt-2 text-sm">
         <div class="flex justify-between">
           <span class="opacity-60">Budget</span>
-          <span>{{ event.budget }} {{ event.budget_currency }}</span>
+          <span>{{ event.budget|floatformat:"2g" }} {{ event.budget_currency }}</span>
         </div>
         <div class="flex justify-between">
           <span class="opacity-60">Approved</span>
-          <span>{{ event.approved_against_budget }} {{ event.budget_currency }}</span>
+          <span>{{ event.approved_against_budget|floatformat:"2g" }} {{ event.budget_currency }}</span>
         </div>
         {% for currency, amount in event.paid_by_currency %}
         <div class="flex justify-between">
           <span class="opacity-60">Paid out</span>
-          <span>{{ amount }} {{ currency }}</span>
+          <span>{{ amount|floatformat:"2g" }} {{ currency }}</span>
         </div>
         {% endfor %}
         <div class="flex justify-between font-semibold">
           <span class="opacity-60">Remaining</span>
           {% with left=event.budget_remaining %}
-          <span class="{% if left < 0 %}text-error{% endif %}">{{ left }} {{ event.budget_currency }}</span>
+          <span class="{% if left < 0 %}text-error{% endif %}">{{ left|floatformat:"2g" }} {{ event.budget_currency }}</span>
           {% endwith %}
         </div>
         {% for currency, amount in event.approved_in_other_currencies %}
         <div class="flex justify-between text-xs opacity-60">
-          <span>Also approved</span><span>{{ amount }} {{ currency }}</span>
+          <span>Also approved</span><span>{{ amount|floatformat:"2g" }} {{ currency }}</span>
         </div>
         {% endfor %}
       </div>
@@ -85,12 +91,12 @@
       {% endif %}
       {% if profile.is_tsp %}
       <div class="card-actions justify-end mt-2">
-        <a href="{% url 'event_edit' event.pk %}" class="btn btn-ghost btn-sm">Edit</a>
+        <a href="{% url 'event_edit' event.pk %}" class="btn btn-outline btn-sm">Edit</a>
         {% if not event.request_count %}
         <form method="post" action="{% url 'event_delete' event.pk %}"
-              onsubmit="return confirm('Delete {{ event.name|escapejs }}? This cannot be undone.');">
+              data-confirm="Delete {{ event.name }}?" data-confirm-action="Delete Event" data-confirm-detail="This cannot be undone.">
           {% csrf_token %}
-          <button type="submit" class="btn btn-ghost btn-sm text-error">Delete</button>
+          <button type="submit" class="btn btn-outline btn-error btn-sm">Delete</button>
         </form>
         {% endif %}
       </div>

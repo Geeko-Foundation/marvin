@@ -1,5 +1,5 @@
 {% load tsp_tags %}
-<h2 class="text-2xl font-bold mb-6">TSP Committee</h2>
+<h2 class="text-2xl font-bold mb-6">Committee</h2>
 
 <div class="stats stats-vertical lg:stats-horizontal shadow w-full mb-6 bg-base-100">
   <a class="stat hover:bg-base-200" href="{% url 'reports' %}?status=submitted">
@@ -50,8 +50,8 @@
             <td>{{ req.reference }}</td>
             <td>{{ req.user.get_full_name|default:req.user.username }}</td>
             <td>{{ req.event.name }}</td>
-            <td>{{ req.created_at|date:"M d, Y" }}</td>
-            <td>{% for currency, amount in req.totals_estimated %}{{ amount }} {{ currency }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
+            <td>{{ req.created_at|date }}</td>
+            <td>{% for currency, amount in req.totals_estimated %}{{ amount|floatformat:"2g" }} {{ currency }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
             <td><a href="{% url 'request_detail' req.pk %}" class="btn btn-primary btn-sm">Review</a></td>
           </tr>
           {% endfor %}

@@ -29,7 +29,7 @@
           {% if item.subtitle %}<p class="text-sm opacity-60">{{ item.subtitle }}</p>{% endif %}
           {% if item.totals %}
           <p class="text-sm">To pay:
-            {% for currency, amount in item.totals %}<strong>{{ amount }} {{ currency }}</strong>{% if not forloop.last %}, {% endif %}{% endfor %}
+            {% for currency, amount in item.totals %}<strong>{{ amount|floatformat:"2g" }} {{ currency }}</strong>{% if not forloop.last %}, {% endif %}{% endfor %}
           </p>
           {% if item.mixed_currencies %}
           <p class="text-xs text-warning">Mixed currencies. Each one has to be paid separately.</p>

@@ -1,6 +1,7 @@
 """TSP views: auth, onboarding, events, travel requests, reports, and search."""
 
 import csv
+import re
 from decimal import Decimal, InvalidOperation
 
 from django.conf import settings
@@ -1388,16 +1389,37 @@ def reports(request):
 
 @login_required
 def search(request):
-    """Search events by name/location; staff may also search users."""
+    """Search requests and events; staff may also search users."""
     form = SearchForm(request.GET or None)
     query = ''
     event_table = None
     user_table = None
+    requests_found = None
+    profile = get_profile(request.user)
 
     if form.is_valid():
         query = (form.cleaned_data.get('q') or '').strip()
 
     if query:
+        # The committee and finance work across every request; anyone else
+        # only ever finds their own.
+        visible = TravelRequest.objects.select_related('event', 'user')
+        if not (profile.is_tsp or profile.is_finance):
+            visible = visible.filter(user=request.user)
+        # A reference such as TSP643 names one request, so go straight to it.
+        number = re.fullmatch(r'(?:tsp)?\s*#?\s*(\d+)', query, re.IGNORECASE)
+        if number:
+            match = visible.filter(pk=int(number.group(1))).first()
+            if match:
+                return redirect('request_detail', pk=match.pk)
+        requests_found = visible.filter(
+            Q(event__name__icontains=query)
+            | Q(talk_title__icontains=query)
+            | Q(user__username__icontains=query)
+            | Q(user__first_name__icontains=query)
+            | Q(user__last_name__icontains=query),
+        ).order_by('-updated_at')[:20]
+
         events = Event.objects.filter(
             Q(name__icontains=query) | Q(location__icontains=query),
         )
@@ -1417,6 +1439,7 @@ def search(request):
     return render(request, 'tsp/search.html', {
         'form': form,
         'query': query,
+        'requests_found': requests_found,
         'event_table': event_table,
         'user_table': user_table,
         'show_users': request.user.is_staff,

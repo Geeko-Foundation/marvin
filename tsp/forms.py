@@ -213,6 +213,9 @@ class ExpenseForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         """An estimate has to be more than zero, whatever the browser allowed."""
         super().__init__(*args, **kwargs)
+        self.fields['category'].choices = [('', 'Choose')] + [
+            c for c in self.fields['category'].choices if c[0]
+        ]
         self.fields['estimated_amount'].validators.append(MinValueValidator(Decimal('0.01')))
 
 
