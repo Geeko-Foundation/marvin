@@ -34,7 +34,7 @@
       <table class="table table-zebra">
         <thead>
           <tr>
-            <th><input type="checkbox" class="checkbox checkbox-sm" id="select-all-pending"></th>
+            <th><input type="checkbox" class="checkbox checkbox-sm" id="select-all-pending" aria-label="Select all"></th>
             <th>ID</th>
             <th>Requester</th>
             <th>Event</th>
@@ -46,7 +46,7 @@
         <tbody>
           {% for req in pending %}
           <tr>
-            <td><input type="checkbox" class="checkbox checkbox-sm select-pending" name="request_ids" value="{{ req.pk }}"></td>
+            <td><input type="checkbox" class="checkbox checkbox-sm select-pending" name="request_ids" value="{{ req.pk }}" aria-label="Select {{ req.reference }}"></td>
             <td>{{ req.reference }}</td>
             <td>{{ req.user.get_full_name|default:req.user.username }}</td>
             <td>{{ req.event.name }}</td>
@@ -60,7 +60,7 @@
     </div>
     <div class="flex flex-wrap items-center gap-2 mt-3">
       <input type="text" name="notes" class="input input-bordered input-sm grow"
-             placeholder="Note for the requester (required to reject)">
+             placeholder="Note for the requester (required to reject)" aria-label="Note for the requester">
       <button type="submit" name="action" value="approve" class="btn btn-sm">Approve as requested</button>
       <button type="submit" name="action" value="reject" class="btn btn-sm btn-outline btn-error">Reject selected</button>
     </div>

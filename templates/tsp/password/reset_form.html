@@ -1,0 +1,7 @@
+{% extends "tsp/password/layout.html" %}
+{% block title %}Reset Password{% endblock %}
+{% block heading %}Reset your password{% endblock %}
+{% block body %}
+<p class="text-sm opacity-70">Enter the email address on your account and we will send you a link to choose a new password.</p>
+{% include "tsp/password/_form.html" with button="Send reset link" %}
+{% endblock %}

@@ -77,6 +77,7 @@ def dashboard(request):
         'gateways': single_gateways,
         'batch_gateways': batch_gateways,
         'process_form': ProcessPaymentForm(),
+        'wise_sandbox': settings.WISE_API_SANDBOX,
     })
 
 
@@ -104,7 +105,9 @@ def process_payment(request):
         gateway = get_gateway(record.gateway_id)
         label = gateway.label if gateway else record.gateway_id
         # Say what actually happened: a refused transfer is not a payment.
-        if record.status in ('success', 'completed'):
+        if record.status in ('success', 'completed') and record.metadata.get('sandbox'):
+            messages.warning(request, f'{record.reference} went through the Wise sandbox. No real money was sent.')
+        elif record.status in ('success', 'completed'):
             messages.success(request, f'Paid {record.reference} via {label}.')
         elif record.status == 'failed':
             reason = record.metadata.get('error') or 'no reason was given'

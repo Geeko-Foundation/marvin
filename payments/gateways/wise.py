@@ -29,6 +29,10 @@ TRANSFER_STATUS_MAP = {
     'funds_converted': 'funds_converted',
     'outgoing_payment_sent': 'success',
     'cancelled': 'cancelled',
+    # Sent, then sent back: the money never reached the recipient.
+    'funds_refunded': 'failed',
+    'bounced_back': 'failed',
+    'charged_back': 'failed',
 }
 
 
@@ -160,6 +164,7 @@ class WiseApiGateway(PaymentGateway):
                 metadata={
                     'wise_account_id': account_id,
                     'transfer_status': transfer['status'],
+                    'sandbox': client.sandbox,
                     **settlement_details(transfer, quote),
                 },
             )

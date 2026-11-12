@@ -1,0 +1,11 @@
+{% extends "tsp/password/layout.html" %}
+{% block title %}Choose a New Password{% endblock %}
+{% block heading %}Choose a new password{% endblock %}
+{% block body %}
+{% if validlink %}
+{% include "tsp/password/_form.html" with button="Save new password" %}
+{% else %}
+<p class="text-sm opacity-70">This link has expired or has already been used. Ask for a new one from the sign in page.</p>
+<a href="{% url 'password_reset' %}" class="btn btn-primary w-full mt-2">Send a new link</a>
+{% endif %}
+{% endblock %}

@@ -44,62 +44,62 @@
       {% if recreate %}<input type="hidden" name="recreate" value="1">{% endif %}
       <div class="grid gap-4 md:grid-cols-2">
         <div class="form-control">
-          <label class="label"><span class="label-text">Banking Method *</span></label>
+          <label class="label" for="{{ form.banking_method.id_for_label }}"><span class="label-text">Banking Method *</span></label>
           {{ form.banking_method }}
         </div>
         <div class="form-control">
-          <label class="label"><span class="label-text">Account Currency *</span></label>
+          <label class="label" for="{{ form.banking_currency.id_for_label }}"><span class="label-text">Account Currency *</span></label>
           {{ form.banking_currency }}
         </div>
       </div>
 
       <div class="grid gap-4 md:grid-cols-2">
         <div id="field-iban" class="form-control md:col-span-2">
-          <label class="label"><span class="label-text">IBAN *</span></label>
+          <label class="label" for="{{ form.bank_iban.id_for_label }}"><span class="label-text">IBAN *</span></label>
           {{ form.bank_iban }}
         </div>
         <div id="field-swift" class="form-control md:col-span-2">
-          <label class="label">
+          <label class="label" for="{{ form.bank_swift.id_for_label }}">
             <span class="label-text">SWIFT/BIC</span>
             <span class="label-text-alt">Optional, but needed for some transfers outside SEPA</span>
           </label>
           {{ form.bank_swift }}
         </div>
         <div id="field-bank-code" class="form-control md:col-span-2 hidden">
-          <label class="label"><span class="label-text">Bank *</span></label>
+          <label class="label" for="{{ form.bank_code.id_for_label }}"><span class="label-text">Bank *</span></label>
           {{ form.bank_code }}
           <span id="bank-code-hint" class="label-text-alt mt-1 hidden">Loading banks...</span>
         </div>
         <div id="field-account-no" class="form-control md:col-span-2 hidden">
-          <label class="label"><span class="label-text">Account Number *</span></label>
+          <label class="label" for="{{ form.bank_account_no.id_for_label }}"><span class="label-text">Account Number *</span></label>
           {{ form.bank_account_no }}
         </div>
         <div id="field-routing" class="form-control hidden">
-          <label class="label"><span class="label-text">ABA Routing Number *</span></label>
+          <label class="label" for="{{ form.bank_routing_no.id_for_label }}"><span class="label-text">ABA Routing Number *</span></label>
           {{ form.bank_routing_no }}
         </div>
         <div id="field-ifsc" class="form-control hidden">
-          <label class="label"><span class="label-text">IFSC Code *</span></label>
+          <label class="label" for="{{ form.bank_ifsc.id_for_label }}"><span class="label-text">IFSC Code *</span></label>
           {{ form.bank_ifsc }}
         </div>
         <div id="field-bsb" class="form-control hidden">
-          <label class="label"><span class="label-text">BSB Code *</span></label>
+          <label class="label" for="{{ form.bank_bsb.id_for_label }}"><span class="label-text">BSB Code *</span></label>
           {{ form.bank_bsb }}
         </div>
         <div id="field-branch" class="form-control hidden">
-          <label class="label"><span class="label-text">Branch Code *</span></label>
+          <label class="label" for="{{ form.bank_branch.id_for_label }}"><span class="label-text">Branch Code *</span></label>
           {{ form.bank_branch }}
         </div>
         <div id="field-japan-branch" class="form-control hidden">
-          <label class="label"><span class="label-text">Branch *</span></label>
+          <label class="label" for="{{ form.bank_japan_branch.id_for_label }}"><span class="label-text">Branch *</span></label>
           {{ form.bank_japan_branch }}
         </div>
         <div id="field-cpf" class="form-control hidden">
-          <label class="label"><span class="label-text">CPF *</span></label>
+          <label class="label" for="{{ form.bank_cpf.id_for_label }}"><span class="label-text">CPF *</span></label>
           {{ form.bank_cpf }}
         </div>
         <div id="field-account-type" class="form-control hidden">
-          <label class="label"><span class="label-text">Account Type *</span></label>
+          <label class="label" for="{{ form.bank_account_type.id_for_label }}"><span class="label-text">Account Type *</span></label>
           {{ form.bank_account_type }}
         </div>
       </div>

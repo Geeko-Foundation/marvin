@@ -45,7 +45,8 @@ def transition_request(travel_request, to_state, user, notes=''):
     from_state = travel_request.state
     if not can_transition(from_state, to_state):
         raise StateTransitionError(
-            f'Cannot transition from {from_state} to {to_state}'
+            f'{travel_request.reference} cannot go from {RequestState(from_state).label} '
+            f'to {RequestState(to_state).label}.'
         )
 
     travel_request.state = to_state
@@ -81,6 +82,25 @@ def transition_request(travel_request, to_state, user, notes=''):
     notify_request_state_change_email(travel_request, from_state, to_state, user, notes)
 
     return travel_request
+
+
+def reopen_for_payment(travel_request, user, notes):
+    """
+    Put a paid request back in the payment queue because its money came back.
+
+    Paid is otherwise final, so this is its own step rather than a transition
+    anyone could ask for: only a returned payment may undo it.
+    """
+    if travel_request.state != RequestState.PAID:
+        raise StateTransitionError(f'{travel_request.reference} is not paid, so there is nothing to reopen.')
+    travel_request.state = RequestState.SUBMITTED_FOR_PAYMENT
+    travel_request.save(update_fields=['state', 'updated_at'])
+    record('request.state_change', user=user, target=f'request {travel_request.pk}',
+           detail=f'{RequestState.PAID} -> {RequestState.SUBMITTED_FOR_PAYMENT}: {notes}')
+    StateHistory.objects.create(
+        request=travel_request, from_state=RequestState.PAID,
+        to_state=RequestState.SUBMITTED_FOR_PAYMENT, user=user, notes=notes,
+    )
 
 
 def create_request_with_history(travel_request, user):

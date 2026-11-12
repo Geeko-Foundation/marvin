@@ -354,11 +354,11 @@
         <form method="post" action="{% url 'request_document_upload' travel_request.pk %}" enctype="multipart/form-data" class="flex flex-wrap gap-3 items-end">
           {% csrf_token %}
           <div class="form-control">
-            <label class="label py-0"><span class="label-text text-xs">Type</span></label>
+            <label class="label py-0" for="{{ doc_form.kind.id_for_label }}"><span class="label-text text-xs">Type</span></label>
             {{ doc_form.kind }}
           </div>
           <div class="form-control flex-1 min-w-[200px]">
-            <label class="label py-0"><span class="label-text text-xs">File</span></label>
+            <label class="label py-0" for="{{ doc_form.file.id_for_label }}"><span class="label-text text-xs">File</span></label>
             {{ doc_form.file }}
           </div>
           <button type="submit" class="btn btn-sm btn-primary">Upload</button>
