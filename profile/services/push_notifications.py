@@ -32,13 +32,6 @@ def absolute_url(path: str) -> str:
     return f'{base}{path}'
 
 
-def clear_push_subscriptions(user: User) -> None:
-    """Remove all browser push endpoints for ``user`` (e.g. when they opt out)."""
-    from webpush.models import PushInformation
-
-    PushInformation.objects.filter(user=user).delete()
-
-
 def send_push_to_user(
     user: User,
     *,
@@ -54,12 +47,7 @@ def send_push_to_user(
     """
     if not user or not user.is_active:
         return
-    try:
-        profile = user.profile
-    except Exception:
-        return
-    if not profile.push_notifications_enabled:
-        return
+    # Subscribing a browser is how someone turns alerts on.
     if not user.webpush_info.exists():
         return
 

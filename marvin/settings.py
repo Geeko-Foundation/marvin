@@ -149,6 +149,20 @@ DATABASES = {
     }
 }
 
+# Hosts such as Railway hand over one URL, postgresql://user:password@host:port/name.
+if env('DATABASE_URL'):
+    from urllib.parse import unquote, urlsplit
+
+    _url = urlsplit(env('DATABASE_URL'))
+    DATABASES['default'].update({
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': unquote(_url.path.lstrip('/')),
+        'USER': unquote(_url.username or ''),
+        'PASSWORD': unquote(_url.password or ''),
+        'HOST': _url.hostname or '',
+        'PORT': str(_url.port or ''),
+    })
+
 
 # --- Auth ---
 
@@ -217,10 +231,26 @@ _DEV_VAPID_PRIVATE_KEY = (
     '-----END PRIVATE KEY-----\n'
 )
 
+
+def vapid_private_key(value):
+    """
+    The private key in the form pywebpush reads: URL-safe base64 of the DER bytes.
+
+    It cannot load a PEM key, so one pasted in that form is converted here.
+    """
+    import base64
+
+    value = value.replace('\\n', '\n').strip()
+    if '-----BEGIN' not in value:
+        return value
+    body = ''.join(line for line in value.splitlines() if not line.startswith('-----'))
+    return base64.urlsafe_b64encode(base64.b64decode(body)).decode().rstrip('=')
+
+
 WEBPUSH_APP_BASE_URL = env('WEBPUSH_APP_BASE_URL', 'http://127.0.0.1:8000')
 WEBPUSH_SETTINGS = {
     'VAPID_PUBLIC_KEY': env('VAPID_PUBLIC_KEY', _DEV_VAPID_PUBLIC_KEY),
-    'VAPID_PRIVATE_KEY': env('VAPID_PRIVATE_KEY', _DEV_VAPID_PRIVATE_KEY).replace('\\n', '\n'),
+    'VAPID_PRIVATE_KEY': vapid_private_key(env('VAPID_PRIVATE_KEY') or _DEV_VAPID_PRIVATE_KEY),
     'VAPID_ADMIN_EMAIL': env('VAPID_ADMIN_EMAIL', 'admin@marvin.local'),
 }
 
@@ -230,7 +260,7 @@ WEBPUSH_SETTINGS = {
 # Development sandbox token. Set WISE_API_TOKEN in .env for production.
 WISE_API_TOKEN = env(
     'WISE_API_TOKEN',
-    '4420b1fd-2246-4644-9730-56e7c9e4b41b',
+    'bdde76cb-fe9b-4664-974b-c7b52f66294d',
 )
 WISE_API_PROFILE_ID = env('WISE_API_PROFILE_ID', '')
 WISE_API_SANDBOX = env_bool('WISE_API_SANDBOX', default=True)

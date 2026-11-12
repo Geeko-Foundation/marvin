@@ -7,7 +7,7 @@ from django.core.exceptions import PermissionDenied
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.csrf import csrf_exempt
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_http_methods, require_POST
 
 from payments.forms import ProcessPaymentForm
 from payments.models import PaymentRecord
@@ -185,7 +185,7 @@ def gateway_currencies(request, gateway_id):
 
 
 @csrf_exempt
-@require_POST
+@require_http_methods(['GET', 'HEAD', 'POST'])
 def wise_webhook(request):
     """
     Let Wise tell us a transfer changed, instead of waiting for a poll.
@@ -197,6 +197,11 @@ def wise_webhook(request):
     Wise retries on any non-2xx, so an event we have no record for is still
     answered 200. Only an unusable request is refused.
     """
+    # Wise checks the URL answers before saving it, by visiting it and by
+    # sending a test notification. Neither carries anything to act on.
+    if request.method != 'POST' or request.META.get(TEST_HEADER, '').lower() == 'true':
+        return JsonResponse({'status': 'ok'})
+
     if signing_key() is None:
         logger.error('Wise webhook received but WISE_WEBHOOK_PUBLIC_KEY is not set')
         return JsonResponse({'error': 'Webhook signing key not configured.'}, status=503)
@@ -204,9 +209,6 @@ def wise_webhook(request):
     if not verify_signature(request.body, request.META.get(SIGNATURE_HEADER)):
         logger.warning('Wise webhook rejected: bad signature')
         return JsonResponse({'error': 'Invalid signature.'}, status=400)
-
-    if request.META.get(TEST_HEADER, '').lower() == 'true':
-        return JsonResponse({'status': 'test notification acknowledged'})
 
     try:
         event = json.loads(request.body)
