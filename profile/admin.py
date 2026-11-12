@@ -33,6 +33,7 @@ class UserAdmin(BaseUserAdmin):
 admin.site.unregister(User)
 admin.site.register(User, UserAdmin)
 
+
 @admin.register(AuditLogEntry)
 class AuditLogEntryAdmin(admin.ModelAdmin):
     """Readable, never editable. The trail is evidence, not working data."""

@@ -6,11 +6,12 @@ python-dotenv). Defaults in this file are for local development and tests only.
 Copy `.env.example` to `.env` and set production values there.
 """
 
-from pathlib import Path
 import base64
 import os
 import sys
+from pathlib import Path
 from urllib.parse import unquote, urlsplit
+
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -205,6 +206,7 @@ _DEV_VAPID_PRIVATE_KEY = (
     'bLdsp8erTORu1cjzGcAZ9CY6Zjn2wHXynL6VamGV5uQ9cET/qmVT7m7u\n'
     '-----END PRIVATE KEY-----\n'
 )
+
 
 def vapid_private_key(value):
     """

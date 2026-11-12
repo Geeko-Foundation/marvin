@@ -1,5 +1,4 @@
 from django import forms
-from django.contrib.auth.models import User
 
 from profile.countries import COUNTRIES, STATE_CODES, normalise_country, state_code
 from profile.models import BankingMethod, UserProfile
