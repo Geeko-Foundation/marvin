@@ -27,6 +27,10 @@ import requests
 
 from payments.gateways.wise_logging import log_wise_request
 
+# Seconds to connect, then to wait for a reply. Without a limit a slow Wise
+# call holds a server worker until it is killed, part way through a payment.
+TIMEOUT = (5, 30)
+
 WISE_LIVE_BASE_URL = 'https://api.transferwise.com'
 WISE_SANDBOX_BASE_URL = 'https://api.wise-sandbox.com'
 
@@ -97,6 +101,18 @@ class WiseApiClient:
         """Join the configured base URL with an API path."""
         return f'{self.base_url}{path}'
 
+    def _send(self, method: str, path: str, **kwargs):
+        """
+        Make one HTTP call to Wise, with a time limit.
+
+        A network failure becomes a WiseApiError, so every caller handles an
+        unreachable Wise the same way it handles Wise refusing a request.
+        """
+        try:
+            return self._session.request(method, self._url(path), timeout=TIMEOUT, **kwargs)
+        except requests.RequestException as exc:
+            raise WiseApiError(f'Could not reach Wise: {exc}') from exc
+
     def _request(
         self,
         method: str,
@@ -113,12 +129,7 @@ class WiseApiClient:
         Logs every request via ``log_wise_request``.
         """
         headers = dict(extra_headers or {})
-        response = self._session.request(
-            method,
-            self._url(path),
-            json=payload,
-            headers=headers or None,
-        )
+        response = self._send(method, path, json=payload, headers=headers or None)
         log_wise_request(method, path, response.status_code, mode=self.mode_label)
 
         try:
@@ -174,10 +185,7 @@ class WiseApiClient:
         ``types`` filters balance kinds (default ``STANDARD``).
         """
         profile_id = self.resolve_profile_id()
-        response = self._session.get(
-            self._url(f'/v4/profiles/{profile_id}/balances'),
-            params={'types': types},
-        )
+        response = self._send('GET', f'/v4/profiles/{profile_id}/balances', params={'types': types})
         log_wise_request('GET', f'/v4/profiles/{profile_id}/balances', response.status_code, mode=self.mode_label)
         try:
             data = response.json()
@@ -412,18 +420,14 @@ class WiseApiClient:
         path = f'/v3/profiles/{profile_id}/transfers/{transfer_id}/payments'
         body = {'type': funding_type}
 
-        response = self._session.post(self._url(path), json=body)
+        response = self._send('POST', path, json=body)
         log_wise_request('POST', path, response.status_code, mode=self.mode_label)
 
         if response.status_code == 403:
             approval = response.headers.get('x-2fa-approval-result')
             ott = response.headers.get('x-2fa-approval')
             if approval == 'APPROVED' and ott:
-                response = self._session.post(
-                    self._url(path),
-                    json=body,
-                    headers={'One-Time-Token': ott},
-                )
+                response = self._send('POST', path, json=body, headers={'One-Time-Token': ott})
                 log_wise_request('POST', path, response.status_code, mode=self.mode_label)
             elif ott:
                 raise WiseApiError(

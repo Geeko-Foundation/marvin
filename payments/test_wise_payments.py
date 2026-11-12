@@ -119,3 +119,30 @@ class NoSecondPaymentTests(TestCase):
                 service.process_payment(req.pk, 'wise-api', finance)
         self.assertEqual(client.create_transfer.call_count, 1)
         self.assertEqual(PaymentRecord.objects.filter(object_id=req.pk).count(), 1)
+
+
+class WiseClientNetworkTests(TestCase):
+    """Every Wise call has a time limit, and a dead network reads as a Wise error."""
+
+    def make_wise(self):
+        from payments.gateways.wise_api import WiseApiClient
+        return WiseApiClient(api_token='t', profile_id='1', sandbox=True)
+
+    def test_every_call_is_sent_with_a_timeout(self):
+        from payments.gateways.wise_api import TIMEOUT
+        wise = self.make_wise()
+        response = mock.Mock(status_code=200, headers={})
+        response.json.return_value = {'id': 1, 'status': 'processing'}
+        with mock.patch.object(wise._session, 'request', return_value=response) as sent:
+            wise.get_transfer(1)
+            wise.list_balances()
+            wise.fund_transfer(1)
+        self.assertEqual(sent.call_count, 3)
+        for call in sent.call_args_list:
+            self.assertEqual(call.kwargs['timeout'], TIMEOUT)
+
+    def test_a_timeout_is_raised_as_a_wise_error(self):
+        wise = self.make_wise()
+        with mock.patch.object(wise._session, 'request', side_effect=requests.Timeout('slow')):
+            with self.assertRaises(WiseApiError):
+                wise.get_transfer(1)
