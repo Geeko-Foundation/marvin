@@ -1,0 +1,4 @@
+{% load static tsp_tags %}
+<meta name="marvin-alerts" data-vapid-key="{% vapid_public_key %}"
+      data-worker-url="{% url 'service_worker' %}" data-save-url="{% url 'save_webpush_info' %}">
+<script src="{% static 'js/alerts.js' %}" defer></script>

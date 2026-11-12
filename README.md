@@ -268,6 +268,15 @@ DATABASE_CONN_MAX_AGE=60      # seconds to reuse a connection; 0 closes each tim
 
 Then run `python manage.py migrate` and `python manage.py seed_data` as usual. CI runs the whole test suite against both SQLite and PostgreSQL.
 
+A single `DATABASE_URL=postgresql://user:password@host:5432/name` works in place of the variables above, which is what Railway provides.
+
+### Railway
+
+1. Add a PostgreSQL database to the project.
+2. On the web service, set `DATABASE_URL` to `${{Postgres.DATABASE_URL}}`.
+3. Set the start command to `python manage.py migrate && gunicorn marvin.wsgi`. Leave `loaddata` out: on a lasting database it would reset every record in the fixture on each deploy.
+4. Load the starting data once, from the service's shell: `python manage.py loaddata tsp/fixtures/initial.json`.
+
 ## Development notes
 
 - **Database:** SQLite file at `db.sqlite3` in the project root. See PostgreSQL below to use that instead.

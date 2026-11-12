@@ -172,8 +172,7 @@
     "banking_method": null,
     "banking_currency": "EUR",
     "wise_account_id": null,
-    "wise_recipient_verified_at": null,
-    "push_notifications_enabled": false
+    "wise_recipient_verified_at": null
   }
 },
 {
@@ -195,8 +194,7 @@
     "banking_method": "iban",
     "banking_currency": "EUR",
     "wise_account_id": 702418203,
-    "wise_recipient_verified_at": "2026-09-09T07:53:27.169Z",
-    "push_notifications_enabled": false
+    "wise_recipient_verified_at": "2026-09-09T07:53:27.169Z"
   }
 },
 {
@@ -218,8 +216,7 @@
     "banking_method": null,
     "banking_currency": "EUR",
     "wise_account_id": null,
-    "wise_recipient_verified_at": null,
-    "push_notifications_enabled": false
+    "wise_recipient_verified_at": null
   }
 },
 {
@@ -241,8 +238,7 @@
     "banking_method": "iban",
     "banking_currency": "EUR",
     "wise_account_id": 702418650,
-    "wise_recipient_verified_at": "2026-09-08T15:04:57.165Z",
-    "push_notifications_enabled": true
+    "wise_recipient_verified_at": "2026-09-08T15:04:57.165Z"
   }
 },
 {
@@ -264,8 +260,7 @@
     "banking_method": "iban",
     "banking_currency": "EUR",
     "wise_account_id": 702426655,
-    "wise_recipient_verified_at": "2026-09-08T18:18:22.976Z",
-    "push_notifications_enabled": false
+    "wise_recipient_verified_at": "2026-09-08T18:18:22.976Z"
   }
 },
 {
@@ -287,8 +282,7 @@
     "banking_method": null,
     "banking_currency": "EUR",
     "wise_account_id": null,
-    "wise_recipient_verified_at": null,
-    "push_notifications_enabled": false
+    "wise_recipient_verified_at": null
   }
 },
 {
