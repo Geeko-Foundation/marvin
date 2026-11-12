@@ -1,14 +1,17 @@
 import os
+from decimal import Decimal
 
 from django import forms
 from django.contrib.auth.forms import AuthenticationForm
 from django.contrib.auth.models import User
+from django.core.validators import MinValueValidator
 
+from marvin.validators import NAME, line, restrict, single_line, text
 from profile.models import UserProfile
 from tsp.models import (
+    OPTIONAL_EXPENSE_CATEGORIES,
     Comment,
     Document,
-    DocumentKind,
     Event,
     Expense,
     ExpenseCategory,
@@ -116,7 +119,7 @@ class EventForm(forms.ModelForm):
     class Meta:
         model = Event
         fields = ['name', 'location', 'start_date', 'end_date', 'accepting_requests',
-                  'budget', 'budget_currency', 'url', 'description',
+                  'budget', 'budget_currency', 'approval_percent', 'url', 'description',
                   'requests_open_until', 'reimbursements_open_until',
                   'visa_letters_offered']
         widgets = {
@@ -125,6 +128,9 @@ class EventForm(forms.ModelForm):
             'start_date': forms.DateInput(attrs={'class': 'input input-bordered w-full', 'type': 'date'}),
             'end_date': forms.DateInput(attrs={'class': 'input input-bordered w-full', 'type': 'date'}),
             'accepting_requests': forms.CheckboxInput(attrs={'class': 'checkbox'}),
+            'approval_percent': forms.NumberInput(attrs={
+                'class': 'input input-bordered w-full', 'min': '1', 'max': '100', 'step': '1',
+            }),
             'budget': forms.NumberInput(attrs={
                 'class': 'input input-bordered w-full', 'step': '0.01', 'min': '0',
                 'placeholder': 'Leave blank for no limit',
@@ -146,14 +152,57 @@ class EventForm(forms.ModelForm):
             'visa_letters_offered': forms.CheckboxInput(attrs={'class': 'checkbox'}),
         }
 
+    offered_categories = forms.MultipleChoiceField(
+        choices=OPTIONAL_EXPENSE_CATEGORIES,
+        required=False,
+        widget=forms.CheckboxSelectMultiple(attrs={'class': 'checkbox checkbox-sm'}),
+    )
+    custom_categories = forms.CharField(
+        required=False, max_length=300,
+        widget=forms.TextInput(attrs={
+            'class': 'input input-bordered w-full', 'placeholder': 'For example: Childcare, Accessibility support',
+        }),
+    )
+
     def __init__(self, *args, **kwargs):
         """The currency only matters once a budget is set, so let it default."""
         super().__init__(*args, **kwargs)
         self.fields['budget_currency'].required = False
+        self.fields['budget'].validators.append(MinValueValidator(Decimal('0')))
+        optional = dict(OPTIONAL_EXPENSE_CATEGORIES)
+        extra = self.instance.extra_expense_categories or []
+        self.fields['offered_categories'].initial = [c for c in extra if c in optional]
+        self.fields['custom_categories'].initial = ', '.join(c for c in extra if c not in optional)
+
+    def clean_custom_categories(self):
+        """Comma-separated names, each a short single line not already offered."""
+        taken = {label.lower() for _, label in ExpenseCategory.choices + OPTIONAL_EXPENSE_CATEGORIES}
+        names = []
+        for name in self.cleaned_data['custom_categories'].split(','):
+            name = ' '.join(name.split())
+            if not name or name.lower() in taken:
+                continue
+            taken.add(name.lower())
+            if len(name) > 60:
+                raise forms.ValidationError(f'Keep each category under 60 characters: "{name[:20]}…"')
+            single_line(name)
+            names.append(name)
+        return names
 
     def clean_budget_currency(self):
         """Fall back to the model default when nothing was chosen."""
         return self.cleaned_data.get('budget_currency') or 'EUR'
+
+    def clean(self):
+        """An event cannot end before it starts."""
+        cleaned = super().clean()
+        start, end = cleaned.get('start_date'), cleaned.get('end_date')
+        if start and end and end < start:
+            self.add_error('end_date', 'The end date cannot be before the start date.')
+        self.instance.extra_expense_categories = (
+            list(cleaned.get('offered_categories') or []) + list(cleaned.get('custom_categories') or [])
+        )
+        return cleaned
 
 
 class TravelRequestForm(forms.ModelForm):
@@ -169,6 +218,19 @@ class TravelRequestForm(forms.ModelForm):
             'description': forms.Textarea(attrs={'class': 'textarea textarea-bordered w-full', 'rows': 4}),
         }
 
+    def __init__(self, *args, **kwargs):
+        """
+        Offer only events still taking requests.
+
+        A request already filed against an event that has since closed keeps
+        that event, so editing it does not force a different one.
+        """
+        super().__init__(*args, **kwargs)
+        events = Event.open_for_requests()
+        if self.instance.pk and self.instance.event_id:
+            events = events | Event.objects.filter(pk=self.instance.event_id)
+        self.fields['event'].queryset = events.distinct().order_by('start_date')
+
 
 class ExpenseForm(forms.ModelForm):
     """Single expense line item on a travel request."""
@@ -179,19 +241,33 @@ class ExpenseForm(forms.ModelForm):
         widgets = {
             'category': forms.Select(attrs={'class': 'select select-bordered w-full expense-category'}),
             'description': forms.TextInput(attrs={'class': 'input input-bordered w-full'}),
-            'estimated_amount': forms.NumberInput(attrs={'class': 'input input-bordered w-full', 'step': '0.01'}),
+            'estimated_amount': forms.NumberInput(
+                attrs={'class': 'input input-bordered w-full', 'step': '0.01', 'min': '0.01'},
+            ),
             'estimated_currency': forms.Select(
                 choices=CURRENCY_CHOICES,
                 attrs={'class': 'select select-bordered w-full'},
             ),
         }
 
+    def __init__(self, *args, event=None, **kwargs):
+        """Offer the event's categories, and an estimate above zero whatever the browser allowed."""
+        super().__init__(*args, **kwargs)
+        if event is None and self.instance.request_id:
+            event = self.instance.request.event
+        choices = event.expense_categories() if event else ExpenseCategory.choices
+        self.fields['category'] = forms.ChoiceField(
+            choices=[('', 'Choose')] + choices,
+            widget=forms.Select(attrs={'class': 'select select-bordered w-full expense-category'}),
+        )
+        self.fields['estimated_amount'].validators.append(MinValueValidator(Decimal('0.01')))
+
 
 ExpenseFormSet = forms.inlineformset_factory(
     TravelRequest,
     Expense,
     form=ExpenseForm,
-    extra=2,
+    extra=0,
     can_delete=True,
     min_num=1,
     validate_min=True,
@@ -215,12 +291,18 @@ class ExpenseActualForm(forms.ModelForm):
         }
 
     def __init__(self, *args, **kwargs):
-        """Default the currency to the one the line was approved in."""
+        """Receipts come in the currency that was requested, or the approved one."""
         super().__init__(*args, **kwargs)
         self.fields['actual_amount'].required = True
-        approved = self.instance.approved_currency if self.instance else None
-        if approved and not self.instance.actual_currency:
-            self.fields['actual_currency'].initial = approved
+        self.fields['actual_amount'].validators.append(MinValueValidator(Decimal('0')))
+        expense = self.instance
+        if expense and expense.approved_currency:
+            codes = dict.fromkeys([expense.estimated_currency, expense.approved_currency])
+            self.fields['actual_currency'] = forms.ChoiceField(
+                choices=[(c, c) for c in codes],
+                initial=expense.actual_currency or expense.estimated_currency,
+                widget=forms.Select(attrs={'class': 'select select-bordered w-full'}),
+            )
 
 
 ExpenseActualFormSet = forms.inlineformset_factory(
@@ -233,12 +315,13 @@ ExpenseActualFormSet = forms.inlineformset_factory(
 
 
 class ApprovalForm(forms.Form):
-    """Optional committee notes when approving a request."""
+    """Optional committee notes, and the share approved, when approving a request."""
 
     notes = forms.CharField(
         required=False,
         widget=forms.Textarea(attrs={'class': 'textarea textarea-bordered w-full', 'rows': 3}),
     )
+    approval_percent = forms.IntegerField(required=False, min_value=1, max_value=100)
 
 
 class RejectForm(forms.Form):
@@ -295,7 +378,7 @@ class CommentForm(forms.ModelForm):
     def __init__(self, *args, can_write_internal=False, **kwargs):
         super().__init__(*args, **kwargs)
         # Dropping the field, rather than hiding it, means a posted value from
-        # someone who may not write internal notes is simply ignored.
+        # someone who may not write internal notes is ignored.
         if not can_write_internal:
             del self.fields['internal']
 
@@ -358,8 +441,6 @@ class ReportFilterForm(forms.Form):
         required=False,
         widget=forms.DateInput(attrs={'class': 'input input-bordered', 'type': 'date'}),
     )
-    # Every state, rather than the five that used to be listed: draft,
-    # submitted and approved could not be filtered for at all.
     status = forms.ChoiceField(
         required=False,
         choices=[('', 'All statuses')] + list(RequestState.choices),
@@ -388,3 +469,13 @@ class SearchForm(forms.Form):
             'autocomplete': 'off',
         }),
     )
+
+
+# What each free-text field may hold. See marvin/validators.py.
+restrict(SignupAccountForm, first_name=NAME, last_name=NAME)
+restrict(TravelRequestForm, talk_title=line(300), description=text(5000))
+restrict(ExpenseForm, description=line(300))
+restrict(EventForm, name=line(200), location=line(200), description=text(5000))
+restrict(CommentForm, body=text(5000))
+restrict(ApprovalForm, notes=text(2000))
+restrict(RejectForm, notes=text(2000))

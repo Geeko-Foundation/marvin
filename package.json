@@ -1,0 +1,13 @@
+{
+  "name": "marvin-styles",
+  "private": true,
+  "description": "Builds static/css/app.css. Only needed when templates change.",
+  "scripts": {
+    "build:css": "tailwindcss -i static/css/input.css -o static/css/app.css --minify",
+    "watch:css": "tailwindcss -i static/css/input.css -o static/css/app.css --watch"
+  },
+  "devDependencies": {
+    "daisyui": "4.12.14",
+    "tailwindcss": "3.4.17"
+  }
+}

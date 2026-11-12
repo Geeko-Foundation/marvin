@@ -1,9 +1,9 @@
 """django-tables2 tables for the global search page."""
 
+import django_tables2 as tables
 from django.contrib.auth.models import User
 from django.urls import reverse
 from django.utils.html import format_html, mark_safe
-import django_tables2 as tables
 
 from tsp.models import Event
 
@@ -60,6 +60,9 @@ class UserTable(tables.Table):
 
     class Meta:
         model = User
+        # Listing fields explicitly; without it every User column is shown,
+        # the password hash included.
+        fields = ('username', 'email')
         sequence = ('username', 'full_name', 'email', 'groups', 'country', 'staff')
         attrs = {
             'class': 'table table-zebra w-full',

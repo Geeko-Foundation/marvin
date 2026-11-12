@@ -37,12 +37,15 @@ class Command(BaseCommand):
         sent = 0
         for travel_request in pending:
             left = travel_request.event.days_left_to_claim()
-            if left not in days:
+            # The tightest reminder now due. A missed run catches up on the
+            # next one, and a second run on the same day finds nothing new.
+            due = min((d for d in days if 0 <= left <= d), default=None)
+            already = travel_request.claim_reminder_days
+            if due is None or (already is not None and already <= due):
                 continue
             sent += 1
             self.stdout.write(
-                f'{travel_request.reference if hasattr(travel_request, "reference") else travel_request.pk}: '
-                f'{travel_request.user.email}, {left} day(s) left'
+                f'{travel_request.reference}: {travel_request.user.email}, {left} day(s) left'
             )
             if dry_run:
                 continue
@@ -57,6 +60,8 @@ class Command(BaseCommand):
                     f'receipts and report what the trip cost before then.'
                 ),
             )
+            travel_request.claim_reminder_days = due
+            travel_request.save(update_fields=['claim_reminder_days'])
 
         self.stdout.write(self.style.SUCCESS(
             f'{"Would remind" if dry_run else "Reminded"} {sent} requester(s).'

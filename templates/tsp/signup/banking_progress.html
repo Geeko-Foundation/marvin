@@ -1,6 +1,6 @@
 {% extends "tsp/signup/wizard_base.html" %}
 
-{% block title %}Sign Up - Verifying{% endblock %}
+{% block title %}Verifying your bank details{% endblock %}
 
 {% block wizard_content %}
 <div class="card bg-base-100 shadow-xl">
@@ -12,9 +12,9 @@
     </p>
 
     {% if wise_api_sandbox %}
-    <div class="badge badge-warning badge-sm mb-4">Wise sandbox - test API at api.wise-sandbox.com</div>
+    <div class="badge badge-warning badge-sm mb-4">Wise sandbox · test transfers only</div>
     {% else %}
-    <div class="badge badge-error badge-sm mb-4">Wise live API - real transfers</div>
+    <div class="badge badge-error badge-sm mb-4">Live Wise account · real transfers</div>
     {% endif %}
 
     <ul class="space-y-3 mb-6">

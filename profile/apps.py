@@ -19,4 +19,7 @@ class ProfileConfig(AppConfig):
                 return
             ensure_groups()
 
-        post_migrate.connect(setup_groups, sender=self)
+        # weak=False: setup_groups only lives inside this method, so with the
+        # default weak reference it could be garbage collected before migrate
+        # ran, leaving a fresh database with no groups and no error.
+        post_migrate.connect(setup_groups, sender=self, weak=False)

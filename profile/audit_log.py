@@ -11,9 +11,8 @@ class AuditLogEntry(models.Model):
     One thing that happened, written once and never changed.
 
     The domain models already carry created_by and changed_by, but those move
-    with the row and say nothing about what happened in between. This is the
-    trail Patrick asked for: every action recorded, and the record itself not
-    alterable from the application.
+    with the row and say nothing about what happened in between. This records
+    every action, and the application cannot alter the record afterwards.
     """
 
     action = models.CharField(max_length=60)

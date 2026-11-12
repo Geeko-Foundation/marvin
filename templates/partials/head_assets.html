@@ -1,0 +1,5 @@
+{# Shared by every layout, so styles and the icon change in one place. #}
+{% load static %}
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232c5282'/%3E%3Ctext x='16' y='22.5' font-family='Arial,Helvetica,sans-serif' font-size='18' font-weight='700' fill='white' text-anchor='middle'%3E{{ app_name|default:'T'|slice:':1'|upper|urlencode }}%3C/text%3E%3C/svg%3E">
+{# Built from the templates with npm run build:css. Rebuild after changing classes. #}
+<link rel="stylesheet" href="{% static 'css/app.css' %}">

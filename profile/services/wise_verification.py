@@ -17,7 +17,6 @@ from profile.services.wise_recipient import (
     resolve_state,
 )
 
-
 VERIFICATION_STEPS = [
     ('create_payee', 'Create Wise payee account'),
     ('add_bank_details', 'Confirm bank details with Wise'),
