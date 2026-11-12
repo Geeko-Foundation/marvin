@@ -10,6 +10,7 @@ from pathlib import Path
 import base64
 import os
 import sys
+from urllib.parse import unquote, urlsplit
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -127,6 +128,18 @@ DATABASES = {
         'CONN_MAX_AGE': int(env('DATABASE_CONN_MAX_AGE', '0')),
     }
 }
+
+# Hosts such as Railway hand over one URL, postgresql://user:password@host:port/name.
+if env('DATABASE_URL'):
+    _url = urlsplit(env('DATABASE_URL'))
+    DATABASES['default'].update({
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': unquote(_url.path.lstrip('/')),
+        'USER': unquote(_url.username or ''),
+        'PASSWORD': unquote(_url.password or ''),
+        'HOST': _url.hostname or '',
+        'PORT': str(_url.port or ''),
+    })
 
 
 # --- Auth ---
