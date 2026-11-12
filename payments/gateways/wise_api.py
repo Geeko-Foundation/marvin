@@ -1,16 +1,16 @@
 """
 Wise REST API client (live and sandbox).
 
-Based on the functional test in ``api_tests3.py``. All HTTP traffic uses
+All HTTP traffic uses
 ``requests`` against ``https://api.wise-sandbox.com`` (sandbox) or
 ``https://api.transferwise.com`` (production).
 
 Recipient verification flow
 ---------------------------
-1. :meth:`WiseApiClient.create_payee` — POST /v1/accounts
-2. :meth:`WiseApiClient.add_bank_details` — PUT /v1/accounts/{id}
+1. :meth:`WiseApiClient.create_payee` - POST /v1/accounts
+2. :meth:`WiseApiClient.add_bank_details` - PUT /v1/accounts/{id}
 3. Quote → transfer → fund (or sandbox simulation advance)
-4. :meth:`WiseApiClient.reverse_transfer` — PUT /v1/transfers/{id}/cancel
+4. :meth:`WiseApiClient.reverse_transfer` - PUT /v1/transfers/{id}/cancel
 
 In the Wise sandbox, transfer progression after creation uses the official
 simulation endpoints (see Wise Simulation API docs).
@@ -18,6 +18,7 @@ simulation endpoints (see Wise Simulation API docs).
 
 from __future__ import annotations
 
+import base64
 import time
 import uuid
 from decimal import Decimal
@@ -27,7 +28,28 @@ import requests
 
 from payments.gateways.wise_logging import log_wise_request
 
+# Seconds to connect, then to wait for a reply. Without a limit a slow Wise
+# call holds a server worker until it is killed, part way through a payment.
+TIMEOUT = (5, 30)
+
 WISE_LIVE_BASE_URL = 'https://api.transferwise.com'
+
+
+def sign_one_time_token(token: str, private_key_pem: str) -> str:
+    """
+    Sign Wise's one-time token for Strong Customer Authentication.
+
+    Wise checks the signature against the public key uploaded to the account,
+    which proves the request comes from whoever holds the private key.
+    """
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import padding
+
+    key = serialization.load_pem_private_key(private_key_pem.encode(), password=None)
+    signature = key.sign(token.encode('ascii'), padding.PKCS1v15(), hashes.SHA256())
+    return base64.b64encode(signature).decode('ascii')
+
+
 WISE_SANDBOX_BASE_URL = 'https://api.wise-sandbox.com'
 
 SUPPORTED_CURRENCIES = [
@@ -72,11 +94,13 @@ class WiseApiClient:
         profile_id: str | None = None,
         *,
         sandbox: bool = True,
+        sca_private_key: str = '',
     ):
         if not api_token:
             raise WiseApiError('WISE_API_TOKEN is not configured.')
 
         self.api_token = api_token
+        self.sca_private_key = (sca_private_key or '').strip()
         self.profile_id = str(profile_id) if profile_id else ''
         self.sandbox = sandbox
         self.base_url = WISE_SANDBOX_BASE_URL if sandbox else WISE_LIVE_BASE_URL
@@ -97,6 +121,18 @@ class WiseApiClient:
         """Join the configured base URL with an API path."""
         return f'{self.base_url}{path}'
 
+    def _send(self, method: str, path: str, **kwargs):
+        """
+        Make one HTTP call to Wise, with a time limit.
+
+        A network failure becomes a WiseApiError, so every caller handles an
+        unreachable Wise the same way it handles Wise refusing a request.
+        """
+        try:
+            return self._session.request(method, self._url(path), timeout=TIMEOUT, **kwargs)
+        except requests.RequestException as exc:
+            raise WiseApiError(f'Could not reach Wise: {exc}') from exc
+
     def _request(
         self,
         method: str,
@@ -113,12 +149,7 @@ class WiseApiClient:
         Logs every request via ``log_wise_request``.
         """
         headers = dict(extra_headers or {})
-        response = self._session.request(
-            method,
-            self._url(path),
-            json=payload,
-            headers=headers or None,
-        )
+        response = self._send(method, path, json=payload, headers=headers or None)
         log_wise_request(method, path, response.status_code, mode=self.mode_label)
 
         try:
@@ -142,7 +173,7 @@ class WiseApiClient:
         return data if data is not None else {}
 
     def get_profiles(self) -> list[dict]:
-        """GET /v2/profiles — list profiles available to the token."""
+        """GET /v2/profiles - list profiles available to the token."""
         data = self._request('GET', '/v2/profiles')
         if not isinstance(data, list):
             raise WiseApiError('Unexpected profiles response', payload={'response': data})
@@ -169,15 +200,12 @@ class WiseApiClient:
 
     def list_balances(self, types: str = 'STANDARD') -> list[dict]:
         """
-        GET /v4/profiles/{profileId}/balances — list balance accounts for the profile.
+        GET /v4/profiles/{profileId}/balances - list balance accounts for the profile.
 
         ``types`` filters balance kinds (default ``STANDARD``).
         """
         profile_id = self.resolve_profile_id()
-        response = self._session.get(
-            self._url(f'/v4/profiles/{profile_id}/balances'),
-            params={'types': types},
-        )
+        response = self._send('GET', f'/v4/profiles/{profile_id}/balances', params={'types': types})
         log_wise_request('GET', f'/v4/profiles/{profile_id}/balances', response.status_code, mode=self.mode_label)
         try:
             data = response.json()
@@ -189,10 +217,6 @@ class WiseApiClient:
         if isinstance(data, list):
             return data
         return data.get('balances', []) if isinstance(data, dict) else []
-
-    # ------------------------------------------------------------------
-    # Account / payee management
-    # ------------------------------------------------------------------
 
     def create_payee(
         self,
@@ -332,10 +356,6 @@ class WiseApiClient:
         """GET /v1/accounts/{accountId}"""
         return self._request('GET', f'/v1/accounts/{account_id}')
 
-    # ------------------------------------------------------------------
-    # Transfers
-    # ------------------------------------------------------------------
-
     def account_requirements(
         self,
         *,
@@ -412,22 +432,25 @@ class WiseApiClient:
         path = f'/v3/profiles/{profile_id}/transfers/{transfer_id}/payments'
         body = {'type': funding_type}
 
-        response = self._session.post(self._url(path), json=body)
+        response = self._send('POST', path, json=body)
         log_wise_request('POST', path, response.status_code, mode=self.mode_label)
 
         if response.status_code == 403:
             approval = response.headers.get('x-2fa-approval-result')
             ott = response.headers.get('x-2fa-approval')
             if approval == 'APPROVED' and ott:
-                response = self._session.post(
-                    self._url(path),
-                    json=body,
-                    headers={'One-Time-Token': ott},
-                )
+                response = self._send('POST', path, json=body, headers={'One-Time-Token': ott})
+                log_wise_request('POST', path, response.status_code, mode=self.mode_label)
+            elif ott and self.sca_private_key:
+                response = self._send('POST', path, json=body, headers={
+                    'x-2fa-approval': ott,
+                    'X-Signature': sign_one_time_token(ott, self.sca_private_key),
+                })
                 log_wise_request('POST', path, response.status_code, mode=self.mode_label)
             elif ott:
                 raise WiseApiError(
-                    f'SCA required. Complete Wise challenges for OTT={ott} and retry with One-Time-Token.',
+                    'Wise needs this payment signed, and WISE_SCA_PRIVATE_KEY is not set. '
+                    'Fund the transfer in Wise, or configure the signing key.',
                     status_code=403,
                 )
             else:
@@ -469,7 +492,6 @@ class WiseApiClient:
         """
         Advance a sandbox transfer via Wise Simulation API.
 
-        Mirrors ``simulate_user()`` from ``api_tests3.py``.
         Pass ``steps`` to run a subset (e.g. only ``processing`` for verification).
         """
         last: dict = {}
@@ -517,10 +539,6 @@ class WiseApiClient:
         PUT /v1/transfers/{transferId}/cancel
         """
         return self._request('PUT', f'/v1/transfers/{transfer_id}/cancel')
-
-    # ------------------------------------------------------------------
-    # Recipient verification
-    # ------------------------------------------------------------------
 
     def test_recipient(
         self,
@@ -612,7 +630,7 @@ class WiseApiClient:
         }
 
     def get_currencies(self) -> list[str]:
-        """GET /v1/currencies — returns supported currency codes."""
+        """GET /v1/currencies - returns supported currency codes."""
         try:
             data = self._request('GET', '/v1/currencies')
             if isinstance(data, list):
@@ -628,7 +646,7 @@ def get_wise_client(**kwargs) -> WiseApiClient:
 
     Settings:
         WISE_API_TOKEN
-        WISE_API_PROFILE_ID (optional — auto-resolved when empty)
+        WISE_API_PROFILE_ID (optional - auto-resolved when empty)
         WISE_API_SANDBOX (default True)
     """
     try:
@@ -639,6 +657,7 @@ def get_wise_client(**kwargs) -> WiseApiClient:
     if django_settings:
         kwargs.setdefault('api_token', getattr(django_settings, 'WISE_API_TOKEN', None))
         kwargs.setdefault('profile_id', getattr(django_settings, 'WISE_API_PROFILE_ID', None))
+        kwargs.setdefault('sca_private_key', getattr(django_settings, 'WISE_SCA_PRIVATE_KEY', ''))
         if 'sandbox' not in kwargs:
             kwargs['sandbox'] = getattr(django_settings, 'WISE_API_SANDBOX', True)
 

@@ -1,10 +1,10 @@
 {% extends "base.html" %}
 
-{% block title %}Actual Costs for Request #{{ travel_request.pk }}{% endblock %}
+{% block title %}Actual costs for {{ travel_request.reference }}{% endblock %}
 
 {% block content %}
 <h1 class="text-2xl font-bold mb-2">Report your actual costs</h1>
-<p class="opacity-60 mb-6">Request #{{ travel_request.pk }} — {{ travel_request.event.name }}</p>
+<p class="opacity-60 mb-6">{{ travel_request.reference }} · {{ travel_request.event.name }}</p>
 
 <div class="card bg-base-100 shadow-sm mb-6">
   <div class="card-body">
@@ -44,7 +44,7 @@
             <tr>
               <td>{{ form.instance.get_category_display }}</td>
               <td>{{ form.instance.description }}</td>
-              <td>{{ form.instance.approved_amount }} {{ form.instance.approved_currency }}</td>
+              <td>{{ form.instance.approved_amount|floatformat:"2g" }} {{ form.instance.approved_currency }}{% with approx=form.instance.approved_in_requested_currency %}{% if approx %}<span class="block text-xs opacity-70">≈ {{ approx|floatformat:"2g" }} {{ form.instance.estimated_currency }}</span>{% endif %}{% endwith %}</td>
               <td>
                 {{ form.id }}
                 {{ form.actual_amount }}
@@ -59,15 +59,15 @@
           <tfoot>
             <tr class="font-semibold">
               <td colspan="2">Approved total</td>
-              <td>{% for currency, amount in travel_request.totals_approved %}{{ amount }} {{ currency }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
+              <td>{% for currency, amount in travel_request.totals_approved %}{{ amount|floatformat:"2g" }} {{ currency }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
               <td colspan="2"></td>
             </tr>
           </tfoot>
         </table>
       </div>
       <p class="text-sm opacity-60 mt-2">
-        If a receipt is in a different currency from the approved amount, finance
-        will settle that line by hand rather than guess at a rate.
+        A receipt in the currency you asked in is converted at the rate saved when
+        the request was approved, the same rate shown beside the approved amount.
       </p>
     </div>
   </div>

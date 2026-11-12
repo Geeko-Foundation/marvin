@@ -7,7 +7,8 @@ from django.db import transaction
 
 from payments.base import PaymentRequest
 from payments.models import PaymentRecord
-from payments.registry import get_adapter, get_gateway, get_default_adapter
+from payments.registry import get_adapter, get_default_adapter, get_gateway
+from profile.audit_log import record as audit
 
 
 class PaymentService:
@@ -55,9 +56,22 @@ class PaymentService:
         if not self.adapter.get_queue().filter(pk=obj.pk).exists():
             raise ValueError('This request is no longer awaiting payment.')
         ct = ContentType.objects.get_for_model(obj)
-        if PaymentRecord.objects.filter(content_type=ct, object_id=obj.pk).exclude(
-            status__in=['failed', 'cancelled'],
-        ).exists():
+        purpose = self.adapter.payment_purpose(obj)
+        existing = self._payments_under_way(obj)
+        if gateway_id == 'wise-csv':
+            # Finance confirming that the batch file it was in went through.
+            if not existing.filter(status='exported').exists():
+                raise ValueError(
+                    'This request has not been exported in a batch file, so no money has '
+                    'been sent. Export the batch and upload it to Wise first.'
+                )
+            existing = existing.exclude(status='exported')
+        if existing.filter(status='exported').exists():
+            raise ValueError(
+                'This request is in an exported batch file. Mark it paid with Wise Batch CSV '
+                'once Wise has processed the file, rather than paying it again.'
+            )
+        if existing.exists():
             raise ValueError('A payment already exists for this request. Check its status before retrying.')
         gateway = get_gateway(gateway_id)
         if gateway is None:
@@ -78,6 +92,7 @@ class PaymentService:
             reference=payment_request.reference,
             external_id=result.external_id,
             status=result.status,
+            purpose=purpose,
             metadata=result.metadata,
             processed_by=user,
             created_by=user,
@@ -86,9 +101,23 @@ class PaymentService:
 
         if record.status in {'success', 'completed'}:
             self.adapter.on_payment_completed(obj, record, user)
+        audit(
+            'payment.processed',
+            user=user,
+            target=f'{gateway_id} {record.reference}',
+            detail=f'{record.amount} {record.currency}, status {record.status}',
+        )
         return record
 
-    def export_batch(self, gateway_id: str) -> tuple[str | bytes, str, str]:
+    def _payments_under_way(self, obj):
+        """Records for ``obj`` that mean money is moving, or about to, for its current purpose."""
+        return PaymentRecord.objects.filter(
+            content_type=ContentType.objects.get_for_model(obj),
+            object_id=obj.pk,
+            purpose=self.adapter.payment_purpose(obj),
+        ).exclude(status__in=['failed', 'cancelled'])
+
+    def export_batch(self, gateway_id: str, user=None) -> tuple[str | bytes, str, str]:
         """
         Export all current queue items as a batch file for manual gateway upload.
 
@@ -104,11 +133,35 @@ class PaymentService:
         if not gateway.supports_batch_export:
             raise ValueError(f'Gateway {gateway_id} does not support batch export.')
 
-        queue = self.get_queue()
-        requests = [self.build_payment_request(obj) for obj in queue]
+        # Anything already in a file, or being paid another way, stays out, so
+        # exporting again cannot put the same person in two files.
+        # shortcut: two exports at the same instant could both include a request;
+        # fine for one finance team, lock the queue rows if that ever changes.
+        pending = [obj for obj in self.get_queue() if not self._payments_under_way(obj).exists()]
+        if not pending:
+            raise ValueError('Everything awaiting payment is already in an exported file or being paid.')
+        requests = [self.build_payment_request(obj) for obj in pending]
         export = gateway.export_batch(requests)
         if export is None:
             raise ValueError(f'Gateway {gateway_id} returned no batch export.')
+        with transaction.atomic():
+            for obj, payment_request in zip(pending, requests):
+                PaymentRecord.objects.create(
+                    content_type=ContentType.objects.get_for_model(obj),
+                    object_id=obj.pk,
+                    gateway_id=gateway_id,
+                    amount=payment_request.amount,
+                    currency=payment_request.currency,
+                    recipient_name=payment_request.recipient_name,
+                    recipient_email=payment_request.recipient_email,
+                    reference=payment_request.reference,
+                    status='exported',
+                    purpose=self.adapter.payment_purpose(obj),
+                    metadata={'batch_file': export.filename},
+                    processed_by=user,
+                    created_by=user,
+                    changed_by=user,
+                )
         return export.content, export.content_type, export.filename
 
     def refresh_status(self, record: PaymentRecord) -> PaymentRecord:

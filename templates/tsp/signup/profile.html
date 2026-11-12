@@ -1,6 +1,6 @@
 {% extends "tsp/signup/wizard_base.html" %}
 
-{% block title %}Sign Up — Your Details{% endblock %}
+{% block title %}Your details{% endblock %}
 
 {% block wizard_content %}
 <div class="card bg-base-100 shadow-xl">
@@ -65,9 +65,9 @@
 
       <div class="flex flex-wrap gap-3 justify-end">
         {% if can_skip_banking %}
-        <button type="submit" name="action" value="skip" class="btn btn-ghost">Skip for now</button>
+        <button type="submit" name="action" value="skip" class="btn btn-ghost w-full sm:w-auto">Skip for now</button>
         {% endif %}
-        <button type="submit" name="action" value="continue" class="btn btn-primary">Continue — Wise Banking</button>
+        <button type="submit" name="action" value="continue" class="btn btn-primary w-full sm:w-auto">Continue to banking details</button>
       </div>
     </form>
   </div>

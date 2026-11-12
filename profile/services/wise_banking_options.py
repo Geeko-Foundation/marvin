@@ -7,7 +7,10 @@ from django.core.cache import cache
 
 from payments.gateways.wise_api import WiseApiError, get_wise_client
 from profile.models import BankingMethod
-from profile.services.wise_recipient import currency_for_method, recipient_type_for_method
+from profile.services.wise_recipient import (
+    currency_for_method,
+    recipient_type_for_method,
+)
 
 # Wise lists 802 banks for Brazil, 130 for Indonesia and 3755 for Japan, and
 # the lists change, so they are fetched instead of hardcoded and kept for a day.

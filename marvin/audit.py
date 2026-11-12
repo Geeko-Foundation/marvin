@@ -7,7 +7,6 @@ import threading
 from django.conf import settings
 from django.db import models
 
-
 _audit_user = threading.local()
 
 

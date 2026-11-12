@@ -1,6 +1,6 @@
 from django import forms
-from django.contrib.auth.models import User
 
+from marvin.validators import BANK, NAME, PHONE, POSTCODE, line, restrict
 from profile.countries import COUNTRIES, STATE_CODES, normalise_country, state_code
 from profile.models import BankingMethod, UserProfile
 from profile.services.wise_recipient import (
@@ -44,7 +44,7 @@ REQUIRED_BANK_FIELDS = {
 
 
 class ProfileForm(forms.ModelForm):
-    """Personal details only — banking is managed via Wise onboarding for requestors."""
+    """Personal details only - banking is managed via Wise onboarding for requestors."""
 
     first_name = forms.CharField(max_length=150, required=True)
     last_name = forms.CharField(max_length=150, required=False)
@@ -59,7 +59,6 @@ class ProfileForm(forms.ModelForm):
             'state',
             'country',
             'postal_code',
-            'push_notifications_enabled',
         ]
         widgets = {
             'phone': forms.TextInput(attrs={'class': INPUT_CLASS}),
@@ -71,7 +70,6 @@ class ProfileForm(forms.ModelForm):
                 choices=[('', 'Select your country')] + list(COUNTRIES),
             ),
             'postal_code': forms.TextInput(attrs={'class': INPUT_CLASS}),
-            'push_notifications_enabled': forms.CheckboxInput(attrs={'class': 'checkbox'}),
         }
 
     def __init__(self, *args, **kwargs):
@@ -107,7 +105,7 @@ class ProfileForm(forms.ModelForm):
 
 
 class OnboardingPersonalForm(ProfileForm):
-    """First-time requestor profile — all address fields required."""
+    """First-time requestor profile - all address fields required."""
 
     def __init__(self, *args, **kwargs):
         """Require address fields that are optional on the standard profile form."""
@@ -129,7 +127,7 @@ class OnboardingPersonalForm(ProfileForm):
 
 
 class WiseRecipientForm(forms.Form):
-    """Banking details sent to Wise only — never stored in Marvin."""
+    """Banking details sent to Wise only - never stored in Marvin."""
 
     banking_method = forms.ChoiceField(
         choices=BankingMethod.choices,
@@ -202,7 +200,7 @@ class WiseRecipientForm(forms.Form):
             if profile.banking_currency:
                 self.fields['banking_currency'].initial = profile.banking_currency
         self.fields['bank_swift'].help_text = (
-            'Optional for many SEPA transfers — IBAN alone is usually enough within the EU.'
+            'Optional for most SEPA transfers, where the IBAN alone is usually enough.'
         )
 
     def clean(self):
@@ -257,3 +255,17 @@ class StaffBankingForm(forms.ModelForm):
                 attrs={'class': 'select select-bordered w-full'},
             ),
         }
+
+
+# What each free-text field may hold. See marvin/validators.py.
+for _form in (ProfileForm, OnboardingPersonalForm):
+    restrict(
+        _form, first_name=NAME, last_name=NAME, phone=PHONE, postal_code=POSTCODE,
+        address_line=line(200), city=line(100), state=line(100), country=line(100),
+    )
+restrict(WiseRecipientForm, **{
+    name: BANK for name in (
+        'bank_iban', 'bank_swift', 'bank_account_no', 'bank_routing_no', 'bank_ifsc',
+        'bank_bsb', 'bank_cpf', 'bank_code', 'bank_branch', 'bank_japan_branch',
+    )
+})

@@ -7,8 +7,8 @@
 <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 mb-6">
   <div>
     <div class="flex items-center gap-3 mb-1">
-      <h1 class="text-2xl font-bold">Request #{{ travel_request.pk }}</h1>
-      <span class="badge {{ travel_request.state|state_badge }}">{{ travel_request.get_state_display }}</span>
+      <h1 class="text-2xl font-bold">{{ travel_request.reference }}</h1>
+      <span class="badge {{ travel_request.state|state_badge }} whitespace-nowrap">{{ travel_request.get_state_display }}</span>
     </div>
     <p class="opacity-60">{{ travel_request.event.name }} · {{ travel_request.event.location }}</p>
     <p class="text-sm opacity-60">Requester: {{ travel_request.user.get_full_name|default:travel_request.user.username }}</p>
@@ -16,6 +16,21 @@
   <div class="flex flex-wrap gap-2">
     {% if travel_request.is_editable_by_requester and travel_request.user_id == user.id %}
     <a href="{% url 'request_edit' travel_request.pk %}" class="btn btn-sm btn-outline">Edit</a>
+    {% elif travel_request.can_change_amounts and travel_request.user_id == user.id %}
+    <a href="{% url 'request_edit' travel_request.pk %}" class="btn btn-sm btn-outline"
+       title="Sends the request back to the committee for approval">Change Amounts</a>
+    {% endif %}
+    {% if travel_request.can_request_advance and travel_request.user_id == user.id %}
+    <form method="post" action="{% url 'request_advance' travel_request.pk %}">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-sm btn-info">Request Advance of {{ travel_request.advance_amount|floatformat:"2g" }} {{ travel_request.advance_currency }}</button>
+    </form>
+    {% endif %}
+    {% if travel_request.can_take_back_from_payment and travel_request.user_id == user.id %}
+    <form method="post" action="{% url 'request_take_back' travel_request.pk %}">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-sm btn-outline">Take Back to Edit</button>
+    </form>
     {% endif %}
     {% if travel_request.state == 'draft' and travel_request.user_id == user.id %}
     <form method="post" action="{% url 'request_submit' travel_request.pk %}">
@@ -33,21 +48,77 @@
       <button type="submit" class="btn btn-sm btn-success" {% if missing_docs %}disabled title="Upload all required documents first"{% endif %}>Submit for Payment</button>
     </form>
     {% endif %}
-    {% if travel_request.state == 'draft' or travel_request.state == 'submitted' or travel_request.state == 'approved' %}
+    <a href="{% url 'request_form' travel_request.pk %}" class="btn btn-sm btn-ghost" target="_blank">Print Form</a>
+    {% if travel_request.state == 'draft' or travel_request.state == 'submitted' or travel_request.state == 'approved' or travel_request.state == 'accepted' %}
     {% if travel_request.user_id == user.id or profile.is_tsp %}
-    <form method="post" action="{% url 'request_cancel' travel_request.pk %}" onsubmit="return confirm('Cancel this request?')">
+    <form method="post" action="{% url 'request_cancel' travel_request.pk %}" data-confirm="Cancel {{ travel_request.reference }}?" data-confirm-action="Cancel Request" data-confirm-detail="It can't be reopened afterwards.{% if travel_request.advance_payment %} The advance already paid will have to be paid back.{% endif %}">
       {% csrf_token %}
-      <button type="submit" class="btn btn-sm btn-error btn-outline">Cancel</button>
+      <button type="submit" class="btn btn-sm btn-error btn-outline">Cancel Request</button>
     </form>
     {% endif %}
     {% endif %}
-    <a href="{% url 'request_form' travel_request.pk %}" class="btn btn-sm btn-ghost" target="_blank">Print Form</a>
   </div>
 </div>
 
+{% with paid=travel_request.payment %}
+{% if paid and paid.purpose != 'advance' and paid.status != 'failed' %}
+<div class="alert alert-success mb-6">
+  <span>
+    {% if paid.status == 'success' or paid.status == 'completed' %}Paid{% else %}Sending{% endif %}
+    <strong>{{ paid.amount|floatformat:"2g" }} {{ paid.currency }}</strong> on {{ paid.created_at|date:"j M Y" }}.
+    {% with m=paid.metadata %}
+    {% if m.fee %}Wise fee {{ m.fee }} {{ m.fee_currency|default:paid.currency }}.{% endif %}
+    {% if m.target_currency and m.target_currency != paid.currency %}
+    Converted at 1 {{ paid.currency }} = {{ m.exchange_rate }} {{ m.target_currency }}, so {{ m.target_amount }} {{ m.target_currency }} reaches the account.
+    {% endif %}
+    {% endwith %}
+    {% if paid.external_id %}<span class="block text-sm">Wise transfer {{ paid.external_id }} · reference {{ paid.reference }}</span>{% endif %}
+  </span>
+</div>
+{% endif %}
+{% endwith %}
+{% with owed=travel_request.amount_owed_back advance=travel_request.advance_payment %}
+{% if owed %}
+<div class="alert alert-error mb-6 flex flex-wrap justify-between">
+  <span>
+    <strong>{{ owed.1 }} {{ owed.0 }}</strong> of the advance has to be paid back.
+    {% if travel_request.user_id == user.id %}New requests can be submitted once finance has confirmed it.{% endif %}
+  </span>
+  {% if profile.is_finance %}
+  <form method="post" action="{% url 'request_settle' travel_request.pk %}">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="refund">
+    <button type="submit" class="btn btn-sm">Refund Received</button>
+  </form>
+  {% endif %}
+</div>
+{% elif travel_request.advance_covers_costs and profile.is_finance %}
+<div class="alert alert-info mb-6 flex flex-wrap justify-between">
+  <span>The advance already covers the actual costs, so there is nothing more to pay.</span>
+  <form method="post" action="{% url 'request_settle' travel_request.pk %}">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="close">
+    <button type="submit" class="btn btn-sm">Close as Paid</button>
+  </form>
+</div>
+{% endif %}
+{% if travel_request.advance_amount or advance %}
+<div class="alert mb-6">
+  <span>
+    {% if advance %}
+    Advance of <strong>{{ advance.amount|floatformat:"2g" }} {{ advance.currency }}</strong> paid on {{ advance.created_at|date:"j M Y" }}. It is taken off the final payment.
+    {% elif travel_request.awaiting_advance %}
+    Advance of <strong>{{ travel_request.advance_amount|floatformat:"2g" }} {{ travel_request.advance_currency }}</strong> requested; waiting for finance to pay it.
+    {% else %}
+    The committee allows an advance of <strong>{{ travel_request.advance_amount|floatformat:"2g" }} {{ travel_request.advance_currency }}</strong> before the event{% if travel_request.state == 'approved' %}, once the request is accepted{% endif %}.
+    {% endif %}
+  </span>
+</div>
+{% endif %}
+{% endwith %}
+
 <div class="grid gap-6 lg:grid-cols-3">
   <div class="lg:col-span-2 flex flex-col gap-6">
-    <!-- Details -->
     <div class="card bg-base-100 shadow-sm">
       <div class="card-body">
         <h2 class="card-title text-lg">Request Details</h2>
@@ -60,7 +131,6 @@
       </div>
     </div>
 
-    <!-- Expenses -->
     <div class="card bg-base-100 shadow-sm">
       <div class="card-body">
         <h2 class="card-title text-lg">Expenses</h2>
@@ -85,10 +155,10 @@
               <tr>
                 <td>{{ expense.get_category_display }}</td>
                 <td>{{ expense.description }}</td>
-                <td>{{ expense.estimated_amount }} {{ expense.estimated_currency }}</td>
+                <td>{{ expense.estimated_amount|floatformat:"2g" }} {{ expense.estimated_currency }}</td>
                 {% if travel_request.state != 'draft' and travel_request.state != 'submitted' %}
                 <td>
-                  {% if expense.approved_amount %}{{ expense.approved_amount }} {{ expense.approved_currency }}{% else %}—{% endif %}
+                  {% if expense.approved_amount %}{{ expense.approved_amount|floatformat:"2g" }} {{ expense.approved_currency }}{% else %}-{% endif %}
                   {% with approx=expense.approved_in_requested_currency %}
                   {% if approx %}
                   <span class="block text-xs opacity-70"
@@ -100,12 +170,12 @@
                 </td>
                 {% endif %}
                 {% if travel_request.total_actual %}
-                <td>{% if expense.actual_amount %}{{ expense.actual_amount }} {{ expense.actual_currency }}{% else %}—{% endif %}</td>
+                <td>{% if expense.actual_amount %}{{ expense.actual_amount|floatformat:"2g" }} {{ expense.actual_currency }}{% else %}-{% endif %}</td>
                 <td>
                   {% if expense.has_currency_mismatch %}
                   <span class="badge badge-warning badge-sm">finance to settle</span>
                   {% else %}
-                  {{ expense.payable_amount|default_if_none:"—" }} {{ expense.approved_currency }}
+                  {{ expense.payable_amount|default_if_none:"-" }} {{ expense.approved_currency }}
                   {% endif %}
                 </td>
                 {% endif %}
@@ -115,23 +185,39 @@
             <tfoot>
               <tr class="font-semibold">
                 <td colspan="2">Total</td>
-                <td>{% for currency, amount in travel_request.totals_estimated %}{{ amount }} {{ currency }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
+                <td>{% for currency, amount in travel_request.totals_estimated %}{{ amount|floatformat:"2g" }} {{ currency }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
                 {% if travel_request.state != 'draft' and travel_request.state != 'submitted' %}
-                <td>{% for currency, amount in travel_request.totals_approved %}{{ amount }} {{ currency }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
+                <td>{% for currency, amount in travel_request.totals_approved %}{{ amount|floatformat:"2g" }} {{ currency }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
                 {% endif %}
                 {% if travel_request.total_actual %}
-                <td>{% for currency, amount in travel_request.totals_actual %}{{ amount }} {{ currency }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
-                <td>{% for currency, amount in travel_request.totals_payable %}{{ amount }} {{ currency }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
+                <td>{% for currency, amount in travel_request.totals_actual %}{{ amount|floatformat:"2g" }} {{ currency }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
+                <td>{% for currency, amount in travel_request.totals_payable %}{{ amount|floatformat:"2g" }} {{ currency }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
                 {% endif %}
               </tr>
             </tfoot>
           </table>
         </div>
+        {% if travel_request.approval_percent %}
+        <p class="text-sm opacity-70 mt-2">Approved at {{ travel_request.approval_percent }}% of what was asked for.</p>
+        {% endif %}
 
-        {% if profile.is_tsp and travel_request.state == 'submitted' %}
-        <div class="divider">TSP Review</div>
+        {% if profile.is_tsp and travel_request.state == 'submitted' and travel_request.user_id == user.id %}
+        <div class="divider">Committee review</div>
+        <p class="text-sm opacity-70">This is your own request, so another committee member has to review it.</p>
+        {% elif profile.is_tsp and travel_request.state == 'submitted' %}
+        <div class="divider">Committee review</div>
         <form method="post" action="{% url 'request_approve' travel_request.pk %}">
           {% csrf_token %}
+          <label class="flex flex-wrap items-center gap-3 mb-3 p-3 bg-base-200 rounded-box text-sm">
+            <span class="flex-1">
+              Share of the request covered
+              <span class="block opacity-70">Starts at {{ travel_request.event.approval_percent }}%, the usual share for {{ travel_request.event.name }}. Changing it refills every line below.</span>
+            </span>
+            <span class="flex items-center gap-1">
+              <input type="number" min="1" max="100" step="1" value="{{ travel_request.event.approval_percent }}"
+                     class="input input-bordered input-sm w-20" name="approval_percent" data-percent> %
+            </span>
+          </label>
           {% for line in review_lines %}
           {% with expense=line.expense %}
           <input type="hidden" name="expense_id" value="{{ expense.pk }}">
@@ -139,14 +225,14 @@
             <div class="flex flex-wrap gap-3 items-end">
               <span class="text-sm flex-1">
                 {{ expense.get_category_display }}: {{ expense.description }}
-                <span class="block opacity-70">Requested {{ expense.estimated_amount }} {{ expense.estimated_currency }}</span>
+                <span class="block opacity-70">Requested {{ expense.estimated_amount|floatformat:"2g" }} {{ expense.estimated_currency }}{% for option in line.options %}{% if option.code == 'EUR' and option.rates %} ≈ {{ option.amount|floatformat:"2g" }} EUR{% endif %}{% endfor %}</span>
               </span>
               <input type="number" name="approved_amount_{{ expense.pk }}" step="0.01"
                      value="{% for option in line.options %}{% if option.selected %}{{ option.amount }}{% endif %}{% endfor %}"
                      class="input input-bordered input-sm w-32" placeholder="Amount" data-amount>
               <select name="approved_currency_{{ expense.pk }}" class="select select-bordered select-sm w-24" data-currency>
                 {% for option in line.options %}
-                <option value="{{ option.code }}" data-amount="{{ option.amount }}"{% if option.selected %} selected{% endif %}>{{ option.code }}</option>
+                <option value="{{ option.code }}" data-amount="{{ option.amount }}" data-full="{{ option.full }}"{% if option.selected %} selected{% endif %}>{{ option.code }}</option>
                 {% endfor %}
               </select>
             </div>
@@ -154,9 +240,9 @@
             <p class="text-xs opacity-80 mt-2{% if not option.selected %} hidden{% endif %}" data-rate-for="{{ option.code }}">
               {% if option.rates %}
               90-day average: 1 {{ option.code }} = {{ option.rates.average|floatformat:4 }} {{ expense.estimated_currency }}
-              ({{ option.rates.window_start|date:"j M" }} – {{ option.rates.window_end|date:"j M" }})
+              ({{ option.rates.window_start|date:"j M" }} to {{ option.rates.window_end|date:"j M" }})
               · today: {{ option.rates.current|floatformat:4 }}
-              · range {{ option.rates.low|floatformat:4 }}–{{ option.rates.high|floatformat:4 }}
+              · range {{ option.rates.low|floatformat:4 }} to {{ option.rates.high|floatformat:4 }}
               {% elif option.code == expense.estimated_currency %}
               Same currency as requested.
               {% endif %}
@@ -169,11 +255,30 @@
             Amounts in another currency are filled in at the 90-day average rate. That rate is saved with
             the approval, so the requester sees what it is worth in their own currency.
           </p>
+          <div class="flex flex-wrap gap-3 items-end mb-3 p-3 bg-base-200 rounded-box">
+            <span class="text-sm flex-1">
+              Advance before the event (optional)
+              <span class="block opacity-70">For people who can't front the costs. Leave empty for none.</span>
+            </span>
+            <input type="number" name="advance_amount" step="0.01" min="0"
+                   class="input input-bordered input-sm w-32" placeholder="Amount">
+            <select name="advance_currency" class="select select-bordered select-sm w-24">
+              {% for code in payout_currencies %}<option value="{{ code }}">{{ code }}</option>{% endfor %}
+            </select>
+          </div>
           <script>
-            document.querySelectorAll('[data-approval-line]').forEach(function (line) {
+            var percent = document.querySelector('[data-percent]');
+            var lines = document.querySelectorAll('[data-approval-line]');
+            function fill(line) {
+              var full = parseFloat(line.querySelector('[data-currency]').selectedOptions[0].dataset.full);
+              var share = Math.min(Math.max(parseFloat(percent.value) || 0, 0), 100);
+              line.querySelector('[data-amount]').value = (Math.round(full * share) / 100).toFixed(2);
+            }
+            percent.addEventListener('input', function () { lines.forEach(fill); });
+            lines.forEach(function (line) {
               var select = line.querySelector('[data-currency]');
               select.addEventListener('change', function () {
-                line.querySelector('[data-amount]').value = select.selectedOptions[0].dataset.amount;
+                fill(line);
                 line.querySelectorAll('[data-rate-for]').forEach(function (hint) {
                   hint.classList.toggle('hidden', hint.dataset.rateFor !== select.value);
                 });
@@ -181,20 +286,33 @@
             });
           </script>
           <textarea name="notes" class="textarea textarea-bordered w-full mb-3" rows="2" placeholder="Approval notes (optional)"></textarea>
+          {% with left=travel_request.event.budget_remaining %}
+          {% if left is not None %}
+          <p class="text-sm mb-2">
+            {{ travel_request.event.name }} has
+            <strong class="{% if left < 0 %}text-error{% endif %}">{{ left|floatformat:"2g" }} {{ travel_request.event.budget_currency }}</strong>
+            left of its budget.
+          </p>
+          <label class="label cursor-pointer justify-start gap-2 mb-2">
+            <input type="checkbox" name="over_budget" value="1" class="checkbox checkbox-sm">
+            <span class="label-text">Approve even if this takes the event over budget</span>
+          </label>
+          {% endif %}
+          {% endwith %}
           <div class="flex gap-2">
             <button type="submit" class="btn btn-success btn-sm">Approve</button>
           </div>
         </form>
-        <form method="post" action="{% url 'request_reject' travel_request.pk %}" class="mt-3">
+        <div class="divider text-xs opacity-60">or reject it</div>
+        <form method="post" action="{% url 'request_reject' travel_request.pk %}">
           {% csrf_token %}
           <textarea name="notes" class="textarea textarea-bordered w-full mb-2" rows="2" placeholder="Rejection reason (required)" required></textarea>
-          <button type="submit" class="btn btn-error btn-sm">Reject</button>
+          <button type="submit" class="btn btn-error btn-outline btn-sm">Reject Request</button>
         </form>
         {% endif %}
       </div>
     </div>
 
-    <!-- Documents -->
     <div class="card bg-base-100 shadow-sm">
       <div class="card-body">
         <h2 class="card-title text-lg">Documents</h2>
@@ -212,8 +330,17 @@
               <tr>
                 <td>{{ doc.get_kind_display }}</td>
                 <td>{{ doc.original_name }}</td>
-                <td>{{ doc.created_at|date:"M d, Y" }}</td>
-                <td><a href="{% url 'document_download' doc.pk %}" class="link link-primary">Download</a></td>
+                <td>{{ doc.created_at|date }}</td>
+                <td class="flex gap-3">
+                  <a href="{% url 'document_download' doc.pk %}" class="link link-primary">Download</a>
+                  {% if travel_request.user_id == user.id and travel_request.state != 'submitted_for_payment' and travel_request.state != 'paid' %}
+                  <form method="post" action="{% url 'request_document_delete' travel_request.pk doc.pk %}"
+                        data-confirm="Remove {{ doc.original_name }}?" data-confirm-action="Remove" data-confirm-detail="The file is deleted, and you would need to upload it again.">
+                    {% csrf_token %}
+                    <button type="submit" class="link link-error">Remove</button>
+                  </form>
+                  {% endif %}
+                </td>
               </tr>
               {% endfor %}
             </tbody>
@@ -223,7 +350,7 @@
         <p class="text-sm opacity-60 mb-4">No documents uploaded yet.</p>
         {% endif %}
 
-        {% if travel_request.state == 'accepted' or profile.is_tsp or profile.is_finance %}
+        {% if travel_request.state == 'accepted' and travel_request.user_id == user.id %}
         <form method="post" action="{% url 'request_document_upload' travel_request.pk %}" enctype="multipart/form-data" class="flex flex-wrap gap-3 items-end">
           {% csrf_token %}
           <div class="form-control">
@@ -240,7 +367,6 @@
       </div>
     </div>
 
-    <!-- Comments -->
     <div class="card bg-base-100 shadow-sm">
       <div class="card-body">
         <h2 class="card-title text-lg">Comments</h2>
@@ -248,7 +374,7 @@
           {% for comment in comments %}
           <div class="chat chat-start">
             <div class="chat-header text-xs opacity-60">
-              {{ comment.user.get_full_name|default:comment.user.username }} · {{ comment.created_at|date:"M d, H:i" }}
+              {{ comment.user.get_full_name|default:comment.user.username }} · {{ comment.created_at|date:"j M, H:i" }}
               {% if comment.internal %}<span class="badge badge-warning badge-sm ml-1">Internal</span>{% endif %}
             </div>
             <div class="chat-bubble {% if comment.internal %}chat-bubble-warning{% else %}chat-bubble-primary{% endif %}">{{ comment.body }}</div>
@@ -272,26 +398,29 @@
     </div>
   </div>
 
-  <!-- Sidebar: State History -->
   <div class="card bg-base-100 shadow-sm h-fit">
     <div class="card-body">
-      <h2 class="card-title text-lg">State History</h2>
+      <h2 class="card-title text-lg">History</h2>
+      {% if state_history %}
       <ul class="timeline timeline-vertical timeline-compact">
         {% for entry in state_history %}
         <li>
-          <div class="timeline-start text-xs opacity-60">{{ entry.created_at|date:"M d, H:i" }}</div>
+          <div class="timeline-start text-xs opacity-60">{{ entry.created_at|date:"j M, H:i" }}</div>
           <div class="timeline-middle">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4 text-primary"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clip-rule="evenodd" /></svg>
           </div>
           <div class="timeline-end timeline-box text-sm">
-            <span class="badge {{ entry.to_state|state_badge }} badge-xs">{{ entry.to_state }}</span>
-            <p class="text-xs opacity-60">{{ entry.user.username }}</p>
+            <span class="badge {{ entry.to_state|state_badge }} badge-xs whitespace-nowrap">{{ entry.to_state|state_label }}</span>
+            <p class="text-xs opacity-60">{{ entry.actor|default:entry.user.username }}</p>
             {% if entry.notes %}<p class="text-xs mt-1">{{ entry.notes }}</p>{% endif %}
           </div>
           <hr/>
         </li>
         {% endfor %}
       </ul>
+      {% else %}
+      <p class="text-sm opacity-60">Nothing has happened to this request yet.</p>
+      {% endif %}
     </div>
   </div>
 </div>

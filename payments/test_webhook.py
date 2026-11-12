@@ -147,5 +147,10 @@ class WiseWebhookTests(TestCase):
         response = self.post(b'not json at all')
         self.assertEqual(response.status_code, 400)
 
-    def test_the_endpoint_does_not_answer_a_get(self):
-        self.assertEqual(self.client.get(self.url).status_code, 405)
+    @override_settings(WISE_WEBHOOK_PUBLIC_KEY='')
+    def test_wise_can_check_the_url_before_a_signing_key_is_set(self):
+        self.assertEqual(self.client.get(self.url).status_code, 200)
+        response = self.post(self.event(), signature='anything', **{'x-test-notification': 'true'})
+        self.assertEqual(response.status_code, 200)
+        self.request.refresh_from_db()
+        self.assertEqual(self.request.state, RequestState.SUBMITTED_FOR_PAYMENT)

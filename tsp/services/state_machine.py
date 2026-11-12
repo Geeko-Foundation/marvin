@@ -2,8 +2,8 @@
 
 from django.utils import timezone
 
-from tsp.models import RequestState, StateHistory, TravelRequest
-
+from profile.audit_log import record
+from tsp.models import RequestState, StateHistory
 
 TERMINAL_STATES = {
     RequestState.REJECTED,
@@ -14,9 +14,13 @@ TERMINAL_STATES = {
 TRANSITIONS = {
     RequestState.DRAFT: {RequestState.SUBMITTED, RequestState.CANCELLED},
     RequestState.SUBMITTED: {RequestState.APPROVED, RequestState.REJECTED, RequestState.CANCELLED},
-    RequestState.APPROVED: {RequestState.ACCEPTED, RequestState.CANCELLED},
-    RequestState.ACCEPTED: {RequestState.SUBMITTED_FOR_PAYMENT},
-    RequestState.SUBMITTED_FOR_PAYMENT: {RequestState.PAID},
+    # Back to submitted when the requester changes the amounts after approval.
+    RequestState.APPROVED: {RequestState.ACCEPTED, RequestState.CANCELLED, RequestState.SUBMITTED},
+    RequestState.ACCEPTED: {
+        RequestState.SUBMITTED_FOR_PAYMENT, RequestState.SUBMITTED, RequestState.CANCELLED,
+    },
+    # Back to accepted when the requester takes it back to fix their costs.
+    RequestState.SUBMITTED_FOR_PAYMENT: {RequestState.PAID, RequestState.ACCEPTED},
 }
 
 
@@ -54,6 +58,13 @@ def transition_request(travel_request, to_state, user, notes=''):
         travel_request.accepted_by = user
 
     travel_request.save()
+
+    record(
+        'request.state_change',
+        user=user,
+        target=f'request {travel_request.pk}',
+        detail=f'{from_state} -> {to_state}' + (f': {notes}' if notes else ''),
+    )
 
     StateHistory.objects.create(
         request=travel_request,

@@ -37,7 +37,7 @@ class BatchReviewTests(TestCase):
             self.assertEqual(expense.approved_amount, expense.estimated_amount)
             self.assertEqual(expense.approved_currency, 'EUR')
             # the whole point: finance must not receive a request worth nothing
-            self.assertGreater(travel_request.total_approved(), 0)
+            self.assertGreater(travel_request.totals_approved()[0][1], 0)
 
     def test_an_amount_already_set_is_left_alone(self):
         expense = self.requests[0].expenses.get()

@@ -6,9 +6,11 @@ python-dotenv). Defaults in this file are for local development and tests only.
 Copy `.env.example` to `.env` and set production values there.
 """
 
-from pathlib import Path
 import os
 import sys
+from pathlib import Path
+
+from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -34,18 +36,32 @@ def env_list(key: str, default: str) -> list[str]:
 
 # --- Security (override in .env for production) ---
 
-# Dev/test default only — never use in production.
-SECRET_KEY = env(
-    'DJANGO_SECRET_KEY',
-    'django-insecure-dev-only-change-me-in-env',
-)
-
-DEBUG = env_bool('DEBUG', default=True)
-
 ALLOWED_HOSTS = env_list(
     'ALLOWED_HOSTS',
     'localhost,127.0.0.1,testserver, 10.1.10.50',
 )
+
+# Any host beyond this machine means people can reach the site, so it must
+# not run with developer settings even if nobody remembered to change them.
+LOCAL_HOSTS = {'localhost', '127.0.0.1', '[::1]', '0.0.0.0', 'testserver'}
+SERVED_PUBLICLY = any(host not in LOCAL_HOSTS for host in ALLOWED_HOSTS)
+
+# Published in this repository, so they sign nothing anyone outside can trust:
+# the development default, and the placeholder in .env.example.
+DEV_SECRET_KEY = 'django-insecure-dev-only-change-me-in-env'
+PUBLISHED_SECRET_KEYS = {DEV_SECRET_KEY, 'change-me-to-a-long-random-string'}
+SECRET_KEY = env('DJANGO_SECRET_KEY') or DEV_SECRET_KEY
+if SERVED_PUBLICLY and SECRET_KEY in PUBLISHED_SECRET_KEYS:
+    raise ImproperlyConfigured(
+        'DJANGO_SECRET_KEY must be set when ALLOWED_HOSTS includes a public host. '
+        'Anyone can forge a login with the published development key.'
+    )
+
+DEBUG = env_bool('DEBUG', default=not SERVED_PUBLICLY)
+
+# Sent only over HTTPS once the site is live, so a visit over plain HTTP
+# cannot give the session away.
+SESSION_COOKIE_SECURE = CSRF_COOKIE_SECURE = not DEBUG
 
 # Django checks the Origin header on POSTs and wants the scheme, which
 # ALLOWED_HOSTS does not carry. Assume https for every real host so a
@@ -127,6 +143,20 @@ DATABASES = {
     }
 }
 
+# Hosts such as Railway hand over one URL, postgresql://user:password@host:port/name.
+if env('DATABASE_URL'):
+    from urllib.parse import unquote, urlsplit
+
+    _url = urlsplit(env('DATABASE_URL'))
+    DATABASES['default'].update({
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': unquote(_url.path.lstrip('/')),
+        'USER': unquote(_url.username or ''),
+        'PASSWORD': unquote(_url.password or ''),
+        'HOST': _url.hostname or '',
+        'PORT': str(_url.port or ''),
+    })
+
 
 # --- Auth ---
 
@@ -148,6 +178,7 @@ LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'UTC'
 USE_I18N = True
 USE_TZ = True
+FORMAT_MODULE_PATH = ['marvin.formats']
 
 
 # --- Static / media ---
@@ -180,7 +211,7 @@ PAYMENTS_PERMISSION_CHECK = 'profile.permissions.finance_can_process_payments'
 
 # --- Web Push (django-webpush) ---
 
-# Dev/test VAPID keys — generate your own for production (see .env.example).
+# Development VAPID keys. Generate your own for production, see .env.example.
 _DEV_VAPID_PUBLIC_KEY = (
     'BF8UddgDIQ_Y5lfOLbOqFLyb5inEudxst2ynx6tM5G7VyPMZwBn0JjpmOfbAdfKcvpVqYZXm5D1wRP-qZVPubu4'
 )
@@ -192,17 +223,33 @@ _DEV_VAPID_PRIVATE_KEY = (
     '-----END PRIVATE KEY-----\n'
 )
 
+
+def vapid_private_key(value):
+    """
+    The private key in the form pywebpush reads: URL-safe base64 of the DER bytes.
+
+    It cannot load a PEM key, so one pasted in that form is converted here.
+    """
+    import base64
+
+    value = value.replace('\\n', '\n').strip()
+    if '-----BEGIN' not in value:
+        return value
+    body = ''.join(line for line in value.splitlines() if not line.startswith('-----'))
+    return base64.urlsafe_b64encode(base64.b64decode(body)).decode().rstrip('=')
+
+
 WEBPUSH_APP_BASE_URL = env('WEBPUSH_APP_BASE_URL', 'http://127.0.0.1:8000')
 WEBPUSH_SETTINGS = {
     'VAPID_PUBLIC_KEY': env('VAPID_PUBLIC_KEY', _DEV_VAPID_PUBLIC_KEY),
-    'VAPID_PRIVATE_KEY': env('VAPID_PRIVATE_KEY', _DEV_VAPID_PRIVATE_KEY).replace('\\n', '\n'),
+    'VAPID_PRIVATE_KEY': vapid_private_key(env('VAPID_PRIVATE_KEY') or _DEV_VAPID_PRIVATE_KEY),
     'VAPID_ADMIN_EMAIL': env('VAPID_ADMIN_EMAIL', 'admin@marvin.local'),
 }
 
 
 # --- Wise API ---
 
-# Dev/test sandbox token — override WISE_API_TOKEN in .env for production.
+# Development sandbox token. Set WISE_API_TOKEN in .env for production.
 WISE_API_TOKEN = env(
     'WISE_API_TOKEN',
   'bdde76cb-fe9b-4664-974b-c7b52f66294d',
@@ -217,6 +264,10 @@ WISE_SOURCE_CURRENCY = env('WISE_SOURCE_CURRENCY', 'GBP')
 # Wise signs webhook bodies with an RSA key it publishes per environment.
 # Without the key nothing delivered can be trusted, so the endpoint refuses.
 WISE_WEBHOOK_PUBLIC_KEY = env('WISE_WEBHOOK_PUBLIC_KEY', '').replace('\\n', '\n')
+
+# Private key whose public half is uploaded to the Wise account. Wise asks for
+# a signature with it before funding a transfer on the live API.
+WISE_SCA_PRIVATE_KEY = env('WISE_SCA_PRIVATE_KEY', '').replace('\\n', '\n')
 
 # Currencies the committee approves in, which are the ones finance pays from.
 PAYOUT_CURRENCIES = env_list('PAYOUT_CURRENCIES', 'EUR,USD,GBP')
@@ -265,6 +316,11 @@ LOGGING = {
         },
     },
 }
+
+
+# How long after an event someone may still claim. An organisation can set
+# its own; an individual event can override it.
+REIMBURSEMENT_WINDOW_DAYS = int(env('REIMBURSEMENT_WINDOW_DAYS', '30'))
 
 
 # --- Branding ---

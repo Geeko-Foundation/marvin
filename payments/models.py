@@ -1,4 +1,3 @@
-from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
@@ -22,6 +21,9 @@ class PaymentRecord(AuditModel):
     reference = models.CharField(max_length=100)
     external_id = models.CharField(max_length=100, blank=True, null=True)
     status = models.CharField(max_length=30, default='completed')
+    # What the money is for, as the payable adapter names it: ``payment`` for
+    # the settlement, or something like ``advance`` paid ahead of it.
+    purpose = models.CharField(max_length=20, default='payment')
     metadata = models.JSONField(default=dict, blank=True)
     processed_by = models.ForeignKey(
         get_user_model(),

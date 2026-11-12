@@ -5,7 +5,6 @@ from django.urls import resolve
 
 from profile.decorators import get_profile
 
-
 ONBOARDING_URL_NAMES = {
     'signup',
     'signup_account',

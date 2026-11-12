@@ -1,25 +1,26 @@
 {% load tsp_tags %}
-<h2 class="text-2xl font-bold mb-6">TSP Committee</h2>
+<h2 class="text-2xl font-bold mb-6">Committee</h2>
 
 <div class="stats stats-vertical lg:stats-horizontal shadow w-full mb-6 bg-base-100">
-  <div class="stat">
+  <a class="stat hover:bg-base-200" href="{% url 'reports' %}?status=submitted">
     <div class="stat-title">Pending Review</div>
     <div class="stat-value text-info">{{ pending.paginator.count }}</div>
     <div class="stat-desc">Awaiting committee decision</div>
-  </div>
-  <div class="stat">
+  </a>
+  <a class="stat hover:bg-base-200" href="{% url 'reports' %}?status=approved">
     <div class="stat-title">Approved Funds</div>
-    <div class="stat-value text-success">{{ approved_total|floatformat:0 }} €</div>
+    <div class="stat-value text-success text-2xl">{% for currency, amount in approved_total %}<span class="whitespace-nowrap">{{ amount|floatformat:"0g" }} {{ currency }}</span>{% if not forloop.last %}<span class="opacity-40"> · </span>{% endif %}{% empty %}0{% endfor %}</div>
     <div class="stat-desc">Total approved amounts</div>
-  </div>
+  </a>
 </div>
 
 <div class="grid gap-6 lg:grid-cols-3 mb-6">
   {% for item in state_counts %}
-  <div class="stat bg-base-100 rounded-box shadow-sm">
+  <a class="stat bg-base-100 rounded-box shadow-sm hover:bg-base-200"
+     href="{% url 'reports' %}?status={{ item.state }}">
     <div class="stat-title">{{ item.state|title }}</div>
     <div class="stat-value text-lg">{{ item.count }}</div>
-  </div>
+  </a>
   {% endfor %}
 </div>
 
@@ -49,8 +50,8 @@
             <td>{{ req.reference }}</td>
             <td>{{ req.user.get_full_name|default:req.user.username }}</td>
             <td>{{ req.event.name }}</td>
-            <td>{{ req.created_at|date:"M d, Y" }}</td>
-            <td>{% for currency, amount in req.totals_estimated %}{{ amount }} {{ currency }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
+            <td>{{ req.created_at|date }}</td>
+            <td>{% for currency, amount in req.totals_estimated %}{{ amount|floatformat:"2g" }} {{ currency }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
             <td><a href="{% url 'request_detail' req.pk %}" class="btn btn-primary btn-sm">Review</a></td>
           </tr>
           {% endfor %}

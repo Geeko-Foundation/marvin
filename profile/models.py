@@ -41,10 +41,6 @@ class UserProfile(AuditModel):
     banking_currency = models.CharField(max_length=3, default='EUR')
     wise_account_id = models.PositiveIntegerField(blank=True, null=True)
     wise_recipient_verified_at = models.DateTimeField(blank=True, null=True)
-    push_notifications_enabled = models.BooleanField(
-        default=False,
-        help_text='Receive browser push notifications for TSP activity.',
-    )
 
     class Meta:
         db_table = 'tsp_userprofile'
@@ -162,3 +158,7 @@ class UserProfile(AuditModel):
             return 'Not configured'
         method_label = self.get_banking_method_display() if self.banking_method else 'Bank'
         return f'Wise recipient #{self.wise_account_id} ({self.banking_currency} · {method_label})'
+
+
+# Kept in its own module; imported here so Django picks up the model.
+from profile.audit_log import AuditLogEntry, record  # noqa: E402,F401

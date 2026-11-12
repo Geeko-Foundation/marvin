@@ -32,13 +32,6 @@ def absolute_url(path: str) -> str:
     return f'{base}{path}'
 
 
-def clear_push_subscriptions(user: User) -> None:
-    """Remove all browser push endpoints for ``user`` (e.g. when they opt out)."""
-    from webpush.models import PushInformation
-
-    PushInformation.objects.filter(user=user).delete()
-
-
 def send_push_to_user(
     user: User,
     *,
@@ -54,12 +47,7 @@ def send_push_to_user(
     """
     if not user or not user.is_active:
         return
-    try:
-        profile = user.profile
-    except Exception:
-        return
-    if not profile.push_notifications_enabled:
-        return
+    # Subscribing a browser is how someone turns alerts on.
     if not user.webpush_info.exists():
         return
 
@@ -101,7 +89,7 @@ def send_push_to_group(
 
 def _request_label(travel_request: TravelRequest) -> str:
     """Short human-readable label for push notification body text."""
-    return f'#{travel_request.pk} - {travel_request.event.name}'
+    return f'{travel_request.reference} · {travel_request.event.name}'
 
 
 def _request_url(travel_request: TravelRequest) -> str:
@@ -127,6 +115,9 @@ def notify_request_state_change(
     url = _request_url(travel_request)
     requester = travel_request.user
 
+    if from_state == RequestState.SUBMITTED_FOR_PAYMENT and to_state == RequestState.ACCEPTED:
+        # The requester took it back to edit; "accepted" would mislead them.
+        return
     if to_state == RequestState.SUBMITTED:
         send_push_to_group(
             GROUP_TSP,

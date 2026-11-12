@@ -1,17 +1,32 @@
-from datetime import date
+import os
+from datetime import date, timedelta
 from decimal import Decimal
 from unittest import mock
 
 from django.contrib.auth.models import User
+from django.core import mail
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import RequestFactory, TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from profile.groups import GROUP_FINANCE, GROUP_REQUESTER, GROUP_TSP, assign_user_to_group
+from profile.groups import (
+    GROUP_FINANCE,
+    GROUP_REQUESTER,
+    GROUP_TSP,
+    assign_user_to_group,
+)
 from profile.models import UserProfile
 from tsp.forms import MAX_DOCUMENT_BYTES, DocumentUploadForm
-from tsp.models import Comment, Document, Event, Expense, RequestState, StateHistory, TravelRequest
+from tsp.models import (
+    Comment,
+    Document,
+    Event,
+    Expense,
+    RequestState,
+    StateHistory,
+    TravelRequest,
+)
 from tsp.services.state_machine import (
     StateTransitionError,
     can_transition,
@@ -201,8 +216,9 @@ class DocumentUploadFormTests(TestCase):
 
     def test_rejected_upload_is_not_saved(self):
         owner = make_requester('uploader')
+        # Accepted, so the only thing that can refuse it is the file itself.
         travel_request = TravelRequest.objects.create(
-            user=owner, event=make_event(), description='Talk',
+            user=owner, event=make_event(), description='Talk', state=RequestState.ACCEPTED,
         )
         self.client.force_login(owner)
         self.client.post(
@@ -337,6 +353,7 @@ class EventManagementTests(TestCase):
         self.client.post(reverse('event_edit', args=[self.event.pk]), {
             'name': 'Renamed', 'location': 'Prague',
             'start_date': '2027-06-14', 'end_date': '2027-06-16',
+            'approval_percent': '100',
         })
         self.event.refresh_from_db()
         self.assertEqual(self.event.name, 'Renamed')
@@ -380,6 +397,8 @@ class EventManagementTests(TestCase):
         response = self.client.get(reverse('event_list'))
         self.assertContains(response, reverse('event_delete', args=[self.event.pk]))
         self.assertNotContains(response, reverse('event_delete', args=[busy.pk]))
+
+
 class InternalNotesTests(TestCase):
     PUBLIC = 'Looks fine to me'
     INTERNAL = 'Hotel estimate is well above our usual cap'
@@ -453,7 +472,7 @@ class ActualCostTests(TestCase):
         self.owner = make_user('actualowner', [GROUP_REQUESTER])
         self.event = Event.objects.create(
             name='Conf', location='Berlin',
-            start_date=date(2026, 5, 1), end_date=date(2026, 5, 3),
+            start_date=date(2099, 5, 1), end_date=date(2099, 5, 3),
         )
         self.request = TravelRequest.objects.create(
             user=self.owner, event=self.event, state=RequestState.ACCEPTED,
@@ -472,12 +491,12 @@ class ActualCostTests(TestCase):
     def test_spending_less_than_approved_pays_the_lower_figure(self):
         expense = self._expense(600, 400)
         self.assertEqual(expense.payable_amount(), 400)
-        self.assertEqual(self.request.total_payable(), 400)
+        self.assertEqual(self.request.totals_payable(), [('EUR', 400)])
 
     def test_spending_more_than_approved_still_pays_the_approved_figure(self):
         expense = self._expense(600, 800)
         self.assertEqual(expense.payable_amount(), 600)
-        self.assertEqual(self.request.total_payable(), 600)
+        self.assertEqual(self.request.totals_payable(), [('EUR', 600)])
 
     def test_the_lesser_is_taken_line_by_line(self):
         # Approved 300 + 300, spent 400 + 100. Per line that is 300 + 100 = 400.
@@ -485,9 +504,9 @@ class ActualCostTests(TestCase):
         # line be covered by an underspend on another.
         self._expense(300, 400)
         self._expense(300, 100)
-        self.assertEqual(self.request.total_approved(), 600)
+        self.assertEqual(self.request.totals_approved(), [('EUR', 600)])
         self.assertEqual(self.request.total_actual(), 500)
-        self.assertEqual(self.request.total_payable(), 400)
+        self.assertEqual(self.request.totals_payable(), [('EUR', 400)])
 
     def test_nothing_reported_yet_falls_back_to_approved(self):
         expense = self._expense(600)
@@ -500,6 +519,26 @@ class ActualCostTests(TestCase):
         # 400 USD is not necessarily less than 600 EUR, so it is not guessed at.
         self.assertEqual(expense.payable_amount(), 600)
         self.assertEqual(self.request.expenses_needing_a_decision(), [expense])
+
+    def test_a_receipt_in_the_requested_currency_uses_the_locked_rate(self):
+        expense = Expense.objects.create(
+            request=self.request, category='flight', description='Flight',
+            estimated_amount=10000, estimated_currency='INR',
+            approved_amount=Decimal('73.62'), approved_currency='EUR', approval_rate=Decimal('108.68'),
+            actual_amount=7000, actual_currency='INR',
+        )
+        self.assertFalse(expense.has_currency_mismatch())
+        # 7000 INR at 108.68 is 64.41 EUR, less than the 73.62 approved.
+        self.assertEqual(expense.payable_amount(), Decimal('64.41'))
+
+    def test_the_receipt_currency_is_the_requested_or_the_approved_one(self):
+        from tsp.forms import ExpenseActualForm
+        expense = Expense(estimated_currency='INR', approved_currency='EUR', approved_amount=1)
+        form = ExpenseActualForm(instance=expense)
+        self.assertEqual([c for c, _ in form.fields['actual_currency'].choices], ['INR', 'EUR'])
+        self.assertEqual(form.fields['actual_currency'].initial, 'INR')
+        self.assertFalse(ExpenseActualForm({'actual_amount': '5', 'actual_currency': 'USD'},
+                                           instance=expense).is_valid())
 
     def test_finance_is_asked_to_pay_the_payable_total(self):
         from tsp.payables import TravelRequestPayableAdapter
@@ -540,7 +579,7 @@ class ActualCostTests(TestCase):
         self.assertRedirects(response, reverse('request_detail', args=[self.request.pk]))
         expense.refresh_from_db()
         self.assertEqual(expense.actual_amount, Decimal('425.50'))
-        self.assertEqual(self.request.total_payable(), Decimal('425.50'))
+        self.assertEqual(self.request.totals_payable(), [('EUR', Decimal('425.50'))])
 
     def test_only_the_owner_can_report_them(self):
         self._expense(600)
@@ -588,3 +627,506 @@ class SelfNotificationTests(TestCase):
         transition_request(self.request, RequestState.APPROVED, self.chair)
         self.assertNotIn(self.chair.email, self._recipients())
         self.assertIn(self.owner.email, self._recipients())
+
+
+class DocumentRemovalTests(TestCase):
+    """A document uploaded by mistake has to be removable, up to a point."""
+
+    def setUp(self):
+        self.owner = make_user('docowner', [GROUP_REQUESTER])
+        self.event = Event.objects.create(
+            name='Conf', location='Berlin',
+            start_date=date(2026, 5, 1), end_date=date(2026, 5, 3))
+        self.request = TravelRequest.objects.create(
+            user=self.owner, event=self.event, state=RequestState.ACCEPTED,
+            description='Trip')
+        self.doc = self._doc()
+
+    def _doc(self, kind='invoice'):
+        return Document.objects.create(
+            request=self.request, kind=kind, size=9, uploaded_by=self.owner,
+            file=SimpleUploadedFile(f'{kind}.pdf', b'%PDF-1.4 x'))
+
+    def _delete(self, doc=None):
+        return self.client.post(reverse('request_document_delete',
+                                        args=[self.request.pk, (doc or self.doc).pk]))
+
+    def test_the_requester_can_remove_a_duplicate(self):
+        extra = self._doc()
+        self.assertEqual(self.request.documents.count(), 2)
+        self.client.force_login(self.owner)
+        self._delete(extra)
+        self.assertEqual(self.request.documents.count(), 1)
+
+    def test_the_file_is_removed_from_storage_too(self):
+        path = self.doc.file.path
+        self.client.force_login(self.owner)
+        self._delete()
+        self.assertFalse(os.path.exists(path))
+
+    def test_nobody_else_can_remove_it(self):
+        self.client.force_login(make_user('otherperson', [GROUP_REQUESTER]))
+        self.assertEqual(self._delete().status_code, 403)
+        self.assertEqual(self.request.documents.count(), 1)
+
+    def test_the_committee_cannot_remove_someone_else_s_evidence(self):
+        self.client.force_login(make_user('nosycommittee', [GROUP_TSP]))
+        self.assertEqual(self._delete().status_code, 403)
+        self.assertEqual(self.request.documents.count(), 1)
+
+    def test_documents_are_kept_once_the_request_is_with_finance(self):
+        for state in (RequestState.SUBMITTED_FOR_PAYMENT, RequestState.PAID):
+            with self.subTest(state=state):
+                self.request.state = state
+                self.request.save()
+                self.client.force_login(self.owner)
+                self._delete()
+                self.assertEqual(self.request.documents.count(), 1)
+
+
+class EventBudgetTests(TestCase):
+    """An event's budget is what the committee has to spend on it."""
+
+    def setUp(self):
+        self.committee = make_user('budgetcommittee', [GROUP_TSP])
+        self.owner = make_user('budgetowner', [GROUP_REQUESTER])
+        self.event = Event.objects.create(
+            name='Summit', location='Berlin', budget=Decimal('800.00'),
+            budget_currency='EUR',
+            start_date=date(2026, 5, 1), end_date=date(2026, 5, 3))
+
+    def _request(self, amount, currency='EUR', state=RequestState.APPROVED, user=None):
+        travel_request = TravelRequest.objects.create(
+            user=user or self.owner, event=self.event, state=state, description='T')
+        Expense.objects.create(
+            request=travel_request, category='flight', description='Flight',
+            estimated_amount=amount, estimated_currency=currency,
+            approved_amount=amount, approved_currency=currency)
+        return travel_request
+
+    def test_remaining_budget_counts_what_is_approved(self):
+        self._request(Decimal('700.00'))
+        self.assertEqual(self.event.approved_against_budget(), Decimal('700.00'))
+        self.assertEqual(self.event.budget_remaining(), Decimal('100.00'))
+
+    def test_rejected_and_cancelled_requests_free_their_budget(self):
+        self._request(Decimal('700.00'), state=RequestState.REJECTED)
+        self._request(Decimal('100.00'), state=RequestState.CANCELLED)
+        self.assertEqual(self.event.budget_remaining(), Decimal('800.00'))
+
+    def test_an_event_without_a_budget_has_no_limit(self):
+        self.event.budget = None
+        self.event.save()
+        self._request(Decimal('5000.00'))
+        self.assertIsNone(self.event.budget_remaining())
+
+    def test_other_currencies_are_reported_not_converted(self):
+        self._request(Decimal('100.00'), currency='USD')
+        self.assertEqual(self.event.approved_against_budget(), Decimal('0'))
+        self.assertEqual(self.event.approved_in_other_currencies(),
+                         [('USD', Decimal('100.00'))])
+        self.assertEqual(self.event.budget_remaining(), Decimal('800.00'))
+
+    def test_approving_past_the_budget_is_refused(self):
+        self._request(Decimal('800.00'))
+        pending = TravelRequest.objects.create(
+            user=make_user('second', [GROUP_REQUESTER]), event=self.event,
+            state=RequestState.SUBMITTED, description='Second')
+        expense = Expense.objects.create(
+            request=pending, category='lodging', description='Hotel',
+            estimated_amount=Decimal('110.00'), estimated_currency='EUR')
+        self.client.force_login(self.committee)
+        self.client.post(reverse('request_approve', args=[pending.pk]), {
+            'expense_id': [str(expense.pk)],
+            f'approved_amount_{expense.pk}': '110.00',
+            f'approved_currency_{expense.pk}': 'EUR',
+        })
+        pending.refresh_from_db()
+        self.assertEqual(pending.state, RequestState.SUBMITTED)
+
+    def test_the_committee_can_approve_anyway_and_it_is_recorded(self):
+        self._request(Decimal('800.00'))
+        pending = TravelRequest.objects.create(
+            user=make_user('third', [GROUP_REQUESTER]), event=self.event,
+            state=RequestState.SUBMITTED, description='Third')
+        expense = Expense.objects.create(
+            request=pending, category='lodging', description='Hotel',
+            estimated_amount=Decimal('110.00'), estimated_currency='EUR')
+        self.client.force_login(self.committee)
+        self.client.post(reverse('request_approve', args=[pending.pk]), {
+            'expense_id': [str(expense.pk)],
+            f'approved_amount_{expense.pk}': '110.00',
+            f'approved_currency_{expense.pk}': 'EUR',
+            'over_budget': '1',
+        })
+        pending.refresh_from_db()
+        self.assertEqual(pending.state, RequestState.APPROVED)
+        latest = pending.state_history.order_by('-id').first()
+        self.assertIn('over budget', latest.notes)
+
+    def test_approving_within_budget_is_untouched(self):
+        pending = TravelRequest.objects.create(
+            user=self.owner, event=self.event,
+            state=RequestState.SUBMITTED, description='Within')
+        expense = Expense.objects.create(
+            request=pending, category='lodging', description='Hotel',
+            estimated_amount=Decimal('100.00'), estimated_currency='EUR')
+        self.client.force_login(self.committee)
+        self.client.post(reverse('request_approve', args=[pending.pk]), {
+            'expense_id': [str(expense.pk)],
+            f'approved_amount_{expense.pk}': '100.00',
+            f'approved_currency_{expense.pk}': 'EUR',
+        })
+        pending.refresh_from_db()
+        self.assertEqual(pending.state, RequestState.APPROVED)
+
+
+class ReportFilterTests(TestCase):
+    """Reports are the committee's way of finding a request after the fact."""
+
+    def setUp(self):
+        self.staff = make_user('reportstaff', [GROUP_FINANCE])
+        self.alice = make_user('alice', [GROUP_REQUESTER])
+        self.bob = make_user('bob', [GROUP_REQUESTER])
+        self.conf = Event.objects.create(
+            name='Summit', location='Berlin',
+            start_date=date(2026, 5, 1), end_date=date(2026, 5, 3))
+        self.other = Event.objects.create(
+            name='Workshop', location='Pune',
+            start_date=date(2026, 6, 1), end_date=date(2026, 6, 2))
+        TravelRequest.objects.create(user=self.alice, event=self.conf,
+                                     state=RequestState.SUBMITTED, description='A')
+        TravelRequest.objects.create(user=self.bob, event=self.other,
+                                     state=RequestState.APPROVED, description='B')
+        self.client.force_login(self.staff)
+
+    def _rows(self, **params):
+        response = self.client.get(reverse('reports'), params)
+        return [r.user.username for r in response.context['requests_list']]
+
+    def test_every_state_can_be_filtered_for(self):
+        from tsp.forms import ReportFilterForm
+
+        offered = {value for value, _ in ReportFilterForm().fields['status'].choices if value}
+        # Draft, submitted and approved used to be missing from the dropdown.
+        self.assertEqual(offered, {state.value for state in RequestState})
+
+    def test_filtering_by_a_previously_missing_state_works(self):
+        self.assertEqual(self._rows(status=RequestState.APPROVED), ['bob'])
+        self.assertEqual(self._rows(status=RequestState.SUBMITTED), ['alice'])
+
+    def test_searching_by_requester(self):
+        self.assertEqual(self._rows(q='alice'), ['alice'])
+
+    def test_searching_by_event(self):
+        self.assertEqual(self._rows(q='Workshop'), ['bob'])
+
+    def test_an_empty_search_returns_everything(self):
+        self.assertEqual(sorted(self._rows(q='')), ['alice', 'bob'])
+
+
+class EventDeadlineTests(TestCase):
+    """Events close themselves, so nobody has to remember to untick a box."""
+
+    def _event(self, **kwargs):
+        defaults = dict(
+            name='Summit', location='Berlin',
+            start_date=date(2026, 5, 1), end_date=date(2026, 5, 3))
+        return Event.objects.create(**{**defaults, **kwargs})
+
+    def test_requests_close_on_their_date_without_anyone_unticking(self):
+        past = self._event(requests_open_until=date(2026, 1, 1))
+        future = self._event(end_date=date(2099, 5, 3),
+                             requests_open_until=date(2099, 1, 1))
+        self.assertFalse(past.is_open_for_requests())
+        self.assertTrue(future.is_open_for_requests())
+
+    def test_the_checkbox_still_closes_an_event_on_its_own(self):
+        event = self._event(end_date=date(2099, 5, 3),
+                            requests_open_until=date(2099, 1, 1),
+                            accepting_requests=False)
+        self.assertFalse(event.is_open_for_requests())
+
+    def test_an_event_that_has_already_happened_takes_no_more_requests(self):
+        self.assertFalse(self._event().is_open_for_requests())
+
+    def test_an_event_with_no_date_follows_the_checkbox(self):
+        self.assertTrue(self._event(end_date=date(2099, 5, 3)).is_open_for_requests())
+
+    def test_claims_default_to_the_organisation_window(self):
+        event = self._event(end_date=date(2026, 5, 3))
+        # settings.REIMBURSEMENT_WINDOW_DAYS is 30 unless an org changes it.
+        self.assertEqual(event.reimbursement_deadline(), date(2026, 6, 2))
+
+    def test_an_event_can_set_its_own_claim_deadline(self):
+        event = self._event(reimbursements_open_until=date(2026, 9, 1))
+        self.assertEqual(event.reimbursement_deadline(), date(2026, 9, 1))
+
+    def test_a_closed_window_is_reported_as_closed(self):
+        self.assertTrue(self._event(end_date=date(2020, 1, 1)).reimbursement_window_closed())
+        self.assertFalse(self._event(end_date=date(2099, 1, 1)).reimbursement_window_closed())
+
+    def test_a_late_claim_is_refused(self):
+        owner = make_user('lateclaimer', [GROUP_REQUESTER])
+        event = self._event(end_date=date(2020, 1, 1))
+        req = TravelRequest.objects.create(
+            user=owner, event=event, state=RequestState.ACCEPTED, description='T')
+        Expense.objects.create(
+            request=req, category='flight', description='Flight',
+            estimated_amount=100, approved_amount=100, approved_currency='EUR',
+            actual_amount=90, actual_currency='EUR')
+        for kind in ('receipt', 'invoice', 'signed_form'):
+            Document.objects.create(request=req, kind=kind, size=9, uploaded_by=owner,
+                                    file=SimpleUploadedFile(f'{kind}.pdf', b'%PDF-1.4 x'))
+        self.client.force_login(owner)
+        self.client.post(reverse('request_submit_for_payment', args=[req.pk]))
+        req.refresh_from_db()
+        self.assertEqual(req.state, RequestState.ACCEPTED)
+
+
+class ClaimReminderTests(TestCase):
+    """People forget to claim, so the deadline needs to chase them."""
+
+    def setUp(self):
+        self.owner = make_user('reminderme', [GROUP_REQUESTER])
+        self.owner.email = 'reminderme@example.org'
+        self.owner.save()
+
+    def _request_closing_in(self, days, state=RequestState.ACCEPTED):
+        deadline = timezone.now().date() + timedelta(days=days)
+        event = Event.objects.create(
+            name=f'Event closing in {days}', location='Berlin',
+            start_date=date(2026, 5, 1), end_date=date(2026, 5, 3),
+            reimbursements_open_until=deadline)
+        return TravelRequest.objects.create(
+            user=self.owner, event=event, state=state, description='T')
+
+    def _run(self, **kwargs):
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        out = StringIO()
+        call_command('send_claim_reminders', stdout=out, **kwargs)
+        return out.getvalue()
+
+    def test_a_reminder_goes_out_at_the_set_intervals(self):
+        self._request_closing_in(7)
+        output = self._run()
+        self.assertIn('reminderme@example.org', output)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn('7 day(s) left', mail.outbox[0].subject)
+
+    def test_nothing_is_sent_before_the_first_reminder_is_due(self):
+        self._request_closing_in(20)
+        self._run()
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_running_twice_or_late_never_repeats_a_reminder(self):
+        self._request_closing_in(9)
+        self._run()
+        self._run()
+        # The 14-day reminder was missed, so it goes out once, late.
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn('9 day(s) left', mail.outbox[0].subject)
+
+    def test_a_dry_run_sends_nothing(self):
+        self._request_closing_in(7)
+        output = self._run(dry_run=True)
+        self.assertIn('Would remind 1', output)
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_requests_that_already_moved_on_are_left_alone(self):
+        self._request_closing_in(7, state=RequestState.PAID)
+        self._request_closing_in(7, state=RequestState.SUBMITTED_FOR_PAYMENT)
+        self._run()
+        self.assertEqual(len(mail.outbox), 0)
+
+
+class EventSpendTests(TestCase):
+    """What was approved and what actually left the account are not the same."""
+
+    def setUp(self):
+        self.owner = make_user('spender', [GROUP_REQUESTER])
+        self.event = Event.objects.create(
+            name='Summit', location='Berlin', budget=Decimal('800.00'),
+            start_date=date(2026, 5, 1), end_date=date(2026, 5, 3))
+
+    def _paid_request(self, approved, paid=None, currency='EUR'):
+        from django.contrib.contenttypes.models import ContentType
+
+        from payments.models import PaymentRecord
+
+        req = TravelRequest.objects.create(
+            user=self.owner, event=self.event, state=RequestState.PAID, description='T')
+        Expense.objects.create(
+            request=req, category='flight', description='Flight',
+            estimated_amount=approved, estimated_currency=currency,
+            approved_amount=approved, approved_currency=currency)
+        if paid is not None:
+            PaymentRecord.objects.create(
+                content_type=ContentType.objects.get_for_model(TravelRequest),
+                object_id=req.pk, gateway_id='manual', amount=paid, currency=currency,
+                recipient_name='X', recipient_email='x@example.org',
+                reference=f'TSP{req.pk}', status='completed')
+        return req
+
+    def test_paid_out_is_read_from_the_payments(self):
+        self._paid_request(Decimal('300.00'), paid=Decimal('250.00'))
+        self.assertEqual(self.event.paid_by_currency(), [('EUR', Decimal('250.00'))])
+        self.assertEqual(self.event.approved_against_budget(), Decimal('300.00'))
+
+    def test_a_request_marked_paid_with_no_payment_counts_as_nothing_spent(self):
+        # Flipping a state in the admin must not look like money going out.
+        self._paid_request(Decimal('300.00'), paid=None)
+        self.assertEqual(self.event.paid_by_currency(), [])
+
+    def test_each_currency_is_reported_separately(self):
+        self._paid_request(Decimal('300.00'), paid=Decimal('300.00'), currency='EUR')
+        self._paid_request(Decimal('100.00'), paid=Decimal('100.00'), currency='USD')
+        self.assertEqual(
+            self.event.paid_by_currency(),
+            [('EUR', Decimal('300.00')), ('USD', Decimal('100.00'))])
+
+
+class AuditLogTests(TestCase):
+    """Every action is logged, and the log cannot be altered."""
+
+    def setUp(self):
+        from profile.audit_log import AuditLogEntry
+
+        self.entries = AuditLogEntry
+        self.owner = make_user('audited', [GROUP_REQUESTER])
+        self.committee = make_user('auditcommittee', [GROUP_TSP])
+        self.event = Event.objects.create(
+            name='Summit', location='Berlin',
+            start_date=date(2099, 5, 1), end_date=date(2099, 5, 3))
+        self.request = TravelRequest.objects.create(
+            user=self.owner, event=self.event, state=RequestState.SUBMITTED,
+            description='Trip')
+
+    def test_a_state_change_is_recorded(self):
+        from tsp.services.state_machine import transition_request
+
+        transition_request(self.request, RequestState.APPROVED, self.committee, 'looks fine')
+        entry = self.entries.objects.filter(action='request.state_change').first()
+        self.assertIsNotNone(entry)
+        self.assertEqual(entry.user, self.committee)
+        self.assertIn('submitted -> approved', entry.detail)
+        self.assertIn('looks fine', entry.detail)
+
+    def test_an_entry_cannot_be_changed_once_written(self):
+        from tsp.services.state_machine import transition_request
+
+        transition_request(self.request, RequestState.APPROVED, self.committee)
+        entry = self.entries.objects.first()
+        entry.detail = 'something else'
+        with self.assertRaises(ValueError):
+            entry.save()
+
+    def test_an_entry_cannot_be_deleted(self):
+        from tsp.services.state_machine import transition_request
+
+        transition_request(self.request, RequestState.APPROVED, self.committee)
+        with self.assertRaises(ValueError):
+            self.entries.objects.first().delete()
+
+    def test_removing_a_document_is_recorded(self):
+        self.request.state = RequestState.ACCEPTED
+        self.request.save()
+        doc = Document.objects.create(
+            request=self.request, kind='receipt', size=9, uploaded_by=self.owner,
+            file=SimpleUploadedFile('receipt.pdf', b'%PDF-1.4 x'))
+        self.client.force_login(self.owner)
+        self.client.post(reverse('request_document_delete', args=[self.request.pk, doc.pk]))
+        actions = set(self.entries.objects.values_list('action', flat=True))
+        self.assertIn('document.removed', actions)
+
+    def test_logging_never_breaks_the_action_it_records(self):
+        from unittest import mock
+
+        from tsp.services.state_machine import transition_request
+
+        with mock.patch('profile.audit_log.AuditLogEntry.objects.create',
+                        side_effect=RuntimeError('database on fire')):
+            transition_request(self.request, RequestState.APPROVED, self.committee)
+        self.request.refresh_from_db()
+        self.assertEqual(self.request.state, RequestState.APPROVED)
+
+
+class EventAuditTests(TestCase):
+    """Events are the committee's, so creating and changing them is logged."""
+
+    def setUp(self):
+        from profile.audit_log import AuditLogEntry
+
+        self.entries = AuditLogEntry
+        self.committee = make_user('eventauditor', [GROUP_TSP])
+        self.client.force_login(self.committee)
+
+    def _actions(self):
+        return list(self.entries.objects.values_list('action', flat=True))
+
+    def test_creating_an_event_is_recorded(self):
+        self.client.post(reverse('event_create'), {
+            'name': 'Audited Summit', 'location': 'Berlin',
+            'start_date': '2099-05-01', 'end_date': '2099-05-03',
+            'budget': '500.00', 'budget_currency': 'EUR', 'approval_percent': '100'})
+        entry = self.entries.objects.filter(action='event.created').first()
+        self.assertIsNotNone(entry)
+        self.assertEqual(entry.user, self.committee)
+        self.assertEqual(entry.target, 'Audited Summit')
+        self.assertIn('budget 500.00 EUR', entry.detail)
+
+    def test_editing_an_event_records_what_changed(self):
+        event = Event.objects.create(
+            name='Summit', location='Berlin',
+            start_date=date(2099, 5, 1), end_date=date(2099, 5, 3))
+        self.client.post(reverse('event_edit', args=[event.pk]), {
+            'name': 'Renamed Summit', 'location': 'Berlin',
+            'start_date': '2099-05-01', 'end_date': '2099-05-03', 'approval_percent': '100'})
+        entry = self.entries.objects.filter(action='event.updated').first()
+        self.assertIsNotNone(entry)
+        self.assertIn('name', entry.detail)
+
+    def test_an_ordinary_upload_is_not_logged(self):
+        # Routine requester activity would bury the decisions that matter.
+        owner = make_user('uploader', [GROUP_REQUESTER])
+        event = Event.objects.create(
+            name='E', location='B',
+            start_date=date(2099, 5, 1), end_date=date(2099, 5, 3))
+        req = TravelRequest.objects.create(
+            user=owner, event=event, state=RequestState.ACCEPTED, description='T')
+        self.client.force_login(owner)
+        self.client.post(reverse('request_document_upload', args=[req.pk]), {
+            'kind': 'receipt',
+            'file': SimpleUploadedFile('r.pdf', b'%PDF-1.4 x'),
+        })
+        self.assertNotIn('document.uploaded', self._actions())
+
+
+class DisplayFilterTests(TestCase):
+    """Dates and states read the way a person would write them."""
+
+    def test_a_range_within_a_month_names_the_month_once(self):
+        from tsp.templatetags.tsp_tags import date_range
+        self.assertEqual(date_range(date(2026, 5, 1), date(2026, 5, 3)), '1 to 3 May 2026')
+
+    def test_a_range_across_months_names_both(self):
+        from tsp.templatetags.tsp_tags import date_range
+        self.assertEqual(date_range(date(2026, 4, 30), date(2026, 5, 3)), '30 Apr to 3 May 2026')
+
+    def test_a_range_across_years_names_both_years(self):
+        from tsp.templatetags.tsp_tags import date_range
+        self.assertEqual(date_range(date(2026, 12, 30), date(2027, 1, 2)), '30 Dec 2026 to 2 Jan 2027')
+
+    def test_a_single_day_is_one_date(self):
+        from tsp.templatetags.tsp_tags import date_range
+        self.assertEqual(date_range(date(2026, 5, 1), date(2026, 5, 1)), '1 May 2026')
+        self.assertEqual(date_range(date(2026, 5, 1), None), '1 May 2026')
+
+    def test_a_stored_state_shows_its_name(self):
+        from tsp.templatetags.tsp_tags import state_label
+        self.assertEqual(state_label('submitted_for_payment'), 'Submitted for Payment')
+        self.assertEqual(state_label('approved'), 'Approved')
+        self.assertEqual(state_label('something_new'), 'Something new')

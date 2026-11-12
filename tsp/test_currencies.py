@@ -1,10 +1,9 @@
 from datetime import date
 from decimal import Decimal
 
+from django.apps import apps
 from django.test import TestCase
 from django.urls import reverse
-
-from django.apps import apps
 
 from profile.groups import GROUP_FINANCE, GROUP_REQUESTER
 from tsp.models import (
@@ -39,7 +38,7 @@ class MixedCurrencyTests(TestCase):
         )
 
     def test_a_usd_line_is_not_reported_as_euros(self):
-        # Doug's request #6: one 3.00 usd line whose total read "3.00 EUR".
+        # One 3.00 USD line once showed a total of "3.00 EUR".
         self._expense(Decimal('3.00'), 'USD')
         self.assertEqual(self.request.totals_approved(), [('USD', Decimal('3.00'))])
 

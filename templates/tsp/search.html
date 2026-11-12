@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load tsp_tags %}
 {% load django_tables2 %}
 
 {% block title %}Search{% endblock %}
@@ -6,7 +7,7 @@
 {% block content %}
 <div class="mb-6">
   <h1 class="text-2xl font-bold">Search</h1>
-  <p class="text-sm opacity-60">Find events{% if show_users %} and users{% endif %} across {{ app_name }}</p>
+  <p class="text-sm opacity-60">Find requests, events{% if show_users %} and users{% endif %} across {{ app_name }}</p>
 </div>
 
 <form method="get" class="card bg-base-100 shadow-sm mb-6">
@@ -27,6 +28,27 @@
 {% if query %}
   <div class="card bg-base-100 shadow-sm mb-6">
     <div class="card-body">
+      <h2 class="card-title text-lg mb-2">Requests</h2>
+      {% if requests_found %}
+      <ul class="divide-y divide-base-300">
+        {% for req in requests_found %}
+        <li class="py-3 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <a href="{% url 'request_detail' req.pk %}" class="link link-primary font-medium">{{ req.reference }}</a>
+            <span class="ml-2">{{ req.event.name }}</span>
+            <p class="text-xs opacity-60">{{ req.user.get_full_name|default:req.user.username }} · updated {{ req.updated_at|date }}</p>
+          </div>
+          <span class="badge {{ req.state|state_badge }} badge-sm whitespace-nowrap">{{ req.get_state_display }}</span>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="text-sm opacity-60">No requests match your search.</p>
+      {% endif %}
+    </div>
+  </div>
+  <div class="card bg-base-100 shadow-sm mb-6">
+    <div class="card-body">
       <h2 class="card-title text-lg mb-2">Events</h2>
       {% render_table event_table %}
     </div>
@@ -36,14 +58,14 @@
   <div class="card bg-base-100 shadow-sm">
     <div class="card-body">
       <h2 class="card-title text-lg mb-2">Users</h2>
-      <p class="text-xs opacity-60 mb-4">Admin view — click a username to edit in Django admin.</p>
+      <p class="text-xs opacity-60 mb-4">Admin view. Select a username to edit it in Django admin.</p>
       {% render_table user_table %}
     </div>
   </div>
   {% endif %}
 {% elif request.GET %}
   <div class="alert alert-info">
-    <span>Enter a search term to find matching events{% if show_users %} and users{% endif %}.</span>
+    <span>Enter a reference such as TSP12, an event, or a name.</span>
   </div>
 {% else %}
   <div class="text-center py-12 opacity-60">

@@ -2,16 +2,16 @@
 <h2 class="text-2xl font-bold mb-6">Finance</h2>
 
 <div class="stats stats-vertical lg:stats-horizontal shadow w-full mb-6 bg-base-100">
-  <div class="stat">
+  <a class="stat hover:bg-base-200" href="{% url 'reports' %}?status=submitted_for_payment">
     <div class="stat-title">Awaiting Payment</div>
     <div class="stat-value text-warning">{{ payment_queue.count }}</div>
     <div class="stat-desc">Submitted for payment</div>
-  </div>
-  <div class="stat">
+  </a>
+  <a class="stat hover:bg-base-200" href="{% url 'reports' %}?status=paid">
     <div class="stat-title">Total Paid</div>
-    <div class="stat-value text-success">{{ paid_total|floatformat:0 }} €</div>
-    <div class="stat-desc">All processed payments</div>
-  </div>
+    <div class="stat-value text-success text-2xl">{% for currency, amount in paid_total %}<span class="whitespace-nowrap">{{ amount|floatformat:"0g" }} {{ currency }}</span>{% if not forloop.last %}<span class="opacity-40"> · </span>{% endif %}{% empty %}0{% endfor %}</div>
+    <div class="stat-desc">Completed transfers</div>
+  </a>
 </div>
 
 <div class="flex gap-2 mb-6">
@@ -23,6 +23,42 @@
   </form>
 </div>
 
+{% if owed_back %}
+<div class="card bg-base-100 shadow-sm mb-6 border border-error">
+  <div class="card-body">
+    <h2 class="card-title">Advances to be paid back</h2>
+    <p class="text-sm opacity-70">These requesters can't submit new requests until you record the refund on the request.</p>
+    <ul class="list-disc ml-5">
+      {% for req in owed_back %}
+      {% with owed=req.amount_owed_back %}
+      <li>
+        <a href="{% url 'request_detail' req.pk %}" class="link">{{ req.reference }} · {{ req.user.get_full_name|default:req.user.username }}</a>
+        owes <strong>{{ owed.1 }} {{ owed.0 }}</strong> ({{ req.get_state_display|lower }})
+      </li>
+      {% endwith %}
+      {% endfor %}
+    </ul>
+  </div>
+</div>
+{% endif %}
+
+{% if advance_queue %}
+<div class="card bg-base-100 shadow-sm mb-6">
+  <div class="card-body">
+    <h2 class="card-title">Advances requested</h2>
+    <p class="text-sm opacity-70">Paid before the event from the payment queue. The final payment is reduced by the advance.</p>
+    <ul class="list-disc ml-5">
+      {% for req in advance_queue %}
+      <li>
+        <a href="{% url 'request_detail' req.pk %}" class="link">{{ req.reference }} · {{ req.user.get_full_name|default:req.user.username }}</a>:
+        <strong>{{ req.advance_amount|floatformat:"2g" }} {{ req.advance_currency }}</strong> for {{ req.event.name }} ({{ req.event.start_date }})
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+</div>
+{% endif %}
+
 <div class="card bg-base-100 shadow-sm mb-6">
   <div class="card-body">
     <h2 class="card-title">Payment Queue</h2>
@@ -32,12 +68,12 @@
       <div class="border border-base-300 rounded-box p-4">
         <div class="flex justify-between items-start mb-2">
           <div>
-            <h3 class="font-semibold">#{{ req.pk }} — {{ req.user.get_full_name|default:req.user.username }}</h3>
+            <h3 class="font-semibold">{{ req.reference }} · {{ req.user.get_full_name|default:req.user.username }}</h3>
             <p class="text-sm opacity-60">{{ req.event.name }}</p>
           </div>
-          <span class="badge {{ req.state|state_badge }}">{{ req.get_state_display }}</span>
+          <span class="badge {{ req.state|state_badge }} whitespace-nowrap">{{ req.get_state_display }}</span>
         </div>
-        <p class="text-sm">To pay: {% for currency, amount in req.totals_payable %}<strong>{{ amount }} {{ currency }}</strong>{% if not forloop.last %}, {% endif %}{% endfor %}{% if req.has_mixed_currencies %} <span class="text-warning">(mixed, pay separately)</span>{% endif %}</p>
+        <p class="text-sm">To pay: {% for currency, amount in req.amounts_to_pay %}<strong>{{ amount|floatformat:"2g" }} {{ currency }}</strong>{% if not forloop.last %}, {% endif %}{% endfor %}{% if req.has_mixed_currencies %} <span class="text-warning">(mixed, pay separately)</span>{% endif %}</p>
         <p class="text-sm">Documents: {{ req.doc_count }}/3</p>
         <a href="{% url 'request_detail' req.pk %}" class="btn btn-sm btn-ghost mt-2">View Details</a>
       </div>
@@ -70,8 +106,8 @@
             <td>{{ req.reference }}</td>
             <td>{{ req.user.get_full_name|default:req.user.username }}</td>
             <td>{{ req.event.name }}</td>
-            <td>{% if req.payment %}{{ req.payment.amount }} {{ req.payment.currency }}{% else %}—{% endif %}</td>
-            <td>{% if req.payment %}{{ req.payment.method_label }}{% else %}—{% endif %}</td>
+            <td>{% if req.payment %}{{ req.payment.amount|floatformat:"2g" }} {{ req.payment.currency }}{% else %}-{% endif %}</td>
+            <td>{% if req.payment %}{{ req.payment.method_label }}{% else %}-{% endif %}</td>
           </tr>
           {% endfor %}
         </tbody>
