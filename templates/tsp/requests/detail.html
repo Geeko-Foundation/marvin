@@ -197,7 +197,7 @@
             <div class="flex flex-wrap gap-3 items-end">
               <span class="text-sm flex-1">
                 {{ expense.get_category_display }}: {{ expense.description }}
-                <span class="block opacity-70">Requested {{ expense.estimated_amount|floatformat:"2g" }} {{ expense.estimated_currency }}</span>
+                <span class="block opacity-70">Requested {{ expense.estimated_amount|floatformat:"2g" }} {{ expense.estimated_currency }}{% for option in line.options %}{% if option.code == 'EUR' and option.rates %} ≈ {{ option.amount|floatformat:"2g" }} EUR{% endif %}{% endfor %}</span>
               </span>
               <input type="number" name="approved_amount_{{ expense.pk }}" step="0.01"
                      value="{% for option in line.options %}{% if option.selected %}{{ option.amount }}{% endif %}{% endfor %}"
