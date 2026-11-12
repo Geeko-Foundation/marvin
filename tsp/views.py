@@ -13,20 +13,20 @@ from django.core.cache import cache
 from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import Count, Sum, Value
+from django.db.models import Count, Q, Sum, Value
 from django.db.models.functions import Coalesce, NullIf
-from django.db.models import Q
 from django.http import FileResponse, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
-
 from django_tables2 import RequestConfig
 
 from marvin.validators import spreadsheet_safe
-from profile.audit_log import AuditLogEntry, record as audit
+from payments.models import PaymentRecord
+from profile.audit_log import AuditLogEntry
+from profile.audit_log import record as audit
 from profile.decorators import get_profile
 from profile.forms import OnboardingPersonalForm, WiseRecipientForm
 from profile.groups import GROUP_FINANCE, GROUP_REQUESTER, GROUP_TSP
@@ -45,12 +45,12 @@ from profile.services.wise_verification import (
 )
 from tsp.decorators import group_required, login_required, staff_or_owner
 from tsp.forms import (
-    ExpenseActualFormSet,
     AcceptForm,
     ApprovalForm,
     CommentForm,
     DocumentUploadForm,
     EventForm,
+    ExpenseActualFormSet,
     ExpenseFormSet,
     LoginForm,
     RejectForm,
@@ -59,7 +59,6 @@ from tsp.forms import (
     SignupAccountForm,
     TravelRequestForm,
 )
-from tsp.tables import EventTable, UserTable
 from tsp.models import (
     Document,
     Event,
@@ -68,14 +67,14 @@ from tsp.models import (
     TravelRequest,
     request_owing_money,
 )
+from tsp.payables import TravelRequestPayableAdapter
 from tsp.services import exchange_rates
 from tsp.services.state_machine import (
     StateTransitionError,
     create_request_with_history,
     transition_request,
 )
-from payments.models import PaymentRecord
-from tsp.payables import TravelRequestPayableAdapter
+from tsp.tables import EventTable, UserTable
 
 
 def _state_badge_class(state):
@@ -614,7 +613,7 @@ def _tell_about_refund(request, owing):
     currency, amount = owing.amount_owed_back()
     messages.error(
         request,
-        f'Request #{owing.pk} has {amount} {currency} of its advance to pay back. '
+        f'{owing.reference} has {amount} {currency} of its advance to pay back. '
         'New requests can be submitted once finance has confirmed it.',
     )
 

@@ -6,10 +6,11 @@ python-dotenv). Defaults in this file are for local development and tests only.
 Copy `.env.example` to `.env` and set production values there.
 """
 
-from pathlib import Path
 import os
-from django.core.exceptions import ImproperlyConfigured
 import sys
+from pathlib import Path
+
+from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -196,7 +197,7 @@ PAYMENTS_PERMISSION_CHECK = 'profile.permissions.finance_can_process_payments'
 
 # --- Web Push (django-webpush) ---
 
-# Dev/test VAPID keys — generate your own for production (see .env.example).
+# Development VAPID keys. Generate your own for production, see .env.example.
 _DEV_VAPID_PUBLIC_KEY = (
     'BF8UddgDIQ_Y5lfOLbOqFLyb5inEudxst2ynx6tM5G7VyPMZwBn0JjpmOfbAdfKcvpVqYZXm5D1wRP-qZVPubu4'
 )
@@ -218,7 +219,7 @@ WEBPUSH_SETTINGS = {
 
 # --- Wise API ---
 
-# Dev/test sandbox token — override WISE_API_TOKEN in .env for production.
+# Development sandbox token. Set WISE_API_TOKEN in .env for production.
 WISE_API_TOKEN = env(
     'WISE_API_TOKEN',
     '4420b1fd-2246-4644-9730-56e7c9e4b41b',

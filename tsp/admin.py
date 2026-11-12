@@ -22,7 +22,9 @@ class StateHistoryInline(admin.TabularInline):
 
     model = StateHistory
     extra = 0
-    readonly_fields = ('from_state', 'to_state', 'user', 'notes', 'created_at', 'created_by', 'updated_at', 'changed_by')
+    readonly_fields = (
+        'from_state', 'to_state', 'user', 'notes', 'created_at', 'created_by', 'updated_at', 'changed_by',
+    )
 
 
 @admin.register(Event)

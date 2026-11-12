@@ -17,7 +17,6 @@
   <div class="drawer lg:drawer-open no-print">
     <input id="sidebar-drawer" type="checkbox" class="drawer-toggle" />
     <div class="drawer-content flex flex-col">
-      <!-- Navbar -->
       <div class="navbar bg-base-100 shadow-sm px-4 lg:px-6">
         <div class="flex-none lg:hidden">
           <label for="sidebar-drawer" class="btn btn-square btn-ghost">
@@ -47,7 +46,6 @@
         </div>
       </div>
 
-      <!-- Messages -->
       {% if messages %}
       <div class="px-4 lg:px-6 pt-4">
         {% for message in messages %}
@@ -58,13 +56,11 @@
       </div>
       {% endif %}
 
-      <!-- Main content -->
       <main class="flex-1 p-4 lg:p-6">
         {% block content %}{% endblock %}
       </main>
     </div>
 
-    <!-- Sidebar -->
     <div class="drawer-side z-40">
       <label for="sidebar-drawer" aria-label="close sidebar" class="drawer-overlay"></label>
       <aside class="bg-base-100 w-64 min-h-full">

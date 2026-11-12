@@ -2,7 +2,14 @@ from django.core.exceptions import ValidationError
 from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
 
-from marvin.validators import bank_value, multi_line, person_name, phone_number, postcode, single_line
+from marvin.validators import (
+    bank_value,
+    multi_line,
+    person_name,
+    phone_number,
+    postcode,
+    single_line,
+)
 
 
 class ValidatorTests(SimpleTestCase):

@@ -272,7 +272,7 @@
   document.getElementById('add-expense')?.addEventListener('click', updateTotal);
   if (totalEl) updateTotal();
 
-  // Pre-select event from query param
+  // An event page links here with ?event= to start a request for it.
   const params = new URLSearchParams(window.location.search);
   const eventId = params.get('event');
   if (eventId) {

@@ -119,7 +119,6 @@
 
 <div class="grid gap-6 lg:grid-cols-3">
   <div class="lg:col-span-2 flex flex-col gap-6">
-    <!-- Details -->
     <div class="card bg-base-100 shadow-sm">
       <div class="card-body">
         <h2 class="card-title text-lg">Request Details</h2>
@@ -132,7 +131,6 @@
       </div>
     </div>
 
-    <!-- Expenses -->
     <div class="card bg-base-100 shadow-sm">
       <div class="card-body">
         <h2 class="card-title text-lg">Expenses</h2>
@@ -242,9 +240,9 @@
             <p class="text-xs opacity-80 mt-2{% if not option.selected %} hidden{% endif %}" data-rate-for="{{ option.code }}">
               {% if option.rates %}
               90-day average: 1 {{ option.code }} = {{ option.rates.average|floatformat:4 }} {{ expense.estimated_currency }}
-              ({{ option.rates.window_start|date:"j M" }} – {{ option.rates.window_end|date:"j M" }})
+              ({{ option.rates.window_start|date:"j M" }} to {{ option.rates.window_end|date:"j M" }})
               · today: {{ option.rates.current|floatformat:4 }}
-              · range {{ option.rates.low|floatformat:4 }}–{{ option.rates.high|floatformat:4 }}
+              · range {{ option.rates.low|floatformat:4 }} to {{ option.rates.high|floatformat:4 }}
               {% elif option.code == expense.estimated_currency %}
               Same currency as requested.
               {% endif %}
@@ -315,7 +313,6 @@
       </div>
     </div>
 
-    <!-- Documents -->
     <div class="card bg-base-100 shadow-sm">
       <div class="card-body">
         <h2 class="card-title text-lg">Documents</h2>
@@ -370,7 +367,6 @@
       </div>
     </div>
 
-    <!-- Comments -->
     <div class="card bg-base-100 shadow-sm">
       <div class="card-body">
         <h2 class="card-title text-lg">Comments</h2>
@@ -402,7 +398,6 @@
     </div>
   </div>
 
-  <!-- Sidebar: State History -->
   <div class="card bg-base-100 shadow-sm h-fit">
     <div class="card-body">
       <h2 class="card-title text-lg">History</h2>

@@ -10,10 +10,23 @@ from django.test import RequestFactory, TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from profile.groups import GROUP_FINANCE, GROUP_REQUESTER, GROUP_TSP, assign_user_to_group
+from profile.groups import (
+    GROUP_FINANCE,
+    GROUP_REQUESTER,
+    GROUP_TSP,
+    assign_user_to_group,
+)
 from profile.models import UserProfile
 from tsp.forms import MAX_DOCUMENT_BYTES, DocumentUploadForm
-from tsp.models import Comment, Document, Event, Expense, RequestState, StateHistory, TravelRequest
+from tsp.models import (
+    Comment,
+    Document,
+    Event,
+    Expense,
+    RequestState,
+    StateHistory,
+    TravelRequest,
+)
 from tsp.services.state_machine import (
     StateTransitionError,
     can_transition,
@@ -384,6 +397,8 @@ class EventManagementTests(TestCase):
         response = self.client.get(reverse('event_list'))
         self.assertContains(response, reverse('event_delete', args=[self.event.pk]))
         self.assertNotContains(response, reverse('event_delete', args=[busy.pk]))
+
+
 class InternalNotesTests(TestCase):
     PUBLIC = 'Looks fine to me'
     INTERNAL = 'Hotel estimate is well above our usual cap'
@@ -888,6 +903,7 @@ class ClaimReminderTests(TestCase):
 
     def _run(self, **kwargs):
         from io import StringIO
+
         from django.core.management import call_command
 
         out = StringIO()
@@ -938,6 +954,7 @@ class EventSpendTests(TestCase):
 
     def _paid_request(self, approved, paid=None, currency='EUR'):
         from django.contrib.contenttypes.models import ContentType
+
         from payments.models import PaymentRecord
 
         req = TravelRequest.objects.create(
@@ -973,7 +990,7 @@ class EventSpendTests(TestCase):
 
 
 class AuditLogTests(TestCase):
-    """Patrick asked for every action logged, and the log not alterable."""
+    """Every action is logged, and the log cannot be altered."""
 
     def setUp(self):
         from profile.audit_log import AuditLogEntry
@@ -1027,6 +1044,7 @@ class AuditLogTests(TestCase):
 
     def test_logging_never_breaks_the_action_it_records(self):
         from unittest import mock
+
         from tsp.services.state_machine import transition_request
 
         with mock.patch('profile.audit_log.AuditLogEntry.objects.create',

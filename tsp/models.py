@@ -162,6 +162,7 @@ class Event(AuditModel):
         count as money spent.
         """
         from django.contrib.contenttypes.models import ContentType
+
         from payments.models import PaymentRecord
 
         content_type = ContentType.objects.get_for_model(TravelRequest)
@@ -388,6 +389,7 @@ class TravelRequest(AuditModel):
     def has_mixed_currencies(self):
         """True when the approved lines are not all in the same currency."""
         return len(self.totals_payable()) > 1
+
     @property
     def reference(self):
         """

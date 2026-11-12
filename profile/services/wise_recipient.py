@@ -6,7 +6,6 @@ from payments.gateways.wise_api import WiseApiError, get_wise_client
 from profile.countries import CODES_BY_NAME, VALID_CODES, state_code
 from profile.models import BankingMethod, UserProfile
 
-
 RETURN_TO_SESSION_KEY = 'signup_return_to'
 
 
@@ -118,8 +117,6 @@ def resolve_country(profile: UserProfile, banking: dict) -> str | None:
     return country or None
 
 
-
-
 def resolve_state(profile: UserProfile, country: str | None = None) -> str | None:
     """The state code for a payee, from the country actually sent to Wise."""
     return state_code(country or profile.country, profile.state)
@@ -190,7 +187,10 @@ def recreate_wise_recipient(profile: UserProfile, banking: dict) -> dict:
 
     On failure, returns ``ready=False`` with an error message instead of raising.
     """
-    from profile.services.wise_verification import WiseVerificationError, setup_wise_recipient
+    from profile.services.wise_verification import (
+        WiseVerificationError,
+        setup_wise_recipient,
+    )
 
     try:
         setup_wise_recipient(profile, banking)

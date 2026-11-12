@@ -12,7 +12,6 @@ from tsp.models import (
     OPTIONAL_EXPENSE_CATEGORIES,
     Comment,
     Document,
-    DocumentKind,
     Event,
     Expense,
     ExpenseCategory,
@@ -154,7 +153,9 @@ class EventForm(forms.ModelForm):
         }
 
     offered_categories = forms.MultipleChoiceField(
-        choices=OPTIONAL_EXPENSE_CATEGORIES, required=False, widget=forms.CheckboxSelectMultiple(attrs={'class': 'checkbox checkbox-sm'}),
+        choices=OPTIONAL_EXPENSE_CATEGORIES,
+        required=False,
+        widget=forms.CheckboxSelectMultiple(attrs={'class': 'checkbox checkbox-sm'}),
     )
     custom_categories = forms.CharField(
         required=False, max_length=300,
@@ -240,7 +241,9 @@ class ExpenseForm(forms.ModelForm):
         widgets = {
             'category': forms.Select(attrs={'class': 'select select-bordered w-full expense-category'}),
             'description': forms.TextInput(attrs={'class': 'input input-bordered w-full'}),
-            'estimated_amount': forms.NumberInput(attrs={'class': 'input input-bordered w-full', 'step': '0.01', 'min': '0.01'}),
+            'estimated_amount': forms.NumberInput(
+                attrs={'class': 'input input-bordered w-full', 'step': '0.01', 'min': '0.01'},
+            ),
             'estimated_currency': forms.Select(
                 choices=CURRENCY_CHOICES,
                 attrs={'class': 'select select-bordered w-full'},
@@ -375,7 +378,7 @@ class CommentForm(forms.ModelForm):
     def __init__(self, *args, can_write_internal=False, **kwargs):
         super().__init__(*args, **kwargs)
         # Dropping the field, rather than hiding it, means a posted value from
-        # someone who may not write internal notes is simply ignored.
+        # someone who may not write internal notes is ignored.
         if not can_write_internal:
             del self.fields['internal']
 
@@ -438,8 +441,6 @@ class ReportFilterForm(forms.Form):
         required=False,
         widget=forms.DateInput(attrs={'class': 'input input-bordered', 'type': 'date'}),
     )
-    # Every state, rather than the five that used to be listed: draft,
-    # submitted and approved could not be filtered for at all.
     status = forms.ChoiceField(
         required=False,
         choices=[('', 'All statuses')] + list(RequestState.choices),

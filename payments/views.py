@@ -1,15 +1,13 @@
 import json
 import logging
 
-from django.contrib import messages
 from django.conf import settings
-
-from tsp.decorators import login_required
+from django.contrib import messages
 from django.core.exceptions import PermissionDenied
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
-from django.views.decorators.http import require_POST
 from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_POST
 
 from payments.forms import ProcessPaymentForm
 from payments.models import PaymentRecord
@@ -26,6 +24,7 @@ from payments.webhooks import (
     transfer_id_from,
     verify_signature,
 )
+from tsp.decorators import login_required
 
 logger = logging.getLogger('marvin.wise')
 

@@ -193,6 +193,7 @@ class StrongCustomerAuthenticationTests(TestCase):
 
     def test_the_token_is_signed_and_wise_can_verify_it(self):
         import base64
+
         from cryptography.hazmat.primitives import hashes
         from cryptography.hazmat.primitives.asymmetric import padding
         wise = self.wise(self.pem)

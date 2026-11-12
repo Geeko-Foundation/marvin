@@ -10,8 +10,8 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         """Define CLI flags for recipient identity, bank details, and test amount."""
-        parser.add_argument('--name', default='Douglas DeMaio', help='Recipient full name')
-        parser.add_argument('--email', default='douglas@example.com', help='Recipient email')
+        parser.add_argument('--name', default='Test Recipient', help='Recipient full name')
+        parser.add_argument('--email', default='recipient@example.com', help='Recipient email')
         parser.add_argument('--currency', default='EUR', help='Target currency')
         parser.add_argument('--iban', default='DE89370400440532013000', help='IBAN')
         parser.add_argument('--bic', default='COBADEFFXXX', help='BIC/SWIFT')

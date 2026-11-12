@@ -48,6 +48,8 @@ def sign_one_time_token(token: str, private_key_pem: str) -> str:
     key = serialization.load_pem_private_key(private_key_pem.encode(), password=None)
     signature = key.sign(token.encode('ascii'), padding.PKCS1v15(), hashes.SHA256())
     return base64.b64encode(signature).decode('ascii')
+
+
 WISE_SANDBOX_BASE_URL = 'https://api.wise-sandbox.com'
 
 SUPPORTED_CURRENCIES = [
@@ -216,10 +218,6 @@ class WiseApiClient:
             return data
         return data.get('balances', []) if isinstance(data, dict) else []
 
-    # ------------------------------------------------------------------
-    # Account / payee management
-    # ------------------------------------------------------------------
-
     def create_payee(
         self,
         *,
@@ -357,10 +355,6 @@ class WiseApiClient:
     def get_payee(self, account_id: int) -> dict:
         """GET /v1/accounts/{accountId}"""
         return self._request('GET', f'/v1/accounts/{account_id}')
-
-    # ------------------------------------------------------------------
-    # Transfers
-    # ------------------------------------------------------------------
 
     def account_requirements(
         self,
@@ -545,10 +539,6 @@ class WiseApiClient:
         PUT /v1/transfers/{transferId}/cancel
         """
         return self._request('PUT', f'/v1/transfers/{transfer_id}/cancel')
-
-    # ------------------------------------------------------------------
-    # Recipient verification
-    # ------------------------------------------------------------------
 
     def test_recipient(
         self,

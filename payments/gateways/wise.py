@@ -8,20 +8,21 @@ import uuid
 from decimal import Decimal
 
 import requests
-
 from django.conf import settings
 
 from marvin.validators import spreadsheet_safe
-
 from payments.base import (
     BatchExportResult,
     PaymentGateway,
     PaymentRequest,
     PaymentResult,
 )
-from payments.gateways.wise_api import SUPPORTED_CURRENCIES, WiseApiError, get_wise_client
+from payments.gateways.wise_api import (
+    SUPPORTED_CURRENCIES,
+    WiseApiError,
+    get_wise_client,
+)
 
-# Map Wise transfer lifecycle states to internal PaymentRecord status values.
 TRANSFER_STATUS_MAP = {
     'incoming_payment_waiting': 'processing',
     'processing': 'processing',
@@ -35,9 +36,8 @@ def settlement_details(transfer: dict, quote: dict | None = None) -> dict:
     """
     What Wise says actually happened, as opposed to what was asked for.
 
-    Patrick wanted "exactly how much has been spent and what the conversion
-    rate was and what the target currency was converted to". Those live on the
-    transfer, with the fee on the quote behind it.
+    Finance needs what was spent, the rate and what it was converted to. Those
+    live on the transfer, with the fee on the quote behind it.
     """
     details = {}
     for key, field in (

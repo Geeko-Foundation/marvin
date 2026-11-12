@@ -32,7 +32,7 @@
       {% for req in owed_back %}
       {% with owed=req.amount_owed_back %}
       <li>
-        <a href="{% url 'request_detail' req.pk %}" class="link">#{{ req.pk }} — {{ req.user.get_full_name|default:req.user.username }}</a>
+        <a href="{% url 'request_detail' req.pk %}" class="link">{{ req.reference }} · {{ req.user.get_full_name|default:req.user.username }}</a>
         owes <strong>{{ owed.1 }} {{ owed.0 }}</strong> ({{ req.get_state_display|lower }})
       </li>
       {% endwith %}
@@ -50,7 +50,7 @@
     <ul class="list-disc ml-5">
       {% for req in advance_queue %}
       <li>
-        <a href="{% url 'request_detail' req.pk %}" class="link">#{{ req.pk }} — {{ req.user.get_full_name|default:req.user.username }}</a>:
+        <a href="{% url 'request_detail' req.pk %}" class="link">{{ req.reference }} · {{ req.user.get_full_name|default:req.user.username }}</a>:
         <strong>{{ req.advance_amount|floatformat:"2g" }} {{ req.advance_currency }}</strong> for {{ req.event.name }} ({{ req.event.start_date }})
       </li>
       {% endfor %}

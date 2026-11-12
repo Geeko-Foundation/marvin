@@ -7,8 +7,8 @@ from django.db import transaction
 
 from payments.base import PaymentRequest
 from payments.models import PaymentRecord
+from payments.registry import get_adapter, get_default_adapter, get_gateway
 from profile.audit_log import record as audit
-from payments.registry import get_adapter, get_gateway, get_default_adapter
 
 
 class PaymentService:
