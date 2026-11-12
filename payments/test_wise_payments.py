@@ -322,3 +322,25 @@ class PaymentMessageTests(TestCase):
         sent = self.pay(self.PaymentResult(status='processing', external_id='1'))
         self.assertEqual(sent[0][0], 'info')
         self.assertIn('waiting to settle', sent[0][1])
+
+
+class QueueChoicesTests(TestCase):
+    """Each row offers only what can work for it."""
+
+    setUp = BatchExportTests.setUp
+
+    def page(self):
+        from django.urls import reverse
+        self.client.force_login(self.finance)
+        return self.client.get(reverse('payments:dashboard')).content.decode()
+
+    def test_a_row_not_in_a_file_cannot_be_marked_batch_paid(self):
+        html = self.page()
+        self.assertNotIn('<option value="wise-csv"', html)
+        self.assertNotIn('Mark Batch Paid', html)
+
+    def test_an_exported_row_offers_only_confirming_the_batch(self):
+        self.service.export_batch('wise-csv', self.finance)
+        html = self.page()
+        self.assertIn('Mark Batch Paid', html)
+        self.assertIn('name="gateway_id" value="wise-csv"', html)

@@ -394,8 +394,10 @@ class PaymentSummaryTests(TestCase):
         self.assertIn(f'Wise transfer 2149871408 · reference {req.reference}', html)
 
 
-class ApprovalPercentRecordTests(ApprovalShareTests):
+class ApprovalPercentRecordTests(TestCase):
     """The share the committee approved at stays on the request for everyone to see."""
+
+    setUp = ApprovalShareTests.setUp
 
     def test_the_share_chosen_on_the_form_is_stored_and_shown(self):
         self.client.force_login(self.committee)
@@ -412,6 +414,7 @@ class ApprovalPercentRecordTests(ApprovalShareTests):
         self.assertIn('Approved at 80% of what was asked for.', html)
 
     def test_batch_approval_records_the_events_share(self):
-        super().test_batch_approval_applies_the_share()
+        self.client.force_login(self.committee)
+        self.client.post(reverse('request_batch_review'), {'request_ids': [self.req.pk], 'action': 'approve'})
         self.req.refresh_from_db()
         self.assertEqual(self.req.approval_percent, 69)

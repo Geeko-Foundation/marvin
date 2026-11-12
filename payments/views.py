@@ -65,14 +65,17 @@ def dashboard(request):
         ctx['object'] = obj
         ctx['object_id'] = obj.pk
         ctx['detail_url'] = adapter.get_detail_url(obj)
+        ctx['in_batch'] = service._payments_under_way(obj).filter(status='exported').first()
         queue_items.append(ctx)
 
     batch_gateways = [gw for gw in get_all_gateways() if gw.supports_batch_export]
+    # A batch gateway is confirmed per row only once the row is in a file.
+    single_gateways = [gw for gw in get_all_gateways() if not gw.supports_batch_export]
 
     return render(request, 'payments/dashboard.html', {
         'adapter': adapter,
         'queue_items': queue_items,
-        'gateways': get_all_gateways(),
+        'gateways': single_gateways,
         'batch_gateways': batch_gateways,
         'process_form': ProcessPaymentForm(),
     })
