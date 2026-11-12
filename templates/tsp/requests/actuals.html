@@ -44,7 +44,7 @@
             <tr>
               <td>{{ form.instance.get_category_display }}</td>
               <td>{{ form.instance.description }}</td>
-              <td>{{ form.instance.approved_amount }} {{ form.instance.approved_currency }}</td>
+              <td>{{ form.instance.approved_amount|floatformat:"2g" }} {{ form.instance.approved_currency }}{% with approx=form.instance.approved_in_requested_currency %}{% if approx %}<span class="block text-xs opacity-70">≈ {{ approx|floatformat:"2g" }} {{ form.instance.estimated_currency }}</span>{% endif %}{% endwith %}</td>
               <td>
                 {{ form.id }}
                 {{ form.actual_amount }}
@@ -66,8 +66,8 @@
         </table>
       </div>
       <p class="text-sm opacity-60 mt-2">
-        If a receipt is in a different currency from the approved amount, finance
-        will settle that line by hand rather than guess at a rate.
+        A receipt in the currency you asked in is converted at the rate saved when
+        the request was approved, the same rate shown beside the approved amount.
       </p>
     </div>
   </div>

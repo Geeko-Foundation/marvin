@@ -47,7 +47,7 @@
         <label class="label"><span class="label-text">Share of each request covered (%)</span></label>
         {{ form.approval_percent }}
         <label class="label">
-          <span class="label-text-alt">Reviews start from this share of what was asked for, as in 69 or 80. Reviewers can still change any line.</span>
+          <span class="label-text-alt">Reviews start from this share of what was asked for. Reviewers can still change any line.</span>
         </label>
         {% for error in form.approval_percent.errors %}
         <span class="label-text-alt text-error">{{ error }}</span>

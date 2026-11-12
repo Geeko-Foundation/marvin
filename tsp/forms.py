@@ -252,13 +252,18 @@ class ExpenseActualForm(forms.ModelForm):
         }
 
     def __init__(self, *args, **kwargs):
-        """Default the currency to the one the line was approved in."""
+        """Receipts come in the currency that was requested, or the approved one."""
         super().__init__(*args, **kwargs)
         self.fields['actual_amount'].required = True
         self.fields['actual_amount'].validators.append(MinValueValidator(Decimal('0')))
-        approved = self.instance.approved_currency if self.instance else None
-        if approved and not self.instance.actual_currency:
-            self.fields['actual_currency'].initial = approved
+        expense = self.instance
+        if expense and expense.approved_currency:
+            codes = dict.fromkeys([expense.estimated_currency, expense.approved_currency])
+            self.fields['actual_currency'] = forms.ChoiceField(
+                choices=[(c, c) for c in codes],
+                initial=expense.actual_currency or expense.estimated_currency,
+                widget=forms.Select(attrs={'class': 'select select-bordered w-full'}),
+            )
 
 
 ExpenseActualFormSet = forms.inlineformset_factory(

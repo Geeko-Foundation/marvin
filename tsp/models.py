@@ -51,7 +51,7 @@ class Event(AuditModel):
     accepting_requests = models.BooleanField(default=True)
     budget = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
     budget_currency = models.CharField(max_length=3, default='EUR')
-    # Share of each requested amount the committee starts from, as in 69 for 69%.
+    # Share of each requested amount, in percent, that reviews start from.
     approval_percent = models.PositiveSmallIntegerField(
         default=100, validators=[MinValueValidator(1), MaxValueValidator(100)],
     )
@@ -456,11 +456,24 @@ class Expense(AuditModel):
             return None
         return (self.approved_amount * self.approval_rate).quantize(Decimal('0.01'))
 
-    def has_currency_mismatch(self):
-        """True when the receipt is in a different currency from the approval."""
+    def actual_in_approved_currency(self):
+        """
+        The actual cost in the approved currency, or None when that needs a person.
+
+        A receipt in the currency that was requested converts back at the rate
+        locked at approval, the same rate the requester was shown.
+        """
         if self.actual_amount is None or not self.actual_currency:
-            return False
-        return self.actual_currency != self.approved_currency
+            return None
+        if self.actual_currency == self.approved_currency:
+            return self.actual_amount
+        if self.approval_rate and self.actual_currency == self.estimated_currency:
+            return (self.actual_amount / self.approval_rate).quantize(Decimal('0.01'))
+        return None
+
+    def has_currency_mismatch(self):
+        """True when the receipt is in a currency no locked rate covers."""
+        return self.actual_amount is not None and self.actual_in_approved_currency() is None
 
     def payable_amount(self):
         """
@@ -472,9 +485,10 @@ class Expense(AuditModel):
         """
         if self.approved_amount is None:
             return None
-        if self.actual_amount is None or self.has_currency_mismatch():
+        actual = self.actual_in_approved_currency()
+        if actual is None:
             return self.approved_amount
-        return min(self.approved_amount, self.actual_amount)
+        return min(self.approved_amount, actual)
 
 
 class ExchangeRate(AuditModel):

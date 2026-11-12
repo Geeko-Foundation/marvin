@@ -505,6 +505,26 @@ class ActualCostTests(TestCase):
         self.assertEqual(expense.payable_amount(), 600)
         self.assertEqual(self.request.expenses_needing_a_decision(), [expense])
 
+    def test_a_receipt_in_the_requested_currency_uses_the_locked_rate(self):
+        expense = Expense.objects.create(
+            request=self.request, category='flight', description='Flight',
+            estimated_amount=10000, estimated_currency='INR',
+            approved_amount=Decimal('73.62'), approved_currency='EUR', approval_rate=Decimal('108.68'),
+            actual_amount=7000, actual_currency='INR',
+        )
+        self.assertFalse(expense.has_currency_mismatch())
+        # 7000 INR at 108.68 is 64.41 EUR, less than the 73.62 approved.
+        self.assertEqual(expense.payable_amount(), Decimal('64.41'))
+
+    def test_the_receipt_currency_is_the_requested_or_the_approved_one(self):
+        from tsp.forms import ExpenseActualForm
+        expense = Expense(estimated_currency='INR', approved_currency='EUR', approved_amount=1)
+        form = ExpenseActualForm(instance=expense)
+        self.assertEqual([c for c, _ in form.fields['actual_currency'].choices], ['INR', 'EUR'])
+        self.assertEqual(form.fields['actual_currency'].initial, 'INR')
+        self.assertFalse(ExpenseActualForm({'actual_amount': '5', 'actual_currency': 'USD'},
+                                           instance=expense).is_valid())
+
     def test_finance_is_asked_to_pay_the_payable_total(self):
         from tsp.payables import TravelRequestPayableAdapter
 
