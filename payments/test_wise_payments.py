@@ -236,6 +236,13 @@ class BatchExportTests(TestCase):
         self.req.refresh_from_db()
         self.assertEqual(self.req.state, RequestState.PAID)
 
+    def test_a_request_never_exported_cannot_be_marked_paid_by_batch(self):
+        with self.assertRaises(ValueError) as raised:
+            self.service.process_payment(self.req.pk, 'wise-csv', self.finance)
+        self.assertIn('not been exported', str(raised.exception))
+        self.req.refresh_from_db()
+        self.assertEqual(self.req.state, RequestState.SUBMITTED_FOR_PAYMENT)
+
     def test_an_export_is_not_shown_as_money_paid(self):
         self.service.export_batch('wise-csv', self.finance)
         self.assertIsNone(self.req.payment)

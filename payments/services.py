@@ -60,6 +60,11 @@ class PaymentService:
         existing = self._payments_under_way(obj)
         if gateway_id == 'wise-csv':
             # Finance confirming that the batch file it was in went through.
+            if not existing.filter(status='exported').exists():
+                raise ValueError(
+                    'This request has not been exported in a batch file, so no money has '
+                    'been sent. Export the batch and upload it to Wise first.'
+                )
             existing = existing.exclude(status='exported')
         if existing.filter(status='exported').exists():
             raise ValueError(
