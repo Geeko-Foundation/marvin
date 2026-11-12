@@ -415,7 +415,9 @@ class TravelRequest(AuditModel):
     @property
     def payment(self):
         """Most recent payment record. A batch export is not a payment, so it is skipped."""
-        return self.payments.exclude(status='exported').order_by('-created_at').first()
+        # Filtered in Python so a list page that prefetched payments asks nothing more.
+        records = [p for p in self.payments.all() if p.status != 'exported']
+        return max(records, key=lambda p: p.created_at, default=None)
 
 
 def request_owing_money(user):

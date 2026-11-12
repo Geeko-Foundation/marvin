@@ -441,3 +441,74 @@ class AuditLogPageTests(TestCase):
     def test_requesters_are_refused(self):
         self.client.force_login(make_user('auditrequester', [GROUP_REQUESTER]))
         self.assertEqual(self.client.get(reverse('audit_log')).status_code, 403)
+
+
+class LoginLimitTests(TestCase):
+    """Guessing passwords for one account stops after ten wrong tries."""
+
+    def setUp(self):
+        from django.core.cache import cache
+        cache.clear()
+        self.user = make_user('lockme', [GROUP_REQUESTER])
+        self.user.set_password('right-pass-phrase-9')
+        self.user.save()
+
+    def attempt(self, password, **extra):
+        return self.client.post(reverse('login'), {'username': 'lockme', 'password': password, **extra})
+
+    def test_the_account_locks_after_ten_failures_even_for_the_right_password(self):
+        for _ in range(10):
+            self.attempt('wrong')
+        response = self.attempt('right-pass-phrase-9')
+        self.assertContains(response, 'Too many failed sign-in attempts')
+        self.assertNotIn('_auth_user_id', self.client.session)
+
+    def test_signing_in_clears_earlier_failures(self):
+        for _ in range(9):
+            self.attempt('wrong')
+        self.assertEqual(self.attempt('right-pass-phrase-9').status_code, 302)
+        self.client.logout()
+        for _ in range(9):
+            self.attempt('wrong')
+        self.assertEqual(self.attempt('right-pass-phrase-9').status_code, 302)
+
+    def test_next_never_leads_off_the_site(self):
+        response = self.attempt('right-pass-phrase-9', next='https://evil.example/phish')
+        self.assertEqual(response['Location'], reverse('dashboard'))
+        self.client.logout()
+        response = self.attempt('right-pass-phrase-9', next='/events/')
+        self.assertEqual(response['Location'], '/events/')
+
+
+class ReportQueryTests(TestCase):
+    """The reports page asks the database the same amount however many rows it shows."""
+
+    def setUp(self):
+        self.finance = make_user('reportsfinance', [GROUP_FINANCE])
+        self.event = make_event()
+
+    def add_requests(self, count):
+        from django.contrib.contenttypes.models import ContentType
+        for i in range(count):
+            owner = make_user(f'reportowner{TravelRequest.objects.count()}', [GROUP_REQUESTER])
+            req = TravelRequest.objects.create(user=owner, event=self.event, state=RequestState.PAID, description='T')
+            Expense.objects.create(request=req, category='flight', description='F', estimated_amount=10,
+                                   estimated_currency='EUR', approved_amount=10, approved_currency='EUR')
+            PaymentRecord.objects.create(
+                content_type=ContentType.objects.get_for_model(req), object_id=req.pk, gateway_id='manual',
+                amount=10, currency='EUR', status='completed', reference=req.reference,
+                recipient_name='x', recipient_email='x@example.org')
+
+    def queries_for_csv(self):
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+        self.client.force_login(self.finance)
+        with CaptureQueriesContext(connection) as captured:
+            self.assertEqual(self.client.get(reverse('reports'), {'format': 'csv'}).status_code, 200)
+        return len(captured)
+
+    def test_more_rows_do_not_mean_more_queries(self):
+        self.add_requests(2)
+        few = self.queries_for_csv()
+        self.add_requests(8)
+        self.assertEqual(self.queries_for_csv(), few)

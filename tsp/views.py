@@ -9,6 +9,7 @@ from django.contrib import messages
 from django.contrib.auth import login, logout
 from django.contrib.auth.models import User
 from django.contrib.contenttypes.models import ContentType
+from django.core.cache import cache
 from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
 from django.db import transaction
@@ -19,6 +20,7 @@ from django.http import FileResponse, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
 from django_tables2 import RequestConfig
@@ -91,18 +93,35 @@ def _state_badge_class(state):
     return mapping.get(state, 'badge-ghost')
 
 
+LOGIN_FAILURE_LIMIT = 10
+LOGIN_LOCK_SECONDS = 15 * 60
+
+
 def login_view(request):
     """Authenticate with username/password; honor ``next`` redirect when present."""
     if request.user.is_authenticated:
         return redirect('dashboard')
 
     form = LoginForm(request, data=request.POST or None)
-    if request.method == 'POST' and form.is_valid():
-        login(request, form.get_user())
-        next_url = request.POST.get('next') or request.GET.get('next')
-        if next_url:
-            return redirect(next_url)
-        return redirect(settings.LOGIN_REDIRECT_URL)
+    if request.method == 'POST':
+        # shortcut: counts live in each process's memory, so N workers allow N
+        # times the limit; move CACHES to a shared backend if that matters.
+        failures_key = 'login-failures:' + request.POST.get('username', '').strip().lower()
+        if cache.get(failures_key, 0) >= LOGIN_FAILURE_LIMIT:
+            form.add_error(None, 'Too many failed sign-in attempts for this account. Try again in 15 minutes.')
+        elif form.is_valid():
+            cache.delete(failures_key)
+            login(request, form.get_user())
+            next_url = request.POST.get('next') or request.GET.get('next')
+            # Only back into this site, never on to a link someone planted.
+            if next_url and url_has_allowed_host_and_scheme(
+                next_url, allowed_hosts={request.get_host()}, require_https=request.is_secure(),
+            ):
+                return redirect(next_url)
+            return redirect(settings.LOGIN_REDIRECT_URL)
+        else:
+            cache.add(failures_key, 0, LOGIN_LOCK_SECONDS)
+            cache.incr(failures_key)
 
     return render(request, 'tsp/login.html', {
         'form': form,
@@ -1356,7 +1375,7 @@ def reports(request):
     """Filterable TSP report with optional CSV export."""
     profile = get_profile(request.user)
     form = ReportFilterForm(request.GET or None)
-    qs = TravelRequest.objects.select_related('user', 'event').prefetch_related('expenses', 'payments')
+    qs = TravelRequest.objects.select_related('user__profile', 'event').prefetch_related('expenses', 'payments')
 
     if form.is_valid():
         if form.cleaned_data.get('date_from'):
