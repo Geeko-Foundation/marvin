@@ -64,6 +64,17 @@ def bank_value(value):
         raise ValidationError('Use letters, digits, spaces, dots or hyphens only.')
 
 
+def spreadsheet_safe(row):
+    """
+    A CSV row whose text cells a spreadsheet will not run as formulas.
+
+    Data stored before the validators existed may still start with =, + and so
+    on, so exports quote those cells with a leading apostrophe.
+    """
+    risky = (*_FORMULA_START, '\t', '\r')
+    return [f"'{cell}" if isinstance(cell, str) and cell.startswith(risky) else cell for cell in row]
+
+
 def restrict(form_class, **rules):
     """
     Attach validators, and optionally a length limit, to fields of a form class.

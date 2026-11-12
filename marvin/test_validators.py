@@ -72,3 +72,11 @@ class FormRuleTests(TestCase):
         form = ProfileForm(data={'phone': '=CMD()'})
         form.is_valid()
         self.assertIn('phone', form.errors)
+
+
+class SpreadsheetSafeTests(SimpleTestCase):
+    def test_formula_cells_are_quoted_and_everything_else_is_left_alone(self):
+        from marvin.validators import spreadsheet_safe
+        self.assertEqual(
+            spreadsheet_safe(['=HYPERLINK("x")', '+1', '@SUM', '\tx', 'Ana', 120, None]),
+            ["'=HYPERLINK(\"x\")", "'+1", "'@SUM", "'\tx", 'Ana', 120, None])

@@ -213,6 +213,13 @@ class BatchExportTests(TestCase):
             actual_amount=90, actual_currency='EUR')
         self.service = PaymentService()
 
+    def test_a_name_stored_before_validation_cannot_run_as_a_formula(self):
+        self.owner.first_name, self.owner.last_name = '=HYPERLINK("http://x")', ''
+        self.owner.save()
+        content, _, _ = self.service.export_batch('wise-csv', self.finance)
+        self.assertNotIn('\n=HYPERLINK', content)
+        self.assertIn("'=HYPERLINK", content)
+
     def test_the_file_uses_the_requests_own_reference(self):
         content, _, _ = self.service.export_batch('wise-csv', self.finance)
         self.assertIn(f',{self.req.reference},', content)

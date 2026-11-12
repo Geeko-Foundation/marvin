@@ -23,6 +23,7 @@ from django.views.decorators.http import require_POST
 
 from django_tables2 import RequestConfig
 
+from marvin.validators import spreadsheet_safe
 from profile.audit_log import record as audit
 from profile.decorators import get_profile
 from profile.forms import OnboardingPersonalForm, WiseRecipientForm
@@ -1409,7 +1410,7 @@ def reports(request):
             # An amount without its currency is not worth exporting.
             approved = '; '.join(f'{amount} {currency}'
                                  for currency, amount in req.totals_approved())
-            writer.writerow([
+            writer.writerow(spreadsheet_safe([
                 req.updated_at.date(),
                 req.event.name,
                 req.event.location,
@@ -1420,7 +1421,7 @@ def reports(request):
                 paid,
                 paid_currency,
                 method,
-            ])
+            ]))
         return response
 
     return render(request, 'tsp/reports.html', {

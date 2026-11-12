@@ -11,6 +11,8 @@ import requests
 
 from django.conf import settings
 
+from marvin.validators import spreadsheet_safe
+
 from payments.base import (
     BatchExportResult,
     PaymentGateway,
@@ -227,7 +229,7 @@ class WiseCsvGateway(PaymentGateway):
             'amountCurrency', 'amount', 'sourceCurrency', 'targetCurrency', 'type',
         ])
         for req in payment_requests:
-            writer.writerow([
+            writer.writerow(spreadsheet_safe([
                 req.recipient_name,
                 req.recipient_email,
                 req.reference,
@@ -237,7 +239,7 @@ class WiseCsvGateway(PaymentGateway):
                 'EUR',
                 req.currency,
                 'BANK_TRANSFER',
-            ])
+            ]))
         return BatchExportResult(
             content=output.getvalue(),
             content_type='text/csv',
