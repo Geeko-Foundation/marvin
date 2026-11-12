@@ -239,3 +239,46 @@ class BatchExportTests(TestCase):
     def test_an_export_is_not_shown_as_money_paid(self):
         self.service.export_batch('wise-csv', self.finance)
         self.assertIsNone(self.req.payment)
+
+
+class PaymentMessageTests(TestCase):
+    """Finance is told what happened to the money, not just that the button worked."""
+
+    def setUp(self):
+        from payments.base import PaymentResult
+        self.PaymentResult = PaymentResult
+        owner = make_user('msgowner', [GROUP_REQUESTER])
+        self.finance = make_user('msgfinance', [GROUP_FINANCE])
+        self.req = TravelRequest.objects.create(
+            user=owner, event=make_event(), state=RequestState.SUBMITTED_FOR_PAYMENT, description='T')
+        Expense.objects.create(
+            request=self.req, category='flight', description='F', estimated_amount=100,
+            estimated_currency='EUR', approved_amount=100, approved_currency='EUR',
+            actual_amount=90, actual_currency='EUR')
+
+    def pay(self, result):
+        from django.contrib.messages import get_messages
+        from django.urls import reverse
+        gateway = mock.Mock(label='Wise API Transfer')
+        gateway.initiate_payment.return_value = result
+        self.client.force_login(self.finance)
+        with mock.patch('payments.services.get_gateway', return_value=gateway), \
+                mock.patch('payments.views.get_gateway', return_value=gateway):
+            response = self.client.post(reverse('payments:process'), {
+                'object_id': self.req.pk, 'gateway_id': 'wise-api'}, follow=True)
+        return [(m.level_tag, str(m)) for m in get_messages(response.wsgi_request)]
+
+    def test_a_refused_payment_is_reported_as_not_paid_with_the_reason(self):
+        sent = self.pay(self.PaymentResult(status='failed', metadata={'error': 'Invalid currency'}))
+        self.assertEqual(sent[0][0], 'error')
+        self.assertIn('was not paid', sent[0][1])
+        self.assertIn('Invalid currency', sent[0][1])
+
+    def test_a_settled_payment_is_reported_as_paid(self):
+        sent = self.pay(self.PaymentResult(status='completed', external_id='1'))
+        self.assertEqual(sent[0][0], 'success')
+
+    def test_a_pending_transfer_says_it_is_waiting(self):
+        sent = self.pay(self.PaymentResult(status='processing', external_id='1'))
+        self.assertEqual(sent[0][0], 'info')
+        self.assertIn('waiting to settle', sent[0][1])

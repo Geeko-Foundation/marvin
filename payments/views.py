@@ -101,7 +101,18 @@ def process_payment(request):
         )
         gateway = get_gateway(record.gateway_id)
         label = gateway.label if gateway else record.gateway_id
-        messages.success(request, f'Payment processed via {label}.')
+        # Say what actually happened: a refused transfer is not a payment.
+        if record.status in ('success', 'completed'):
+            messages.success(request, f'Paid {record.reference} via {label}.')
+        elif record.status == 'failed':
+            reason = record.metadata.get('error') or 'no reason was given'
+            messages.error(request, f'{record.reference} was not paid. {label} refused it: {reason}')
+        else:
+            messages.info(
+                request,
+                f'{record.reference} was sent via {label} and is waiting to settle. '
+                'It leaves the queue once Wise confirms the transfer.',
+            )
     except Exception as exc:
         messages.error(request, str(exc))
 
