@@ -13,51 +13,6 @@
     <p class="opacity-60">{{ travel_request.event.name }} · {{ travel_request.event.location }}</p>
     <p class="text-sm opacity-60">Requester: {{ travel_request.user.get_full_name|default:travel_request.user.username }}</p>
   </div>
-  <div class="flex flex-wrap gap-2">
-    {% if travel_request.is_editable_by_requester and travel_request.user_id == user.id %}
-    <a href="{% url 'request_edit' travel_request.pk %}" class="btn btn-sm btn-outline">Edit</a>
-    {% elif travel_request.can_change_amounts and travel_request.user_id == user.id %}
-    <a href="{% url 'request_edit' travel_request.pk %}" class="btn btn-sm btn-outline"
-       title="Sends the request back to the committee for approval">Change Amounts</a>
-    {% endif %}
-    {% if travel_request.can_request_advance and travel_request.user_id == user.id %}
-    <form method="post" action="{% url 'request_advance' travel_request.pk %}">
-      {% csrf_token %}
-      <button type="submit" class="btn btn-sm btn-info">Request Advance of {{ travel_request.advance_amount|floatformat:"2g" }} {{ travel_request.advance_currency }}</button>
-    </form>
-    {% endif %}
-    {% if travel_request.can_take_back_from_payment and travel_request.user_id == user.id %}
-    <form method="post" action="{% url 'request_take_back' travel_request.pk %}">
-      {% csrf_token %}
-      <button type="submit" class="btn btn-sm btn-outline">Take Back to Edit</button>
-    </form>
-    {% endif %}
-    {% if travel_request.state == 'draft' and travel_request.user_id == user.id %}
-    <form method="post" action="{% url 'request_submit' travel_request.pk %}">
-      {% csrf_token %}
-      <button type="submit" class="btn btn-sm btn-primary">Submit for Review</button>
-    </form>
-    {% endif %}
-    {% if travel_request.state == 'approved' and travel_request.user_id == user.id %}
-    <a href="{% url 'request_accept_page' travel_request.pk %}" class="btn btn-sm btn-warning">Accept Request</a>
-    {% endif %}
-    {% if travel_request.state == 'accepted' and travel_request.user_id == user.id %}
-    <a href="{% url 'request_actuals' travel_request.pk %}" class="btn btn-sm btn-outline">Report Actual Costs</a>
-    <form method="post" action="{% url 'request_submit_for_payment' travel_request.pk %}">
-      {% csrf_token %}
-      <button type="submit" class="btn btn-sm btn-success" {% if missing_docs %}disabled title="Upload all required documents first"{% endif %}>Submit for Payment</button>
-    </form>
-    {% endif %}
-    <a href="{% url 'request_form' travel_request.pk %}" class="btn btn-sm btn-ghost" target="_blank">Print Form</a>
-    {% if travel_request.state == 'draft' or travel_request.state == 'submitted' or travel_request.state == 'approved' or travel_request.state == 'accepted' %}
-    {% if travel_request.user_id == user.id or profile.is_tsp %}
-    <form method="post" action="{% url 'request_cancel' travel_request.pk %}" data-confirm="Cancel {{ travel_request.reference }}?" data-confirm-action="Cancel Request" data-confirm-detail="It can't be reopened afterwards.{% if travel_request.advance_payment %} The advance already paid will have to be paid back.{% endif %}">
-      {% csrf_token %}
-      <button type="submit" class="btn btn-sm btn-error btn-outline">Cancel Request</button>
-    </form>
-    {% endif %}
-    {% endif %}
-  </div>
 </div>
 
 {% with paid=travel_request.payment %}
@@ -364,6 +319,57 @@
           <button type="submit" class="btn btn-sm btn-primary">Upload</button>
         </form>
         {% endif %}
+      </div>
+    </div>
+
+    <div class="card bg-base-100 shadow-sm">
+      <div class="card-body">
+        <h2 class="card-title text-lg">Actions</h2>
+        <div class="flex flex-wrap gap-2">
+          {% if travel_request.is_editable_by_requester and travel_request.user_id == user.id %}
+          <a href="{% url 'request_edit' travel_request.pk %}" class="btn btn-sm btn-outline">Edit</a>
+          {% elif travel_request.can_change_amounts and travel_request.user_id == user.id %}
+          <a href="{% url 'request_edit' travel_request.pk %}" class="btn btn-sm btn-outline"
+             title="Sends the request back to the committee for approval">Change Amounts</a>
+          {% endif %}
+          {% if travel_request.can_request_advance and travel_request.user_id == user.id %}
+          <form method="post" action="{% url 'request_advance' travel_request.pk %}">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-sm btn-info">Request Advance of {{ travel_request.advance_amount|floatformat:"2g" }} {{ travel_request.advance_currency }}</button>
+          </form>
+          {% endif %}
+          {% if travel_request.can_take_back_from_payment and travel_request.user_id == user.id %}
+          <form method="post" action="{% url 'request_take_back' travel_request.pk %}">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-sm btn-outline">Take Back to Edit</button>
+          </form>
+          {% endif %}
+          {% if travel_request.state == 'draft' and travel_request.user_id == user.id %}
+          <form method="post" action="{% url 'request_submit' travel_request.pk %}">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-sm btn-primary">Submit for Review</button>
+          </form>
+          {% endif %}
+          {% if travel_request.state == 'approved' and travel_request.user_id == user.id %}
+          <a href="{% url 'request_accept_page' travel_request.pk %}" class="btn btn-sm btn-warning">Accept Request</a>
+          {% endif %}
+          {% if travel_request.state == 'accepted' and travel_request.user_id == user.id %}
+          <a href="{% url 'request_actuals' travel_request.pk %}" class="btn btn-sm btn-outline">Report Actual Costs</a>
+          <form method="post" action="{% url 'request_submit_for_payment' travel_request.pk %}">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-sm btn-success" {% if missing_docs %}disabled title="Upload all required documents first"{% endif %}>Submit for Payment</button>
+          </form>
+          {% endif %}
+          <a href="{% url 'request_form' travel_request.pk %}" class="btn btn-sm btn-ghost" target="_blank">Print Form</a>
+          {% if travel_request.state == 'draft' or travel_request.state == 'submitted' or travel_request.state == 'approved' or travel_request.state == 'accepted' %}
+          {% if travel_request.user_id == user.id or profile.is_tsp %}
+          <form method="post" action="{% url 'request_cancel' travel_request.pk %}" data-confirm="Cancel {{ travel_request.reference }}?" data-confirm-action="Cancel Request" data-confirm-detail="It can't be reopened afterwards.{% if travel_request.advance_payment %} The advance already paid will have to be paid back.{% endif %}">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-sm btn-error btn-outline">Cancel Request</button>
+          </form>
+          {% endif %}
+          {% endif %}
+        </div>
       </div>
     </div>
 

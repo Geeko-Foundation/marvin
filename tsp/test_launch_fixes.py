@@ -223,3 +223,15 @@ class TransitionMessageTests(TestCase):
         with self.assertRaises(StateTransitionError) as raised:
             transition_request(req, RequestState.CANCELLED, req.user)
         self.assertEqual(str(raised.exception), f'{req.reference} cannot go from Paid to Cancelled.')
+
+
+class RequestActionsPlacementTests(TestCase):
+    """The request's actions follow its details, so they are read before acting."""
+
+    def test_actions_come_after_the_expenses_and_documents(self):
+        owner = make_user('placementowner', [GROUP_REQUESTER])
+        req = paid_request(owner, RequestState.DRAFT)
+        self.client.force_login(owner)
+        html = self.client.get(reverse('request_detail', args=[req.pk])).content.decode()
+        self.assertLess(html.index('>Documents</h2>'), html.index('>Submit for Review<'))
+        self.assertLess(html.index('>Submit for Review<'), html.index('>Comments</h2>'))
