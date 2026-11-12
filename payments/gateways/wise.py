@@ -5,7 +5,10 @@ from __future__ import annotations
 import csv
 import io
 import time
+import uuid
 from decimal import Decimal
+
+import requests
 
 from django.conf import settings
 
@@ -57,6 +60,23 @@ def settlement_details(transfer: dict, quote: dict | None = None) -> dict:
     return details
 
 
+def transaction_id_for(payment_request: PaymentRequest, account_id: int) -> str:
+    """
+    The same payment always gets the same id, so a retry cannot make a second transfer.
+
+    Wise returns the transfer it already has when it sees an id again. The id
+    covers who is paid, how much and in which currency, so a changed amount or
+    account makes a new transfer instead of reusing the old one. The site's
+    address keeps two instances that share a Wise account apart.
+    """
+    amount = Decimal(str(payment_request.amount)).quantize(Decimal('0.01'))
+    key = '|'.join((
+        settings.SITE_BASE_URL, payment_request.reference, str(account_id),
+        str(amount), payment_request.currency,
+    ))
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, key))
+
+
 class WiseApiGateway(PaymentGateway):
     """
     Live Wise REST API gateway.
@@ -82,6 +102,7 @@ class WiseApiGateway(PaymentGateway):
         """
         metadata = payment_request.metadata
         client = self._client
+        transfer = None
 
         try:
             account_id = metadata.get('wise_account_id')
@@ -110,9 +131,10 @@ class WiseApiGateway(PaymentGateway):
                 quote_id=quote['id'],
                 target_account=account_id,
                 reference=payment_request.reference,
+                customer_transaction_id=transaction_id_for(payment_request, account_id),
             )
-            client.fund_or_advance_transfer(transfer['id'])
-            transfer = client.get_transfer(transfer['id'])
+            funded = client.fund_or_advance_transfer(transfer['id'])
+            transfer = funded.get('transfer') or client.get_transfer(transfer['id'])
 
             return PaymentResult(
                 status=TRANSFER_STATUS_MAP.get(transfer['status'], 'processing'),
@@ -123,10 +145,17 @@ class WiseApiGateway(PaymentGateway):
                     **settlement_details(transfer, quote),
                 },
             )
-        except WiseApiError as exc:
+        except (WiseApiError, requests.RequestException) as exc:
+            error = {'error': str(exc), 'status_code': getattr(exc, 'status_code', 0)}
+            if transfer is None:
+                return PaymentResult(status='failed', metadata=error)
+            # The transfer exists, so the money may already have gone. Keep its
+            # id and leave it processing: the status refresh and the webhook
+            # settle it, and the duplicate check refuses a second payment.
             return PaymentResult(
-                status='failed',
-                metadata={'error': str(exc), 'status_code': exc.status_code},
+                status='processing',
+                external_id=str(transfer['id']),
+                metadata={'wise_account_id': account_id, **error},
             )
 
     def get_status(self, external_id: str) -> PaymentResult:
