@@ -252,7 +252,7 @@ WEBPUSH_SETTINGS = {
 # Development sandbox token. Set WISE_API_TOKEN in .env for production.
 WISE_API_TOKEN = env(
     'WISE_API_TOKEN',
-    '4420b1fd-2246-4644-9730-56e7c9e4b41b',
+    'bdde76cb-fe9b-4664-974b-c7b52f66294d',
 )
 WISE_API_PROFILE_ID = env('WISE_API_PROFILE_ID', '')
 WISE_API_SANDBOX = env_bool('WISE_API_SANDBOX', default=True)
