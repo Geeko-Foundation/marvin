@@ -880,10 +880,18 @@ class ClaimReminderTests(TestCase):
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn('7 day(s) left', mail.outbox[0].subject)
 
-    def test_nothing_is_sent_on_an_ordinary_day(self):
-        self._request_closing_in(9)
+    def test_nothing_is_sent_before_the_first_reminder_is_due(self):
+        self._request_closing_in(20)
         self._run()
         self.assertEqual(len(mail.outbox), 0)
+
+    def test_running_twice_or_late_never_repeats_a_reminder(self):
+        self._request_closing_in(9)
+        self._run()
+        self._run()
+        # The 14-day reminder was missed, so it goes out once, late.
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn('9 day(s) left', mail.outbox[0].subject)
 
     def test_a_dry_run_sends_nothing(self):
         self._request_closing_in(7)

@@ -198,6 +198,8 @@ class TravelRequest(AuditModel):
     advance_amount = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
     advance_currency = models.CharField(max_length=3, blank=True, null=True)
     advance_requested_at = models.DateTimeField(blank=True, null=True)
+    # The tightest claim reminder already sent, in days left, so none repeats.
+    claim_reminder_days = models.PositiveSmallIntegerField(blank=True, null=True)
     # When finance confirmed an overpaid advance came back.
     refund_settled_at = models.DateTimeField(blank=True, null=True)
     payments = GenericRelation(
