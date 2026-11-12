@@ -67,6 +67,16 @@ def settlement_details(transfer: dict, quote: dict | None = None) -> dict:
     return details
 
 
+# Currencies Wise pays in whole units only.
+ZERO_DECIMAL_CURRENCIES = {'JPY', 'KRW'}
+
+
+def converted(client, amount: Decimal, source: str, target: str) -> Decimal:
+    """``amount`` of ``source`` in ``target`` at Wise's current rate, rounded as Wise pays it."""
+    places = Decimal('1') if target in ZERO_DECIMAL_CURRENCIES else Decimal('0.01')
+    return (amount * client.get_rate(source, target)).quantize(places)
+
+
 def transaction_id_for(payment_request: PaymentRequest, account_id: int) -> str:
     """
     The same payment always gets the same id, so a retry cannot make a second transfer.
@@ -137,12 +147,14 @@ class WiseApiGateway(PaymentGateway):
                     target_account=account_id,
                 )
             else:
-                # The account only takes its own currency. Send exactly what was
-                # approved and let Wise convert, so the cost is the approved sum.
+                # The account only takes its own currency. The requester is owed
+                # the approved sum in full and the foundation pays Wise's fee, so
+                # ask for the approved amount's worth at Wise's rate to arrive.
                 quote = client.create_quote(
                     source_currency=payment_request.currency,
                     target_currency=account_currency,
-                    source_amount=payment_request.amount,
+                    target_amount=converted(client, payment_request.amount, payment_request.currency,
+                                            account_currency),
                     target_account=account_id,
                 )
             transfer = client.create_transfer(
@@ -245,16 +257,27 @@ class WiseCsvGateway(PaymentGateway):
             'name', 'recipientEmail', 'paymentReference', 'receiverType',
             'amountCurrency', 'amount', 'sourceCurrency', 'targetCurrency', 'type',
         ])
+        client = None
         for req in payment_requests:
+            target = req.metadata.get('account_currency') or req.currency
+            amount = req.amount
+            if target != req.currency:
+                # The amount that arrives is fixed, so Wise's fee is added to what
+                # the foundation pays rather than taken off the requester's money.
+                client = client or get_wise_client()
+                try:
+                    amount = converted(client, req.amount, req.currency, target)
+                except WiseApiError as exc:
+                    raise ValueError(f'Could not get Wise\'s rate for {req.reference}: {exc}') from exc
             writer.writerow(spreadsheet_safe([
                 req.recipient_name,
                 req.recipient_email,
                 req.reference,
                 'PERSON',
-                req.currency,
-                req.amount,
+                target,
+                amount,
                 'EUR',
-                req.metadata.get('account_currency') or req.currency,
+                target,
                 'BANK_TRANSFER',
             ]))
         return BatchExportResult(
