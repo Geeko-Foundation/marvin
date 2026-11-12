@@ -958,7 +958,7 @@ def request_batch_review(request):
             if action == 'approve':
                 # Approving in bulk means approving exactly what was asked for.
                 # Left unpriced, the request would reach finance worth nothing,
-                # since total_approved() counts a missing amount as zero.
+                # since a missing approved amount counts for nothing.
                 for expense in travel_request.expenses.all():
                     if expense.approved_amount is None:
                         expense.approved_amount = expense.estimated_amount

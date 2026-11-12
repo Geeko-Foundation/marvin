@@ -1,7 +1,7 @@
 """
 Wise REST API client (live and sandbox).
 
-Based on the functional test in ``api_tests3.py``. All HTTP traffic uses
+All HTTP traffic uses
 ``requests`` against ``https://api.wise-sandbox.com`` (sandbox) or
 ``https://api.transferwise.com`` (production).
 
@@ -498,7 +498,6 @@ class WiseApiClient:
         """
         Advance a sandbox transfer via Wise Simulation API.
 
-        Mirrors ``simulate_user()`` from ``api_tests3.py``.
         Pass ``steps`` to run a subset (e.g. only ``processing`` for verification).
         """
         last: dict = {}

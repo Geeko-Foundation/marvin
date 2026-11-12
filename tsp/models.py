@@ -370,21 +370,9 @@ class TravelRequest(AuditModel):
         """
         return f'TSP{self.pk}' if self.pk else 'TSP'
 
-    def total_estimated(self):
-        """Sum of all line-item estimated amounts, ignoring currency."""
-        return sum(e.estimated_amount for e in self.expenses.all())
-
-    def total_approved(self):
-        """Sum of committee-approved amounts."""
-        return sum(e.approved_amount or 0 for e in self.expenses.all())
-
     def total_actual(self):
         """Sum of what the trip actually cost, as reported with the receipts."""
         return sum(e.actual_amount or 0 for e in self.expenses.all())
-
-    def total_payable(self):
-        """What finance pays: the lesser of approved and actual, line by line."""
-        return sum(e.payable_amount() or 0 for e in self.expenses.all())
 
     def has_all_actual_amounts(self):
         """True when every approved line has its actual cost reported."""

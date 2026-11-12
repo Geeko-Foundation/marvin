@@ -475,12 +475,12 @@ class ActualCostTests(TestCase):
     def test_spending_less_than_approved_pays_the_lower_figure(self):
         expense = self._expense(600, 400)
         self.assertEqual(expense.payable_amount(), 400)
-        self.assertEqual(self.request.total_payable(), 400)
+        self.assertEqual(self.request.totals_payable(), [('EUR', 400)])
 
     def test_spending_more_than_approved_still_pays_the_approved_figure(self):
         expense = self._expense(600, 800)
         self.assertEqual(expense.payable_amount(), 600)
-        self.assertEqual(self.request.total_payable(), 600)
+        self.assertEqual(self.request.totals_payable(), [('EUR', 600)])
 
     def test_the_lesser_is_taken_line_by_line(self):
         # Approved 300 + 300, spent 400 + 100. Per line that is 300 + 100 = 400.
@@ -488,9 +488,9 @@ class ActualCostTests(TestCase):
         # line be covered by an underspend on another.
         self._expense(300, 400)
         self._expense(300, 100)
-        self.assertEqual(self.request.total_approved(), 600)
+        self.assertEqual(self.request.totals_approved(), [('EUR', 600)])
         self.assertEqual(self.request.total_actual(), 500)
-        self.assertEqual(self.request.total_payable(), 400)
+        self.assertEqual(self.request.totals_payable(), [('EUR', 400)])
 
     def test_nothing_reported_yet_falls_back_to_approved(self):
         expense = self._expense(600)
@@ -543,7 +543,7 @@ class ActualCostTests(TestCase):
         self.assertRedirects(response, reverse('request_detail', args=[self.request.pk]))
         expense.refresh_from_db()
         self.assertEqual(expense.actual_amount, Decimal('425.50'))
-        self.assertEqual(self.request.total_payable(), Decimal('425.50'))
+        self.assertEqual(self.request.totals_payable(), [('EUR', Decimal('425.50'))])
 
     def test_only_the_owner_can_report_them(self):
         self._expense(600)
