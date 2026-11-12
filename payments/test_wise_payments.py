@@ -63,6 +63,26 @@ class TransactionIdTests(TestCase):
         self.assertNotEqual(first, second)
 
 
+class AccountCurrencyTests(TestCase):
+    """An account in another currency gets exactly the approved sum, converted by Wise."""
+
+    def test_euros_are_sent_and_wise_converts_into_the_account_currency(self):
+        client = wise_client()
+        request = payment('100.00', 'EUR')
+        request.metadata['account_currency'] = 'INR'
+        gateway_with(client).initiate_payment(request)
+        client.create_quote.assert_called_once_with(
+            source_currency='EUR', target_currency='INR',
+            source_amount=Decimal('100.00'), target_account=704030890)
+
+    def test_a_matching_account_still_receives_the_exact_amount(self):
+        client = wise_client()
+        request = payment('100.00', 'EUR')
+        request.metadata['account_currency'] = 'EUR'
+        gateway_with(client).initiate_payment(request)
+        self.assertEqual(client.create_quote.call_args.kwargs['target_amount'], Decimal('100.00'))
+
+
 class UnclearOutcomeTests(TestCase):
     """Once a transfer exists, an error must never be recorded as a clean failure."""
 
@@ -219,6 +239,12 @@ class BatchExportTests(TestCase):
         content, _, _ = self.service.export_batch('wise-csv', self.finance)
         self.assertNotIn('\n=HYPERLINK', content)
         self.assertIn("'=HYPERLINK", content)
+
+    def test_the_file_converts_into_the_recipients_account_currency(self):
+        self.owner.profile.banking_currency = 'INR'
+        self.owner.profile.save()
+        content, _, _ = self.service.export_batch('wise-csv', self.finance)
+        self.assertIn(',EUR,90.00,EUR,INR,BANK_TRANSFER', content)
 
     def test_the_file_uses_the_requests_own_reference(self):
         content, _, _ = self.service.export_batch('wise-csv', self.finance)

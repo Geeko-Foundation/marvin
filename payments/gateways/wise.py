@@ -119,15 +119,26 @@ class WiseApiGateway(PaymentGateway):
                 )
             account_id = int(account_id)
 
-            quote = client.create_quote(
-                source_currency=metadata.get(
-                    'source_currency',
-                    getattr(settings, 'WISE_SOURCE_CURRENCY', 'GBP'),
-                ),
-                target_currency=payment_request.currency,
-                target_amount=payment_request.amount,
-                target_account=account_id,
-            )
+            account_currency = metadata.get('account_currency') or payment_request.currency
+            if account_currency == payment_request.currency:
+                quote = client.create_quote(
+                    source_currency=metadata.get(
+                        'source_currency',
+                        getattr(settings, 'WISE_SOURCE_CURRENCY', 'GBP'),
+                    ),
+                    target_currency=payment_request.currency,
+                    target_amount=payment_request.amount,
+                    target_account=account_id,
+                )
+            else:
+                # The account only takes its own currency. Send exactly what was
+                # approved and let Wise convert, so the cost is the approved sum.
+                quote = client.create_quote(
+                    source_currency=payment_request.currency,
+                    target_currency=account_currency,
+                    source_amount=payment_request.amount,
+                    target_account=account_id,
+                )
             transfer = client.create_transfer(
                 quote_id=quote['id'],
                 target_account=account_id,
@@ -237,7 +248,7 @@ class WiseCsvGateway(PaymentGateway):
                 req.currency,
                 req.amount,
                 'EUR',
-                req.currency,
+                req.metadata.get('account_currency') or req.currency,
                 'BANK_TRANSFER',
             ]))
         return BatchExportResult(

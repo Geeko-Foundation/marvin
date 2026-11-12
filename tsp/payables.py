@@ -78,6 +78,7 @@ class TravelRequestPayableAdapter(PayableAdapter):
             metadata['banking_method'] = profile.banking_method or ''
             if profile.wise_account_id:
                 metadata['wise_account_id'] = profile.wise_account_id
+            metadata['account_currency'] = profile.banking_currency
 
         return PaymentRequest(
             amount=Decimal(str(amount)),
