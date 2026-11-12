@@ -6,12 +6,9 @@ python-dotenv). Defaults in this file are for local development and tests only.
 Copy `.env.example` to `.env` and set production values there.
 """
 
-import base64
+from pathlib import Path
 import os
 import sys
-from pathlib import Path
-from urllib.parse import unquote, urlsplit
-
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -132,6 +129,8 @@ DATABASES = {
 
 # Hosts such as Railway hand over one URL, postgresql://user:password@host:port/name.
 if env('DATABASE_URL'):
+    from urllib.parse import unquote, urlsplit
+
     _url = urlsplit(env('DATABASE_URL'))
     DATABASES['default'].update({
         'ENGINE': 'django.db.backends.postgresql',
@@ -214,6 +213,8 @@ def vapid_private_key(value):
 
     It cannot load a PEM key, so one pasted in that form is converted here.
     """
+    import base64
+
     value = value.replace('\\n', '\n').strip()
     if '-----BEGIN' not in value:
         return value
