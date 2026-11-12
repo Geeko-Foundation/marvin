@@ -44,7 +44,7 @@ DEBUG = env_bool('DEBUG', default=True)
 
 ALLOWED_HOSTS = env_list(
     'ALLOWED_HOSTS',
-    'localhost,127.0.0.1,testserver',
+    'localhost,127.0.0.1,testserver, 10.1.10.50',
 )
 
 # Django checks the Origin header on POSTs and wants the scheme, which
@@ -205,8 +205,11 @@ WEBPUSH_SETTINGS = {
 # Dev/test sandbox token — override WISE_API_TOKEN in .env for production.
 WISE_API_TOKEN = env(
     'WISE_API_TOKEN',
-    '4420b1fd-2246-4644-9730-56e7c9e4b41b',
+  'bdde76cb-fe9b-4664-974b-c7b52f66294d',
 )
+# old: '4420b1fd-2246-4644-9730-56e7c9e4b41b',
+
+
 WISE_API_PROFILE_ID = env('WISE_API_PROFILE_ID', '')
 WISE_API_SANDBOX = env_bool('WISE_API_SANDBOX', default=True)
 WISE_SOURCE_CURRENCY = env('WISE_SOURCE_CURRENCY', 'GBP')
