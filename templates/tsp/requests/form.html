@@ -123,7 +123,7 @@
       </div>
       <div class="hidden md:grid md:grid-cols-12 gap-3 px-1 pb-1 text-xs font-medium opacity-70" aria-hidden="true">
         <span class="md:col-span-3">Category</span>
-        <span class="md:col-span-4">Description</span>
+        <span class="md:col-span-3">Description</span>
         <span class="md:col-span-2">Amount</span>
         <span class="md:col-span-2">Currency</span>
       </div>
@@ -136,7 +136,7 @@
             <span class="label-text text-xs mb-1 md:sr-only">Category</span>
             {{ expense_form.category }}
           </label>
-          <label class="form-control md:col-span-4">
+          <label class="form-control md:col-span-3">
             <span class="label-text text-xs mb-1 md:sr-only">Description</span>
             {{ expense_form.description }}
           </label>
@@ -148,12 +148,11 @@
             <span class="label-text text-xs mb-1 md:sr-only">Currency</span>
             {{ expense_form.estimated_currency }}
           </label>
-          <div class="md:col-span-1 flex justify-end md:justify-center">
+          <div class="md:col-span-2 flex justify-end md:justify-center">
             {% if expense_form.DELETE %}<span class="hidden">{{ expense_form.DELETE }}</span>{% endif %}
             <button type="button" class="btn btn-ghost btn-sm text-error" data-remove-row
                     aria-label="Remove this expense" title="Remove this expense">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
-              <span class="md:hidden">Remove</span>
+              <span>Remove</span>
             </button>
           </div>
         </div>
