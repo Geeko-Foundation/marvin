@@ -72,6 +72,7 @@
     Converted at 1 {{ paid.currency }} = {{ m.exchange_rate }} {{ m.target_currency }}, so {{ m.target_amount }} {{ m.target_currency }} reaches the account.
     {% endif %}
     {% endwith %}
+    {% if paid.external_id %}<span class="block text-sm">Wise transfer {{ paid.external_id }} · reference {{ paid.reference }}</span>{% endif %}
   </span>
 </div>
 {% endif %}

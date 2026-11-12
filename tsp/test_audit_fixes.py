@@ -383,6 +383,7 @@ class PaymentSummaryTests(TestCase):
         PaymentRecord.objects.create(
             content_type=ContentType.objects.get_for_model(req), object_id=req.pk,
             gateway_id='wise-api', amount=Decimal('10.00'), currency='EUR', status='completed',
+            external_id='2149871408',
             reference=req.reference, recipient_name='x', recipient_email='x@example.org',
             metadata={'fee': '0.57', 'fee_currency': 'EUR', 'exchange_rate': '103.722',
                       'target_amount': '978.09', 'target_currency': 'INR'})
@@ -390,3 +391,4 @@ class PaymentSummaryTests(TestCase):
         html = self.client.get(reverse('request_detail', args=[req.pk])).content.decode()
         self.assertIn('Wise fee 0.57 EUR', html)
         self.assertIn('978.09 INR reaches the account', html)
+        self.assertIn(f'Wise transfer 2149871408 · reference {req.reference}', html)
