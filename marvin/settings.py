@@ -8,6 +8,7 @@ Copy `.env.example` to `.env` and set production values there.
 
 from pathlib import Path
 import os
+from django.core.exceptions import ImproperlyConfigured
 import sys
 from dotenv import load_dotenv
 
@@ -34,18 +35,32 @@ def env_list(key: str, default: str) -> list[str]:
 
 # --- Security (override in .env for production) ---
 
-# Dev/test default only — never use in production.
-SECRET_KEY = env(
-    'DJANGO_SECRET_KEY',
-    'django-insecure-dev-only-change-me-in-env',
-)
-
-DEBUG = env_bool('DEBUG', default=True)
-
 ALLOWED_HOSTS = env_list(
     'ALLOWED_HOSTS',
     'localhost,127.0.0.1,testserver',
 )
+
+# Any host beyond this machine means people can reach the site, so it must
+# not run with developer settings even if nobody remembered to change them.
+LOCAL_HOSTS = {'localhost', '127.0.0.1', '[::1]', '0.0.0.0', 'testserver'}
+SERVED_PUBLICLY = any(host not in LOCAL_HOSTS for host in ALLOWED_HOSTS)
+
+# Published in this repository, so they sign nothing anyone outside can trust:
+# the development default, and the placeholder in .env.example.
+DEV_SECRET_KEY = 'django-insecure-dev-only-change-me-in-env'
+PUBLISHED_SECRET_KEYS = {DEV_SECRET_KEY, 'change-me-to-a-long-random-string'}
+SECRET_KEY = env('DJANGO_SECRET_KEY') or DEV_SECRET_KEY
+if SERVED_PUBLICLY and SECRET_KEY in PUBLISHED_SECRET_KEYS:
+    raise ImproperlyConfigured(
+        'DJANGO_SECRET_KEY must be set when ALLOWED_HOSTS includes a public host. '
+        'Anyone can forge a login with the published development key.'
+    )
+
+DEBUG = env_bool('DEBUG', default=not SERVED_PUBLICLY)
+
+# Sent only over HTTPS once the site is live, so a visit over plain HTTP
+# cannot give the session away.
+SESSION_COOKIE_SECURE = CSRF_COOKIE_SECURE = not DEBUG
 
 # Django checks the Origin header on POSTs and wants the scheme, which
 # ALLOWED_HOSTS does not carry. Assume https for every real host so a
