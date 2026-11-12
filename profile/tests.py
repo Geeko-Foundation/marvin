@@ -1,5 +1,6 @@
 from django.contrib.auth.models import Group, User
 from django.test import TestCase
+from django.urls import reverse
 
 from profile.decorators import get_profile
 from profile.groups import GROUP_PERMISSIONS, GROUP_REQUESTER, user_in_group
@@ -69,3 +70,17 @@ class PushDeliveryTests(TestCase):
             PushInformation.objects.create(user=user, subscription=sub)
             send_push_to_user(user, head='Hi', body='There')
             send.assert_called_once()
+
+    def test_the_profile_and_dashboard_offer_one_button(self):
+        from django.conf import settings
+
+        from tsp.tests import make_requester
+
+        self.client.force_login(make_requester('alertsviewer'))
+        key = settings.WEBPUSH_SETTINGS['VAPID_PUBLIC_KEY']
+        for name in ('profile', 'dashboard'):
+            with self.subTest(page=name):
+                html = self.client.get(reverse(name)).content.decode()
+                self.assertIn('data-alerts-toggle', html)
+                self.assertIn(f'data-vapid-key="{key}"', html)
+                self.assertNotIn('webpush.js', html)

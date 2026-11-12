@@ -2,12 +2,14 @@
 
 {% block title %}Dashboard{% endblock %}
 
+{% block extra_head %}{% if not user.webpush_info.exists %}{% include 'partials/alerts_head.html' %}{% endif %}{% endblock %}
+
 {% block content %}
 {% if not user.webpush_info.exists %}
 <div class="alert mb-6 flex flex-wrap justify-between" data-alerts-prompt hidden>
-  <span>Want an alert when your request moves on or a payment is sent?</span>
+  <span data-alerts-status aria-live="polite">Want an alert when your request moves on or a payment is sent?</span>
   <span class="flex gap-2">
-    <a href="{% url 'profile' %}#alerts" class="btn btn-primary btn-sm">Turn on alerts</a>
+    <button type="button" class="btn btn-primary btn-sm" data-alerts-toggle>Turn on alerts</button>
     <button type="button" class="btn btn-ghost btn-sm" data-alerts-dismiss>Not now</button>
   </span>
 </div>

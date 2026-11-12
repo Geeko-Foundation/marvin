@@ -28,3 +28,11 @@ def page_url(context, param, number):
     query = context['request'].GET.copy()
     query[param] = number
     return '?' + query.urlencode()
+
+
+@register.simple_tag
+def vapid_public_key():
+    """The key browsers subscribe with, for the alerts button."""
+    from django.conf import settings
+
+    return settings.WEBPUSH_SETTINGS['VAPID_PUBLIC_KEY']
