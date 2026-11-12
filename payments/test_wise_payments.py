@@ -302,6 +302,8 @@ class PaymentMessageTests(TestCase):
         from django.urls import reverse
         gateway = mock.Mock(label='Wise API Transfer')
         gateway.initiate_payment.return_value = result
+        # The queue page asks again about anything still waiting.
+        gateway.get_status.return_value = self.PaymentResult(status='unknown', external_id=result.external_id)
         self.client.force_login(self.finance)
         with mock.patch('payments.services.get_gateway', return_value=gateway), \
                 mock.patch('payments.views.get_gateway', return_value=gateway):
@@ -323,6 +325,82 @@ class PaymentMessageTests(TestCase):
         sent = self.pay(self.PaymentResult(status='processing', external_id='1'))
         self.assertEqual(sent[0][0], 'info')
         self.assertIn('waiting to settle', sent[0][1])
+
+    def test_a_transfer_wise_is_holding_says_why(self):
+        held = 'Transfer processing is suspended, please ensure profile is verified.'
+        sent = self.pay(self.PaymentResult(status='processing', external_id='1', metadata={'error': held}))
+        self.assertEqual(sent[0][0], 'warning')
+        self.assertIn(held, sent[0][1])
+        self.assertIn('cannot be paid twice', sent[0][1])
+
+    def test_the_queue_shows_a_waiting_payment_instead_of_offering_it_again(self):
+        from django.urls import reverse
+        self.pay(self.PaymentResult(status='processing', external_id='1'))
+        with mock.patch('payments.services.get_gateway') as get_gateway:
+            get_gateway.return_value.get_status.return_value = self.PaymentResult(status='unknown', external_id='1')
+            html = self.client.get(reverse('payments:dashboard')).content.decode()
+            get_gateway.return_value.get_status.assert_called_once_with('1')
+        self.assertIn('Waiting for Wise to confirm', html)
+        self.assertNotIn('Process Payment', html)
+
+    def test_a_transfer_that_settled_meanwhile_leaves_the_queue_on_the_next_visit(self):
+        from django.urls import reverse
+        self.pay(self.PaymentResult(status='processing', external_id='1'))
+        with mock.patch('payments.services.get_gateway') as get_gateway:
+            get_gateway.return_value.get_status.return_value = self.PaymentResult(status='success', external_id='1')
+            html = self.client.get(reverse('payments:dashboard')).content.decode()
+        self.req.refresh_from_db()
+        self.assertEqual(self.req.state, RequestState.PAID)
+        self.assertNotIn(self.req.reference + ' ·', html)
+
+
+class SandboxSettlingTests(TestCase):
+    """A sandbox transfer only moves on when Marvin asks Wise to simulate it."""
+
+    def client_at(self, status):
+        from payments.gateways.wise_api import WiseApiClient
+        wise = WiseApiClient(api_token='t', profile_id='1', sandbox=True)
+        wise.get_transfer = mock.Mock(return_value={'id': 5, 'status': status})
+        wise.advance_sandbox_transfer = mock.Mock(return_value={'id': 5, 'status': 'outgoing_payment_sent'})
+        return wise
+
+    def steps_run(self, wise):
+        return wise.advance_sandbox_transfer.call_args.kwargs['steps'] if wise.advance_sandbox_transfer.called else ()
+
+    def test_only_the_missing_steps_are_simulated(self):
+        for status, steps in (
+            ('incoming_payment_waiting', ('processing', 'funds_converted', 'outgoing_payment_sent')),
+            ('processing', ('funds_converted', 'outgoing_payment_sent')),
+            ('funds_converted', ('outgoing_payment_sent',)),
+            ('outgoing_payment_sent', ()),
+            ('cancelled', ()),
+        ):
+            with self.subTest(status=status):
+                wise = self.client_at(status)
+                wise.settle_sandbox_transfer(5, delay_seconds=0)
+                self.assertEqual(tuple(self.steps_run(wise)), steps)
+
+    def test_verification_stops_at_processing(self):
+        wise = self.client_at('incoming_payment_waiting')
+        wise.settle_sandbox_transfer(5, delay_seconds=0, up_to='processing')
+        self.assertEqual(tuple(self.steps_run(wise)), ('processing',))
+
+    def test_a_funded_sandbox_transfer_is_carried_through_to_sent(self):
+        wise = self.client_at('incoming_payment_waiting')
+        wise.fund_transfer = mock.Mock(return_value={'status': 'COMPLETED'})
+        outcome = wise.fund_or_advance_transfer(5, sandbox_delay_seconds=0)
+        self.assertEqual(outcome['transfer']['status'], 'outgoing_payment_sent')
+
+    def test_a_live_funded_transfer_is_left_to_wise(self):
+        wise = self.client_at('incoming_payment_waiting')
+        wise.sandbox = False
+        wise.fund_transfer = mock.Mock(return_value={'status': 'COMPLETED'})
+        wise.fund_or_advance_transfer(5)
+        wise.advance_sandbox_transfer.assert_not_called()
+
+    def test_checking_a_stuck_sandbox_transfer_finishes_it(self):
+        wise = self.client_at('processing')
+        self.assertEqual(gateway_with(wise).get_status('5').status, 'success')
 
 
 class QueueChoicesTests(TestCase):

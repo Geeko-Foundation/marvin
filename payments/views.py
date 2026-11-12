@@ -56,15 +56,23 @@ def dashboard(request):
     """
     service = PaymentService()
     adapter = service.adapter
-    queue = service.get_queue()
+
+    # Ask Wise about transfers still waiting, so a settled one leaves the queue
+    # without waiting for a webhook. shortcut: one Wise call per waiting
+    # transfer on each visit; fine for a short queue.
+    for obj in service.get_queue():
+        for record in service._payments_under_way(obj).exclude(status='exported').exclude(external_id=None):
+            service.refresh_status(record)
 
     queue_items = []
-    for obj in queue:
+    for obj in service.get_queue():
         ctx = adapter.get_queue_item_context(obj)
         ctx['object'] = obj
         ctx['object_id'] = obj.pk
         ctx['detail_url'] = adapter.get_detail_url(obj)
-        ctx['in_batch'] = service._payments_under_way(obj).filter(status='exported').first()
+        under_way = service._payments_under_way(obj)
+        ctx['in_batch'] = under_way.filter(status='exported').first()
+        ctx['sending'] = under_way.exclude(status='exported').first()
         queue_items.append(ctx)
 
     batch_gateways = [gw for gw in get_all_gateways() if gw.supports_batch_export]
@@ -109,6 +117,13 @@ def process_payment(request):
         elif record.status == 'failed':
             reason = record.metadata.get('error') or 'no reason was given'
             messages.error(request, f'{record.reference} was not paid. {label} refused it: {reason}')
+        elif record.metadata.get('error'):
+            # The transfer exists but Wise stopped it part way, so say why.
+            messages.warning(
+                request,
+                f'{record.reference} was created in {label} but Wise is holding it: '
+                f'{record.metadata["error"]} It stays in the queue and cannot be paid twice.',
+            )
         else:
             messages.info(
                 request,

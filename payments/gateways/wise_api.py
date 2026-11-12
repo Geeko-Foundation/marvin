@@ -61,6 +61,12 @@ SANDBOX_SIMULATION_STEPS = (
     'funds_converted',
     'outgoing_payment_sent',
 )
+# How many of those steps a sandbox transfer in each state has already passed.
+SANDBOX_STEPS_DONE_BY_STATUS = {
+    'incoming_payment_waiting': 0,
+    'processing': 1,
+    'funds_converted': 2,
+}
 
 
 class WiseApiError(Exception):
@@ -517,7 +523,6 @@ class WiseApiClient:
         """
         try:
             fund = self.fund_transfer(transfer_id)
-            return {'method': 'fund', 'fund': fund, 'transfer': self.get_transfer(transfer_id)}
         except WiseApiError as exc:
             if self.sandbox and exc.status_code in (403, 422):
                 transfer = self.advance_sandbox_transfer(
@@ -527,6 +532,27 @@ class WiseApiClient:
                 )
                 return {'method': 'sandbox_simulation', 'transfer': transfer}
             raise
+        if self.sandbox:
+            # A funded sandbox transfer never moves on by itself; Wise expects
+            # the simulation calls a real bank's progress would replace.
+            transfer = self.settle_sandbox_transfer(
+                transfer_id, delay_seconds=sandbox_delay_seconds,
+                up_to=sandbox_steps[-1] if sandbox_steps else SANDBOX_SIMULATION_STEPS[-1],
+            )
+        else:
+            transfer = self.get_transfer(transfer_id)
+        return {'method': 'fund', 'fund': fund, 'transfer': transfer}
+
+    def settle_sandbox_transfer(
+        self, transfer_id: int, *, delay_seconds: float = 2.0, up_to: str = SANDBOX_SIMULATION_STEPS[-1],
+    ) -> dict:
+        """Run the simulation steps a sandbox transfer still needs to reach ``up_to``."""
+        transfer = self.get_transfer(transfer_id)
+        done = SANDBOX_STEPS_DONE_BY_STATUS.get(transfer.get('status'))
+        steps = SANDBOX_SIMULATION_STEPS[done:SANDBOX_SIMULATION_STEPS.index(up_to) + 1] if done is not None else ()
+        if not steps:
+            return transfer
+        return self.advance_sandbox_transfer(transfer_id, delay_seconds=delay_seconds, steps=steps)
 
     def get_transfer(self, transfer_id: int) -> dict:
         """GET /v1/transfers/{transferId}"""

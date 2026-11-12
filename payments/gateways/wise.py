@@ -183,7 +183,11 @@ class WiseApiGateway(PaymentGateway):
         On API failure, report an unknown result so the stored status is preserved.
         """
         try:
-            transfer = self._client.get_transfer(int(external_id))
+            if self._client.sandbox:
+                # Nothing else moves a sandbox transfer on, so a check does it.
+                transfer = self._client.settle_sandbox_transfer(int(external_id), delay_seconds=0.5)
+            else:
+                transfer = self._client.get_transfer(int(external_id))
             return PaymentResult(
                 status=TRANSFER_STATUS_MAP.get(transfer['status'], transfer['status']),
                 external_id=external_id,

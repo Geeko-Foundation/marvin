@@ -45,7 +45,10 @@
         <form method="post" action="{% url 'payments:process' %}" class="flex flex-wrap gap-2 items-end">
           {% csrf_token %}
           <input type="hidden" name="object_id" value="{{ item.object_id }}">
-          {% if item.in_batch %}
+          {% if item.sending %}
+          <span class="text-sm opacity-70 max-w-md">Sent {{ item.sending.created_at|date:"j M, H:i" }}. Waiting for Wise to confirm ({{ item.sending.get_status_display }}).
+            {% if item.sending.metadata.error %}<span class="block text-warning">Wise is holding it: {{ item.sending.metadata.error }}</span>{% endif %}</span>
+          {% elif item.in_batch %}
           <span class="text-sm opacity-70">In the batch file exported {{ item.in_batch.created_at|date:"j M Y" }}</span>
           <input type="hidden" name="gateway_id" value="{{ item.in_batch.gateway_id }}">
           <button type="submit" class="btn btn-primary btn-sm">Mark Batch Paid</button>
