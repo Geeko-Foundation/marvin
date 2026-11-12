@@ -392,3 +392,26 @@ class PaymentSummaryTests(TestCase):
         self.assertIn('Wise fee 0.57 EUR', html)
         self.assertIn('978.09 INR reaches the account', html)
         self.assertIn(f'Wise transfer 2149871408 · reference {req.reference}', html)
+
+
+class ApprovalPercentRecordTests(ApprovalShareTests):
+    """The share the committee approved at stays on the request for everyone to see."""
+
+    def test_the_share_chosen_on_the_form_is_stored_and_shown(self):
+        self.client.force_login(self.committee)
+        self.client.post(reverse('request_approve', args=[self.req.pk]), {
+            'expense_id': [str(self.expense.pk)],
+            f'approved_amount_{self.expense.pk}': '160.00',
+            f'approved_currency_{self.expense.pk}': 'EUR',
+            'approval_percent': '80',
+        })
+        self.req.refresh_from_db()
+        self.assertEqual((self.req.state, self.req.approval_percent), (RequestState.APPROVED, 80))
+        self.client.force_login(self.owner)
+        html = self.client.get(reverse('request_detail', args=[self.req.pk])).content.decode()
+        self.assertIn('Approved at 80% of what was asked for.', html)
+
+    def test_batch_approval_records_the_events_share(self):
+        super().test_batch_approval_applies_the_share()
+        self.req.refresh_from_db()
+        self.assertEqual(self.req.approval_percent, 69)

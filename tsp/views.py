@@ -738,6 +738,7 @@ def _send_back_for_review(travel_request, user):
         approval_rate=None, approval_rate_date=None,
     )
     travel_request.approved_at = None
+    travel_request.approval_percent = None
     travel_request.advance_amount = None
     travel_request.advance_currency = None
     travel_request.advance_requested_at = None
@@ -845,9 +846,11 @@ def request_approve(request, pk):
         return redirect('request_detail', pk=pk)
     form = ApprovalForm(request.POST)
     if not form.is_valid():
-        messages.error(request, ' '.join(form.errors.get('notes', ['Check the approval notes.'])))
+        errors = form.errors.get('notes') or form.errors.get('approval_percent') or ['Check the approval notes.']
+        messages.error(request, ' '.join(errors))
         return redirect('request_detail', pk=pk)
     notes = form.cleaned_data.get('notes', '')
+    travel_request.approval_percent = form.cleaned_data.get('approval_percent')
 
     error = None
     # Everything below is undone if any check refuses the approval, so a
@@ -965,6 +968,7 @@ def request_batch_review(request):
                 for expense in travel_request.expenses.all():
                     if expense.approved_amount is None:
                         expense.approved_amount = travel_request.event.share_of(expense.estimated_amount)
+                        travel_request.approval_percent = travel_request.event.approval_percent
                         expense.approved_currency = expense.estimated_currency
                         expense.save(update_fields=['approved_amount', 'approved_currency'])
                 remaining = travel_request.event.budget_remaining()

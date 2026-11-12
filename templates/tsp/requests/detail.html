@@ -199,6 +199,9 @@
             </tfoot>
           </table>
         </div>
+        {% if travel_request.approval_percent %}
+        <p class="text-sm opacity-70 mt-2">Approved at {{ travel_request.approval_percent }}% of what was asked for.</p>
+        {% endif %}
 
         {% if profile.is_tsp and travel_request.state == 'submitted' and travel_request.user_id == user.id %}
         <div class="divider">Committee review</div>
@@ -214,7 +217,7 @@
             </span>
             <span class="flex items-center gap-1">
               <input type="number" min="1" max="100" step="1" value="{{ travel_request.event.approval_percent }}"
-                     class="input input-bordered input-sm w-20" data-percent> %
+                     class="input input-bordered input-sm w-20" name="approval_percent" data-percent> %
             </span>
           </label>
           {% for line in review_lines %}

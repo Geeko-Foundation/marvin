@@ -276,12 +276,13 @@ ExpenseActualFormSet = forms.inlineformset_factory(
 
 
 class ApprovalForm(forms.Form):
-    """Optional committee notes when approving a request."""
+    """Optional committee notes, and the share approved, when approving a request."""
 
     notes = forms.CharField(
         required=False,
         widget=forms.Textarea(attrs={'class': 'textarea textarea-bordered w-full', 'rows': 3}),
     )
+    approval_percent = forms.IntegerField(required=False, min_value=1, max_value=100)
 
 
 class RejectForm(forms.Form):

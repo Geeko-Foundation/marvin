@@ -194,6 +194,8 @@ class TravelRequest(AuditModel):
         default=RequestState.DRAFT,
     )
     approved_at = models.DateTimeField(blank=True, null=True)
+    # The share of the request the committee approved at, in percent.
+    approval_percent = models.PositiveSmallIntegerField(blank=True, null=True)
     accepted_at = models.DateTimeField(blank=True, null=True)
     accepted_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
