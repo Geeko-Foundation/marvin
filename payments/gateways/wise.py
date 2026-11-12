@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import csv
 import io
-import time
 import uuid
 from decimal import Decimal
 
@@ -217,8 +216,9 @@ class WiseCsvGateway(PaymentGateway):
         """
         Build a Wise Send-by-email CSV from the current payment queue.
 
-        Each row includes recipient details and a unique payment reference
-        suffix to avoid collisions on repeated exports.
+        Each row uses the request's own reference, as on its page and the bank
+        statement. Repeat exports are prevented by the service, not by making
+        references unique, since unique references would hide a duplicate.
         """
         output = io.StringIO()
         writer = csv.writer(output)
@@ -227,11 +227,10 @@ class WiseCsvGateway(PaymentGateway):
             'amountCurrency', 'amount', 'sourceCurrency', 'targetCurrency', 'type',
         ])
         for req in payment_requests:
-            reference = f'{req.reference}-{int(time.time())}'
             writer.writerow([
                 req.recipient_name,
                 req.recipient_email,
-                reference,
+                req.reference,
                 'PERSON',
                 req.currency,
                 req.amount,

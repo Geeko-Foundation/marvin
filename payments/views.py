@@ -124,7 +124,12 @@ def batch_export(request):
 
     service = PaymentService()
     try:
-        content, content_type, filename = service.export_batch(gateway_id)
+        content, content_type, filename = service.export_batch(gateway_id, request.user)
+        messages.info(
+            request,
+            'Batch file downloaded. Once Wise has processed it, mark each request paid '
+            'with Wise Batch CSV. Requests in this file are left out of the next export.',
+        )
         response = HttpResponse(content, content_type=content_type)
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
         return response

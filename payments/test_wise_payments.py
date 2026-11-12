@@ -197,3 +197,45 @@ class StrongCustomerAuthenticationTests(TestCase):
         with mock.patch.object(wise._session, 'request', side_effect=self.challenge_then(403)):
             with self.assertRaises(WiseApiError):
                 wise.fund_transfer(42)
+
+
+class BatchExportTests(TestCase):
+    """A request goes into one batch file, and is paid once."""
+
+    def setUp(self):
+        self.owner = make_user('batchexportowner', [GROUP_REQUESTER])
+        self.finance = make_user('batchexportfinance', [GROUP_FINANCE])
+        self.req = TravelRequest.objects.create(
+            user=self.owner, event=make_event(), state=RequestState.SUBMITTED_FOR_PAYMENT, description='T')
+        Expense.objects.create(
+            request=self.req, category='flight', description='F', estimated_amount=100,
+            estimated_currency='EUR', approved_amount=100, approved_currency='EUR',
+            actual_amount=90, actual_currency='EUR')
+        self.service = PaymentService()
+
+    def test_the_file_uses_the_requests_own_reference(self):
+        content, _, _ = self.service.export_batch('wise-csv', self.finance)
+        self.assertIn(f',{self.req.reference},', content)
+        self.assertNotIn(f'{self.req.reference}-', content)
+
+    def test_exporting_again_leaves_out_what_is_already_in_a_file(self):
+        self.service.export_batch('wise-csv', self.finance)
+        with self.assertRaises(ValueError):
+            self.service.export_batch('wise-csv', self.finance)
+        self.assertEqual(PaymentRecord.objects.filter(object_id=self.req.pk, status='exported').count(), 1)
+
+    def test_an_exported_request_cannot_also_be_paid_through_the_api(self):
+        self.service.export_batch('wise-csv', self.finance)
+        with self.assertRaises(ValueError) as raised:
+            self.service.process_payment(self.req.pk, 'wise-api', self.finance)
+        self.assertIn('batch file', str(raised.exception))
+
+    def test_marking_an_exported_request_paid_still_works(self):
+        self.service.export_batch('wise-csv', self.finance)
+        self.service.process_payment(self.req.pk, 'wise-csv', self.finance)
+        self.req.refresh_from_db()
+        self.assertEqual(self.req.state, RequestState.PAID)
+
+    def test_an_export_is_not_shown_as_money_paid(self):
+        self.service.export_batch('wise-csv', self.finance)
+        self.assertIsNone(self.req.payment)

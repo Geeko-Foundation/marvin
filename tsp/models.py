@@ -413,8 +413,8 @@ class TravelRequest(AuditModel):
 
     @property
     def payment(self):
-        """Most recent payment record, for template compatibility."""
-        return self.payments.order_by('-created_at').first()
+        """Most recent payment record. A batch export is not a payment, so it is skipped."""
+        return self.payments.exclude(status='exported').order_by('-created_at').first()
 
 
 def request_owing_money(user):
