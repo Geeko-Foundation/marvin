@@ -475,8 +475,15 @@ def event_list(request):
     if date_to:
         events = events.filter(end_date__lte=date_to)
 
+    # What people can still act on comes first, soonest first; past events
+    # follow, most recent first, since that is the one someone is looking for.
+    events = list(events)
+    upcoming = sorted((e for e in events if not e.is_past), key=lambda e: e.start_date)
+    past = sorted((e for e in events if e.is_past), key=lambda e: e.start_date, reverse=True)
+
     return render(request, 'tsp/events/list.html', {
-        'events': events,
+        'upcoming': upcoming,
+        'past': past,
         'profile': profile,
         'date_from': date_from or '',
         'date_to': date_to or '',
