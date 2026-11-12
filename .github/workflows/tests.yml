@@ -68,3 +68,44 @@ jobs:
 
       - name: Tests
         run: uv run python manage.py test
+
+  # The deploy installs from requirements.txt, not uv.lock, so a package added
+  # to pyproject.toml alone would pass the tests above and break the live site.
+  deploy-requirements:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install what the deploy installs
+        run: pip install -r requirements.txt
+
+      - name: The app starts with only those
+        run: python manage.py check
+
+  # The stylesheet is built by Tailwind and committed. A template that uses a
+  # new class without a rebuild looks broken in production but passes tests.
+  css-built:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        if: hashFiles('package.json') != ''
+        with:
+          node-version: "22"
+
+      - name: Rebuild the stylesheet
+        if: hashFiles('package.json') != ''
+        run: |
+          npm ci
+          npm run build:css
+
+      - name: The committed stylesheet matches
+        if: hashFiles('package.json') != ''
+        run: git diff --exit-code static/css/app.css || (echo "Run npm run build:css and commit static/css/app.css." && exit 1)
