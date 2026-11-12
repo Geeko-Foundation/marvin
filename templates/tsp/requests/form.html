@@ -121,34 +121,40 @@
         <h2 class="card-title text-lg">Expenses</h2>
         <button type="button" id="add-expense" class="btn btn-sm btn-outline">Add Expense</button>
       </div>
-      <div id="expense-rows" class="flex flex-col gap-4">
+      <div class="hidden md:grid md:grid-cols-12 gap-3 px-1 pb-1 text-xs font-medium opacity-70" aria-hidden="true">
+        <span class="md:col-span-3">Category</span>
+        <span class="md:col-span-4">Description</span>
+        <span class="md:col-span-2">Amount</span>
+        <span class="md:col-span-2">Currency</span>
+      </div>
+      <div id="expense-rows" class="flex flex-col divide-y divide-base-300 md:divide-y-0 gap-0 md:gap-2">
         {% for expense_form in formset %}
-        <div class="expense-row grid gap-3 md:grid-cols-12 items-end border border-base-300 rounded-box p-4">
+        <div class="expense-row grid gap-2 md:gap-3 md:grid-cols-12 items-center py-3 md:py-0"
+             {% if expense_form.instance.pk %}data-saved{% endif %}>
           {% for hidden in expense_form.hidden_fields %}{{ hidden }}{% endfor %}
-          <div class="form-control md:col-span-3">
-            <label class="label py-0"><span class="label-text text-xs">Category</span></label>
+          <label class="form-control md:col-span-3">
+            <span class="label-text text-xs mb-1 md:sr-only">Category</span>
             {{ expense_form.category }}
-          </div>
-          <div class="form-control md:col-span-4">
-            <label class="label py-0"><span class="label-text text-xs">Description</span></label>
+          </label>
+          <label class="form-control md:col-span-4">
+            <span class="label-text text-xs mb-1 md:sr-only">Description</span>
             {{ expense_form.description }}
-          </div>
-          <div class="form-control md:col-span-2">
-            <label class="label py-0"><span class="label-text text-xs">Amount</span></label>
+          </label>
+          <label class="form-control md:col-span-2">
+            <span class="label-text text-xs mb-1 md:sr-only">Amount</span>
             {{ expense_form.estimated_amount }}
-          </div>
-          <div class="form-control md:col-span-3 flex flex-row gap-2 items-end">
-            <div class="flex-1">
-              <label class="label py-0"><span class="label-text text-xs">Currency</span></label>
-              {{ expense_form.estimated_currency }}
-            </div>
-            {% if expense_form.DELETE and expense_form.instance.pk %}
-            <label data-remove-line class="label cursor-pointer gap-1 pb-2"
-                   title="Tick to remove this expense when you save the request">
-              {{ expense_form.DELETE }}
-              <span class="label-text text-xs whitespace-nowrap">Remove</span>
-            </label>
-            {% endif %}
+          </label>
+          <label class="form-control md:col-span-2">
+            <span class="label-text text-xs mb-1 md:sr-only">Currency</span>
+            {{ expense_form.estimated_currency }}
+          </label>
+          <div class="md:col-span-1 flex justify-end md:justify-center">
+            {% if expense_form.DELETE %}<span class="hidden">{{ expense_form.DELETE }}</span>{% endif %}
+            <button type="button" class="btn btn-ghost btn-sm text-error" data-remove-row
+                    aria-label="Remove this expense" title="Remove this expense">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+              <span class="md:hidden">Remove</span>
+            </button>
           </div>
         </div>
         {% endfor %}
@@ -174,16 +180,63 @@
     if (!firstRow) return;
     const prefix = totalForms.name.replace('-TOTAL_FORMS', '');
     const newRow = firstRow.cloneNode(true);
-    newRow.querySelector('[data-remove-line]')?.remove();
+    newRow.removeAttribute('data-saved');
+    newRow.classList.remove('opacity-40');
+    newRow.querySelector('[name$="-DELETE"]')?.closest('span')?.remove();
     newRow.querySelectorAll('input, select').forEach(el => {
       el.name = el.name.replace(new RegExp(`${prefix}-\\d+-`), `${prefix}-${count}-`);
       el.id = el.id.replace(new RegExp(`${prefix}-\\d+-`), `${prefix}-${count}-`);
-      if (el.type === 'checkbox') el.checked = false;
-      else if (el.tagName === 'SELECT') el.selectedIndex = 0;
-      else el.value = '';
+      if (el.tagName === 'SELECT') {
+        // Back to what the page started with, so currency defaults as it should.
+        const preset = [...el.options].find(o => o.defaultSelected);
+        el.value = preset ? preset.value : '';
+      } else {
+        el.value = '';
+      }
     });
+    const undo = newRow.querySelector('[data-remove-row]');
+    undo.querySelector('span').textContent = 'Remove';
     container.appendChild(newRow);
     totalForms.value = count + 1;
+  });
+
+  // Django matches rows by position, so after a row goes the rest close up.
+  // Saved lines always come first and are never taken out, so they keep theirs.
+  function renumberRows() {
+    const total = document.querySelector('[name$="-TOTAL_FORMS"]');
+    const prefix = total.name.replace('-TOTAL_FORMS', '');
+    const rows = document.querySelectorAll('#expense-rows .expense-row');
+    rows.forEach((row, index) => {
+      row.querySelectorAll('input, select').forEach(el => {
+        el.name = el.name.replace(new RegExp(`${prefix}-\\d+-`), `${prefix}-${index}-`);
+        el.id = el.id.replace(new RegExp(`${prefix}-\\d+-`), `${prefix}-${index}-`);
+      });
+    });
+    total.value = rows.length;
+  }
+
+  // Remove a row: a blank one goes, a saved one is marked for removal on save.
+  document.getElementById('expense-rows')?.addEventListener('click', function (event) {
+    const button = event.target.closest('[data-remove-row]');
+    if (!button) return;
+    const row = button.closest('.expense-row');
+    const rows = this.querySelectorAll('.expense-row');
+    if (row.hasAttribute('data-saved')) {
+      const box = row.querySelector('[name$="-DELETE"]');
+      box.checked = !box.checked;
+      row.classList.toggle('opacity-40', box.checked);
+      button.querySelector('span').textContent = box.checked ? 'Undo' : 'Remove';
+      button.setAttribute('aria-label', box.checked ? 'Keep this expense' : 'Remove this expense');
+    } else if (rows.length > 1) {
+      row.remove();
+      renumberRows();
+    } else {
+      row.querySelectorAll('input:not([type=hidden]), select').forEach(el => {
+        const preset = el.tagName === 'SELECT' && [...el.options].find(o => o.defaultSelected);
+        el.value = preset ? preset.value : '';
+      });
+    }
+    updateTotal();
   });
 
   // A running total per currency, so nobody adds up mixed currencies by hand.

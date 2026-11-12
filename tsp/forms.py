@@ -223,7 +223,7 @@ ExpenseFormSet = forms.inlineformset_factory(
     TravelRequest,
     Expense,
     form=ExpenseForm,
-    extra=2,
+    extra=0,
     can_delete=True,
     min_num=1,
     validate_min=True,
