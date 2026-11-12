@@ -15,39 +15,39 @@
       <h2 class="card-title text-lg">Personal Information</h2>
       <div class="grid gap-4 md:grid-cols-2">
         <div class="form-control">
-          <label class="label"><span class="label-text">First Name</span></label>
+          <label class="label" for="{{ form.first_name.id_for_label }}"><span class="label-text">First Name</span></label>
           {{ form.first_name }}
         </div>
         <div class="form-control">
-          <label class="label"><span class="label-text">Last Name</span></label>
+          <label class="label" for="{{ form.last_name.id_for_label }}"><span class="label-text">Last Name</span></label>
           {{ form.last_name }}
         </div>
         <div class="form-control md:col-span-2">
-          <label class="label"><span class="label-text">Email</span></label>
+          <label class="label" for="{{ form.email.id_for_label }}"><span class="label-text">Email</span></label>
           {{ form.email }}
         </div>
         <div class="form-control md:col-span-2">
-          <label class="label"><span class="label-text">Street Address</span></label>
+          <label class="label" for="{{ form.address_line.id_for_label }}"><span class="label-text">Street Address</span></label>
           {{ form.address_line }}
         </div>
         <div class="form-control">
-          <label class="label"><span class="label-text">City</span></label>
+          <label class="label" for="{{ form.city.id_for_label }}"><span class="label-text">City</span></label>
           {{ form.city }}
         </div>
         <div class="form-control">
-          <label class="label"><span class="label-text">State/Province</span></label>
+          <label class="label" for="{{ form.state.id_for_label }}"><span class="label-text">State/Province</span></label>
           {{ form.state }}
         </div>
         <div class="form-control">
-          <label class="label"><span class="label-text">Postal Code</span></label>
+          <label class="label" for="{{ form.postal_code.id_for_label }}"><span class="label-text">Postal Code</span></label>
           {{ form.postal_code }}
         </div>
         <div class="form-control">
-          <label class="label"><span class="label-text">Country</span></label>
+          <label class="label" for="{{ form.country.id_for_label }}"><span class="label-text">Country</span></label>
           {{ form.country }}
         </div>
         <div class="form-control md:col-span-2">
-          <label class="label"><span class="label-text">Phone</span></label>
+          <label class="label" for="{{ form.phone.id_for_label }}"><span class="label-text">Phone</span></label>
           {{ form.phone }}
         </div>
       </div>
@@ -83,11 +83,11 @@
       <p class="text-sm opacity-60 mb-4">Only the currency and payout method are stored here. Account numbers stay with Wise.</p>
       <div class="grid gap-4 md:grid-cols-2">
         <div class="form-control">
-          <label class="label"><span class="label-text">Banking Method</span></label>
+          <label class="label" for="{{ banking_form.banking_method.id_for_label }}"><span class="label-text">Banking Method</span></label>
           {{ banking_form.banking_method }}
         </div>
         <div class="form-control">
-          <label class="label"><span class="label-text">Currency</span></label>
+          <label class="label" for="{{ banking_form.banking_currency.id_for_label }}"><span class="label-text">Currency</span></label>
           {{ banking_form.banking_currency }}
         </div>
       </div>

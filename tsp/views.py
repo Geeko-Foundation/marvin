@@ -2,6 +2,7 @@
 
 import csv
 import re
+import time
 from decimal import Decimal, InvalidOperation
 
 from django.conf import settings
@@ -19,6 +20,7 @@ from django.http import FileResponse, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.dateparse import parse_date
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 from django_tables2 import RequestConfig
@@ -60,6 +62,7 @@ from tsp.forms import (
     TravelRequestForm,
 )
 from tsp.models import (
+    SETTLED_PAYMENT_STATUSES,
     Document,
     Event,
     Expense,
@@ -77,23 +80,32 @@ from tsp.services.state_machine import (
 from tsp.tables import EventTable, UserTable
 
 
-def _state_badge_class(state):
-    """Return a DaisyUI badge CSS class for a travel request state string."""
-    mapping = {
-        'draft': 'badge-ghost',
-        'submitted': 'badge-info',
-        'approved': 'badge-warning',
-        'rejected': 'badge-error',
-        'accepted': 'badge-primary',
-        'submitted_for_payment': 'badge-secondary',
-        'paid': 'badge-success',
-        'cancelled': 'badge-neutral',
-    }
-    return mapping.get(state, 'badge-ghost')
+def _is_safe_redirect(request, url):
+    """Only back into this site, never on to a link someone planted."""
+    return bool(url) and url_has_allowed_host_and_scheme(
+        url, allowed_hosts={request.get_host()}, require_https=request.is_secure(),
+    )
 
 
+# Ten wrong passwords from one address lock that address out of the account.
+# A far higher limit across every address still stops a spread-out attack,
+# without letting one person lock the real owner out after ten guesses.
 LOGIN_FAILURE_LIMIT = 10
+LOGIN_ACCOUNT_FAILURE_LIMIT = 100
 LOGIN_LOCK_SECONDS = 15 * 60
+
+
+def _client_address(request):
+    """
+    The visitor's address. Behind a proxy that is the last one it appended.
+
+    shortcut: assumes a single proxy in front of the app, as on Railway; with
+    more, the last entry is one of them and visitors share one count.
+    """
+    forwarded = request.META.get('HTTP_X_FORWARDED_FOR', '')
+    if forwarded and settings.SECURE_PROXY_SSL_HEADER:
+        return forwarded.split(',')[-1].strip()
+    return request.META.get('REMOTE_ADDR', '')
 
 
 def login_view(request):
@@ -105,22 +117,22 @@ def login_view(request):
     if request.method == 'POST':
         # shortcut: counts live in each process's memory, so N workers allow N
         # times the limit; move CACHES to a shared backend if that matters.
-        failures_key = 'login-failures:' + request.POST.get('username', '').strip().lower()
-        if cache.get(failures_key, 0) >= LOGIN_FAILURE_LIMIT:
+        account_key = 'login-failures:' + request.POST.get('username', '').strip().lower()
+        failures_key = f'{account_key}:{_client_address(request)}'
+        if (cache.get(failures_key, 0) >= LOGIN_FAILURE_LIMIT
+                or cache.get(account_key, 0) >= LOGIN_ACCOUNT_FAILURE_LIMIT):
             form.add_error(None, 'Too many failed sign-in attempts for this account. Try again in 15 minutes.')
         elif form.is_valid():
             cache.delete(failures_key)
             login(request, form.get_user())
             next_url = request.POST.get('next') or request.GET.get('next')
-            # Only back into this site, never on to a link someone planted.
-            if next_url and url_has_allowed_host_and_scheme(
-                next_url, allowed_hosts={request.get_host()}, require_https=request.is_secure(),
-            ):
+            if _is_safe_redirect(request, next_url):
                 return redirect(next_url)
             return redirect(settings.LOGIN_REDIRECT_URL)
         else:
-            cache.add(failures_key, 0, LOGIN_LOCK_SECONDS)
-            cache.incr(failures_key)
+            for key in (failures_key, account_key):
+                cache.add(key, 0, LOGIN_LOCK_SECONDS)
+                cache.incr(key)
 
     return render(request, 'tsp/login.html', {
         'form': form,
@@ -218,8 +230,12 @@ def signup_banking(request):
     recreate = request.GET.get('recreate') == '1' or request.POST.get('recreate') == '1'
     return_to = request.GET.get('return_to') or request.POST.get('return_to')
 
-    if return_to:
+    if _is_safe_redirect(request, return_to):
         request.session[RETURN_TO_SESSION_KEY] = return_to
+    if request.method == 'GET':
+        # Opening the form again means starting over, so bank details from an
+        # abandoned attempt go now.
+        request.session.pop(SESSION_KEY, None)
 
     if not profile.is_profile_complete():
         return redirect('signup_profile')
@@ -230,9 +246,9 @@ def signup_banking(request):
     if request.method == 'POST':
         form = WiseRecipientForm(request.POST, profile=profile)
         if form.is_valid():
-            request.session[SESSION_KEY] = init_verification_state(
-                banking=banking_session_payload(form.cleaned_data),
-            )
+            state = init_verification_state(banking=banking_session_payload(form.cleaned_data))
+            state['started_at'] = time.time()
+            request.session[SESSION_KEY] = state
             return redirect('signup_banking_progress')
     else:
         form = WiseRecipientForm(profile=profile)
@@ -275,6 +291,20 @@ def signup_skip_banking(request):
     return redirect('dashboard')
 
 
+# Bank details wait in the session only while Wise checks them, which takes
+# seconds. Anything older was abandoned, so it is dropped rather than kept.
+VERIFICATION_MAX_AGE_SECONDS = 60 * 60
+
+
+def _verification_state(request):
+    """The verification in progress, or None once it has been left too long."""
+    state = request.session.get(SESSION_KEY)
+    if state and time.time() - state.get('started_at', 0) > VERIFICATION_MAX_AGE_SECONDS:
+        del request.session[SESSION_KEY]
+        return None
+    return state
+
+
 @login_required
 @group_required(GROUP_REQUESTER)
 def signup_banking_progress(request):
@@ -287,7 +317,7 @@ def signup_banking_progress(request):
     if profile.is_wise_recipient_ready():
         return redirect('signup_complete')
 
-    if SESSION_KEY not in request.session:
+    if _verification_state(request) is None:
         return redirect('signup_banking')
 
     return render(request, 'tsp/signup/banking_progress.html', {
@@ -305,7 +335,7 @@ def signup_banking_step(request):
         return JsonResponse({'error': 'POST required'}, status=405)
 
     profile = get_profile(request.user)
-    state = request.session.get(SESSION_KEY)
+    state = _verification_state(request)
 
     if not state:
         return JsonResponse({'error': 'Verification not started. Go back to banking step.'}, status=400)
@@ -430,7 +460,7 @@ def _finance_sections(request):
     paid_total = [
         (row['currency'], row['total'])
         for row in PaymentRecord.objects.filter(
-            content_type=travel_request_ct, status__in=('success', 'completed'),
+            content_type=travel_request_ct, status__in=SETTLED_PAYMENT_STATUSES,
         ).values('currency').annotate(total=Sum('amount')).order_by('-total')
     ]
 
@@ -456,7 +486,7 @@ def dashboard(request):
     if not (profile.is_requester or profile.is_tsp or profile.is_finance):
         raise PermissionDenied
 
-    context = {'profile': profile, 'state_badge': _state_badge_class}
+    context = {'profile': profile}
     if profile.is_requester:
         context.update(_requester_sections(request))
     if profile.is_tsp:
@@ -481,12 +511,20 @@ def onboarding_wise(request):
     return redirect('signup_banking')
 
 
+def _date_param(request, name):
+    """A YYYY-MM-DD date from the query string, or None if it is missing or not a date."""
+    try:
+        return parse_date(request.GET.get(name) or '')
+    except ValueError:
+        return None
+
+
 @login_required
 def event_list(request):
     """List TSP events, optionally filtered by start/end date query params."""
     profile = get_profile(request.user)
-    date_from = request.GET.get('from')
-    date_to = request.GET.get('to')
+    date_from = _date_param(request, 'from')
+    date_to = _date_param(request, 'to')
 
     events = Event.objects.annotate(request_count=Count('requests'))
     if date_from:
@@ -635,13 +673,14 @@ def request_create(request):
         form_is_valid = form.is_valid()
         formset = ExpenseFormSet(request.POST, form_kwargs={'event': form.cleaned_data.get('event')})
         if form_is_valid and formset.is_valid():
-            travel_request = form.save(commit=False)
-            travel_request.user = request.user
-            travel_request.state = RequestState.DRAFT
-            travel_request.save()
-            formset.instance = travel_request
-            formset.save()
-            create_request_with_history(travel_request, request.user)
+            with transaction.atomic():
+                travel_request = form.save(commit=False)
+                travel_request.user = request.user
+                travel_request.state = RequestState.DRAFT
+                travel_request.save()
+                formset.instance = travel_request
+                formset.save()
+                create_request_with_history(travel_request, request.user)
             messages.success(request, 'Request created as draft.')
             return redirect('request_detail', pk=travel_request.pk)
     else:
@@ -746,7 +785,6 @@ def request_detail(request, pk, travel_request, profile):
         'state_history': _history_for(travel_request, sees_internal),
         'comment_form': comment_form,
         'doc_form': doc_form,
-        'state_badge': _state_badge_class,
         'missing_docs': travel_request.missing_document_kinds(),
     })
 
@@ -913,10 +951,11 @@ def _apply_approved_amounts(travel_request, data):
         expense = expenses.get(eid)
         if expense is None:
             continue
+        raw = data.get(f'approved_amount_{eid}', '').strip()
         try:
-            amount = Decimal(data.get(f'approved_amount_{eid}', ''))
+            amount = Decimal(raw)
         except InvalidOperation:
-            continue
+            return f'Enter an approved amount for {expense.get_category_display()}, as a number such as 73.62.'
         if not amount.is_finite() or amount < 0:
             return 'Approved amounts have to be zero or more.'
         currency = data.get(f'approved_currency_{eid}', '')
@@ -1422,6 +1461,7 @@ def reports(request):
         PaymentRecord.objects.filter(
             content_type=travel_request_ct,
             object_id__in=qs.filter(state=RequestState.PAID).values_list('pk', flat=True),
+            status__in=SETTLED_PAYMENT_STATUSES,
         )
         .values('currency')
         .annotate(total=Sum('amount'))
@@ -1438,9 +1478,10 @@ def reports(request):
             'Payment Method',
         ])
         for req in requests_list:
-            paid = req.payment.amount if req.payment else ''
-            paid_currency = req.payment.currency if req.payment else ''
-            method = req.payment.method_label if req.payment else ''
+            payment = req.settled_payment
+            paid = payment.amount if payment else ''
+            paid_currency = payment.currency if payment else ''
+            method = payment.method_label if payment else ''
             # An amount without its currency is not worth exporting.
             approved = '; '.join(f'{amount} {currency}'
                                  for currency, amount in req.totals_approved())
@@ -1465,7 +1506,6 @@ def reports(request):
         'total_requests': total_requests,
         'total_approved': total_approved,
         'total_paid': total_paid,
-        'state_badge': _state_badge_class,
     })
 
 

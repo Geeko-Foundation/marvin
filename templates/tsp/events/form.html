@@ -10,26 +10,26 @@
   <div class="card bg-base-100 shadow-sm">
     <div class="card-body gap-4">
       <div class="form-control">
-        <label class="label"><span class="label-text">Event Name</span></label>
+        <label class="label" for="{{ form.name.id_for_label }}"><span class="label-text">Event Name</span></label>
         {{ form.name }}
       </div>
       <div class="form-control">
-        <label class="label"><span class="label-text">Location</span></label>
+        <label class="label" for="{{ form.location.id_for_label }}"><span class="label-text">Location</span></label>
         {{ form.location }}
       </div>
       <div class="grid grid-cols-2 gap-4">
         <div class="form-control">
-          <label class="label"><span class="label-text">Start Date</span></label>
+          <label class="label" for="{{ form.start_date.id_for_label }}"><span class="label-text">Start Date</span></label>
           {{ form.start_date }}
         </div>
         <div class="form-control">
-          <label class="label"><span class="label-text">End Date</span></label>
+          <label class="label" for="{{ form.end_date.id_for_label }}"><span class="label-text">End Date</span></label>
           {{ form.end_date }}
         </div>
       </div>
       <div class="grid gap-4 md:grid-cols-2">
         <div class="form-control">
-          <label class="label"><span class="label-text">Budget</span></label>
+          <label class="label" for="{{ form.budget.id_for_label }}"><span class="label-text">Budget</span></label>
           {{ form.budget }}
           <label class="label">
             <span class="label-text-alt">Leave blank for no limit</span>
@@ -39,12 +39,12 @@
           {% endfor %}
         </div>
         <div class="form-control">
-          <label class="label"><span class="label-text">Budget Currency</span></label>
+          <label class="label" for="{{ form.budget_currency.id_for_label }}"><span class="label-text">Budget Currency</span></label>
           {{ form.budget_currency }}
         </div>
       </div>
       <div class="form-control md:w-1/2">
-        <label class="label"><span class="label-text">Share of each request covered (%)</span></label>
+        <label class="label" for="{{ form.approval_percent.id_for_label }}"><span class="label-text">Share of each request covered (%)</span></label>
         {{ form.approval_percent }}
         <label class="label">
           <span class="label-text-alt">Reviews start from this share of what was asked for. Reviewers can still change any line.</span>
@@ -59,14 +59,14 @@
       </p>
       <div class="grid gap-4 md:grid-cols-2">
         <div class="form-control">
-          <label class="label"><span class="label-text">Requests close on</span></label>
+          <label class="label" for="{{ form.requests_open_until.id_for_label }}"><span class="label-text">Requests close on</span></label>
           {{ form.requests_open_until }}
           <label class="label">
             <span class="label-text-alt">Leave blank to close it by hand</span>
           </label>
         </div>
         <div class="form-control">
-          <label class="label"><span class="label-text">Claims close on</span></label>
+          <label class="label" for="{{ form.reimbursements_open_until.id_for_label }}"><span class="label-text">Claims close on</span></label>
           {{ form.reimbursements_open_until }}
           <label class="label">
             <span class="label-text-alt">Defaults to 30 days after the event</span>
@@ -74,11 +74,11 @@
         </div>
       </div>
       <div class="form-control">
-        <label class="label"><span class="label-text">Event URL</span></label>
+        <label class="label" for="{{ form.url.id_for_label }}"><span class="label-text">Event URL</span></label>
         {{ form.url }}
       </div>
       <div class="form-control">
-        <label class="label"><span class="label-text">Description</span></label>
+        <label class="label" for="{{ form.description.id_for_label }}"><span class="label-text">Description</span></label>
         {{ form.description }}
       </div>
       <fieldset class="form-control gap-2">
@@ -89,7 +89,7 @@
           {{ choice.tag }}<span class="label-text">{{ choice.choice_label }}</span>
         </label>
         {% endfor %}
-        <label class="label pb-1"><span class="label-text">Other categories, separated by commas</span></label>
+        <label class="label pb-1" for="{{ form.custom_categories.id_for_label }}"><span class="label-text">Other categories, separated by commas</span></label>
         {{ form.custom_categories }}
         {% for error in form.custom_categories.errors %}<span class="label-text-alt text-error">{{ error }}</span>{% endfor %}
       </fieldset>

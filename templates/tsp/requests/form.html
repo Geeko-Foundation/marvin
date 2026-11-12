@@ -41,19 +41,19 @@
       {% if banking_form %}
       <div class="grid gap-4 md:grid-cols-2" id="recreate-banking-fields">
         <div class="form-control md:col-span-2">
-          <label class="label"><span class="label-text">Banking Method</span></label>
+          <label class="label" for="{{ banking_form.banking_method.id_for_label }}"><span class="label-text">Banking Method</span></label>
           {{ banking_form.banking_method }}
         </div>
         <div class="form-control">
-          <label class="label"><span class="label-text">Currency</span></label>
+          <label class="label" for="{{ banking_form.banking_currency.id_for_label }}"><span class="label-text">Currency</span></label>
           {{ banking_form.banking_currency }}
         </div>
         <div class="form-control recreate-iban">
-          <label class="label"><span class="label-text">IBAN</span></label>
+          <label class="label" for="{{ banking_form.bank_iban.id_for_label }}"><span class="label-text">IBAN</span></label>
           {{ banking_form.bank_iban }}
         </div>
         <div class="form-control recreate-iban">
-          <label class="label"><span class="label-text">SWIFT/BIC (optional)</span></label>
+          <label class="label" for="{{ banking_form.bank_swift.id_for_label }}"><span class="label-text">SWIFT/BIC (optional)</span></label>
           {{ banking_form.bank_swift }}
         </div>
         <div class="form-control recreate-us hidden">
@@ -61,7 +61,7 @@
           <input type="text" name="bank_account_no" class="input input-bordered w-full recreate-acct-no" />
         </div>
         <div class="form-control recreate-us hidden">
-          <label class="label"><span class="label-text">Routing Number</span></label>
+          <label class="label" for="{{ banking_form.bank_routing_no.id_for_label }}"><span class="label-text">Routing Number</span></label>
           {{ banking_form.bank_routing_no }}
         </div>
         <div class="form-control recreate-india hidden">
@@ -69,7 +69,7 @@
           <input type="text" name="bank_account_no" class="input input-bordered w-full recreate-acct-no" disabled />
         </div>
         <div class="form-control recreate-india hidden">
-          <label class="label"><span class="label-text">IFSC</span></label>
+          <label class="label" for="{{ banking_form.bank_ifsc.id_for_label }}"><span class="label-text">IFSC</span></label>
           {{ banking_form.bank_ifsc }}
         </div>
       </div>
@@ -96,19 +96,19 @@
       <h2 class="card-title text-lg">Event & Talk</h2>
       <div class="grid gap-4">
         <div class="form-control">
-          <label class="label"><span class="label-text">Event</span></label>
+          <label class="label" for="{{ form.event.id_for_label }}"><span class="label-text">Event</span></label>
           {{ form.event }}
         </div>
         <div class="form-control">
-          <label class="label"><span class="label-text">Talk title</span><span class="label-text-alt opacity-60">Optional</span></label>
+          <label class="label" for="{{ form.talk_title.id_for_label }}"><span class="label-text">Talk title</span><span class="label-text-alt opacity-60">Optional</span></label>
           {{ form.talk_title }}
         </div>
         <div class="form-control">
-          <label class="label"><span class="label-text">Talk link</span><span class="label-text-alt opacity-60">Optional</span></label>
+          <label class="label" for="{{ form.talk_url.id_for_label }}"><span class="label-text">Talk link</span><span class="label-text-alt opacity-60">Optional</span></label>
           {{ form.talk_url }}
         </div>
         <div class="form-control">
-          <label class="label"><span class="label-text">Why you are going</span></label>
+          <label class="label" for="{{ form.description.id_for_label }}"><span class="label-text">Why you are going</span></label>
           {{ form.description }}
         </div>
       </div>

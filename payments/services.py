@@ -177,12 +177,18 @@ class PaymentService:
         if gateway is None:
             return record
         result = gateway.get_status(record.external_id)
+        was_settled = record.status in {'success', 'completed'}
         if result.status != 'unknown':
             record.status = result.status
         record.metadata.update(result.metadata)
         record.save()
+        obj = record.content_object
+        if obj is None:
+            return record
         if record.status in {'success', 'completed'}:
-            obj = record.content_object
-            if obj is not None:
-                self.adapter.on_payment_completed(obj, record, record.processed_by)
+            self.adapter.on_payment_completed(obj, record, record.processed_by)
+        elif was_settled and record.status == 'failed':
+            audit('payment.returned', user=record.processed_by, target=f'{record.gateway_id} {record.reference}',
+                  detail=f'{record.amount} {record.currency}, {record.metadata.get("transfer_status", "failed")}')
+            self.adapter.on_payment_returned(obj, record)
         return record

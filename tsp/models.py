@@ -23,6 +23,10 @@ class RequestState(models.TextChoices):
     CANCELLED = 'cancelled', 'Cancelled'
 
 
+# What a payment record's status is once the money has actually gone.
+SETTLED_PAYMENT_STATUSES = ('success', 'completed')
+
+
 class ExpenseCategory(models.TextChoices):
     """Expense line-item categories on a travel request."""
 
@@ -169,6 +173,7 @@ class Event(AuditModel):
         records = PaymentRecord.objects.filter(
             content_type=content_type,
             object_id__in=self.requests.values_list('pk', flat=True),
+            status__in=SETTLED_PAYMENT_STATUSES,
         )
         totals = {}
         for record in records:
@@ -435,6 +440,12 @@ class TravelRequest(AuditModel):
         """Most recent payment record. A batch export is not a payment, so it is skipped."""
         # Filtered in Python so a list page that prefetched payments asks nothing more.
         records = [p for p in self.payments.all() if p.status != 'exported']
+        return max(records, key=lambda p: p.created_at, default=None)
+
+    @property
+    def settled_payment(self):
+        """The latest payment that actually went through, for totals and reports."""
+        records = [p for p in self.payments.all() if p.status in SETTLED_PAYMENT_STATUSES]
         return max(records, key=lambda p: p.created_at, default=None)
 
 

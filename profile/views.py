@@ -12,10 +12,10 @@ def profile_view(request):
     """
     Display and update the signed-in user's profile.
 
-    Requestors edit personal details and push notification preferences. Staff
-    members may additionally submit banking metadata via a separate form.
-    Clears push subscriptions when notifications are disabled, and stamps
-    ``profile_completed_at`` when a requestor first completes required fields.
+    Requestors edit their personal details, and staff may also submit banking
+    details through a separate form. Stamps ``profile_completed_at`` when a
+    requestor first completes the required fields. Alerts are turned on and off
+    by the browser button on the page, not through this form.
     """
     profile = get_profile(request.user)
     banking_form = None

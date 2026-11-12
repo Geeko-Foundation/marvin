@@ -103,6 +103,9 @@ class PayableAdapter(ABC):
         """What the next payment for ``obj`` is for. One may be open per purpose."""
         return 'payment'
 
+    def on_payment_returned(self, obj, payment_record) -> None:
+        """Host-project hook for a payment that went through and then came back."""
+
     def get_detail_url(self, obj) -> str:
         """URL name or path for linking to the payable object detail page."""
         return ''

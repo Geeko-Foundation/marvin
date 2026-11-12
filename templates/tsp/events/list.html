@@ -17,11 +17,11 @@
 <form method="get" class="flex flex-wrap items-end gap-3 mb-6">
   <label class="form-control">
     <span class="label-text text-xs mb-1">From</span>
-    <input type="date" name="from" value="{{ date_from }}" class="input input-bordered input-sm">
+    <input type="date" name="from" value="{{ date_from|date:"Y-m-d" }}" class="input input-bordered input-sm">
   </label>
   <label class="form-control">
     <span class="label-text text-xs mb-1">To</span>
-    <input type="date" name="to" value="{{ date_to }}" class="input input-bordered input-sm">
+    <input type="date" name="to" value="{{ date_to|date:"Y-m-d" }}" class="input input-bordered input-sm">
   </label>
   <button type="submit" class="btn btn-sm btn-outline">Filter</button>
   {% if date_from or date_to %}
