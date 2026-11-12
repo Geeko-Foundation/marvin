@@ -3,6 +3,8 @@ from decimal import Decimal
 
 from django import forms
 from django.core.validators import MinValueValidator
+
+from marvin.validators import NAME, line, restrict, text
 from django.contrib.auth.forms import AuthenticationForm
 from django.contrib.auth.models import User
 
@@ -421,3 +423,13 @@ class SearchForm(forms.Form):
             'autocomplete': 'off',
         }),
     )
+
+
+# What each free-text field may hold. See marvin/validators.py.
+restrict(SignupAccountForm, first_name=NAME, last_name=NAME)
+restrict(TravelRequestForm, talk_title=line(300), description=text(5000))
+restrict(ExpenseForm, description=line(300))
+restrict(EventForm, name=line(200), location=line(200), description=text(5000))
+restrict(CommentForm, body=text(5000))
+restrict(ApprovalForm, notes=text(2000))
+restrict(RejectForm, notes=text(2000))

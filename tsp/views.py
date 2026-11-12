@@ -820,7 +820,10 @@ def request_approve(request, pk):
         messages.error(request, 'You cannot review your own request. Another committee member has to.')
         return redirect('request_detail', pk=pk)
     form = ApprovalForm(request.POST)
-    notes = form.cleaned_data.get('notes', '') if form.is_valid() else request.POST.get('notes', '')
+    if not form.is_valid():
+        messages.error(request, ' '.join(form.errors.get('notes', ['Check the approval notes.'])))
+        return redirect('request_detail', pk=pk)
+    notes = form.cleaned_data.get('notes', '')
 
     error = None
     # Everything below is undone if any check refuses the approval, so a
@@ -904,7 +907,12 @@ def request_batch_review(request):
     """Approve or reject several submitted requests in one go."""
     action = request.POST.get('action')
     ids = request.POST.getlist('request_ids')
-    notes = request.POST.get('notes', '').strip()
+    # The same rules as a single review, since these notes go into the history too.
+    notes_form = RejectForm({'notes': request.POST.get('notes', '')})
+    if request.POST.get('notes', '').strip() and not notes_form.is_valid():
+        messages.error(request, ' '.join(notes_form.errors['notes']))
+        return redirect('dashboard')
+    notes = notes_form.cleaned_data.get('notes', '') if notes_form.is_valid() else ''
 
     if action not in ('approve', 'reject'):
         messages.error(request, 'Choose whether to approve or reject.')
