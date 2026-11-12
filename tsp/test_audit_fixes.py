@@ -257,3 +257,46 @@ class UserSearchTests(TestCase):
         self.assertContains(page, 'searchtarget')
         self.assertNotContains(page, 'pbkdf2_')
         self.assertNotContains(page, 'Password')
+
+
+class DocumentUploadTests(TestCase):
+    """Only the requester adds evidence, and only while the claim is theirs to build."""
+
+    def setUp(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        self.file = lambda: SimpleUploadedFile('receipt.pdf', b'%PDF-1.4 receipt')
+        self.owner = make_user('uploadowner', [GROUP_REQUESTER])
+        self.req = TravelRequest.objects.create(
+            user=self.owner, event=make_event(), state=RequestState.ACCEPTED, description='T')
+
+    def upload(self, user):
+        from tsp.models import Document
+        self.client.force_login(user)
+        response = self.client.post(reverse('request_document_upload', args=[self.req.pk]),
+                                    {'kind': 'receipt', 'file': self.file()})
+        return response, Document.objects.filter(request=self.req).count()
+
+    def test_the_requester_can_upload_while_accepted(self):
+        _, count = self.upload(self.owner)
+        self.assertEqual(count, 1)
+
+    def test_committee_and_finance_cannot_upload_to_someone_elses_request(self):
+        for group in (GROUP_TSP, GROUP_FINANCE):
+            with self.subTest(group=group):
+                response, count = self.upload(make_user(f'uploader-{group}', [group]))
+                self.assertEqual(response.status_code, 403)
+                self.assertEqual(count, 0)
+
+    def test_nothing_can_be_added_once_the_request_has_moved_on(self):
+        for state in (RequestState.SUBMITTED, RequestState.SUBMITTED_FOR_PAYMENT,
+                      RequestState.PAID, RequestState.CANCELLED):
+            with self.subTest(state=state):
+                self.req.state = state
+                self.req.save()
+                _, count = self.upload(self.owner)
+                self.assertEqual(count, 0)
+
+    def test_staff_do_not_see_the_upload_form(self):
+        self.client.force_login(make_user('uploadviewer', [GROUP_TSP]))
+        page = self.client.get(reverse('request_detail', args=[self.req.pk]))
+        self.assertNotContains(page, reverse('request_document_upload', args=[self.req.pk]))

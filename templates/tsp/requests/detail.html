@@ -315,7 +315,7 @@
         <p class="text-sm opacity-60 mb-4">No documents uploaded yet.</p>
         {% endif %}
 
-        {% if travel_request.state == 'accepted' or profile.is_tsp or profile.is_finance %}
+        {% if travel_request.state == 'accepted' and travel_request.user_id == user.id %}
         <form method="post" action="{% url 'request_document_upload' travel_request.pk %}" enctype="multipart/form-data" class="flex flex-wrap gap-3 items-end">
           {% csrf_token %}
           <div class="form-control">

@@ -203,8 +203,9 @@ class DocumentUploadFormTests(TestCase):
 
     def test_rejected_upload_is_not_saved(self):
         owner = make_requester('uploader')
+        # Accepted, so the only thing that can refuse it is the file itself.
         travel_request = TravelRequest.objects.create(
-            user=owner, event=make_event(), description='Talk',
+            user=owner, event=make_event(), description='Talk', state=RequestState.ACCEPTED,
         )
         self.client.force_login(owner)
         self.client.post(

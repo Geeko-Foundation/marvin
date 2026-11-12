@@ -1232,6 +1232,17 @@ def request_comment(request, pk, travel_request, profile):
 @require_POST
 def request_document_upload(request, pk, travel_request, profile):
     """Upload a receipt, invoice, or signed form to a travel request."""
+    # Documents are the requester's evidence for the claim. Letting someone who
+    # reviews or pays it add to that evidence would defeat the point of it.
+    if travel_request.user_id != request.user.id:
+        raise PermissionDenied
+    if travel_request.state != RequestState.ACCEPTED:
+        messages.error(
+            request,
+            'Documents can be added after you accept the approval, and until the '
+            'request goes to finance. Take it back from finance to add more.',
+        )
+        return redirect('request_detail', pk=pk)
     form = DocumentUploadForm(request.POST, request.FILES)
     if form.is_valid() and request.FILES.get('file'):
         uploaded = request.FILES['file']
