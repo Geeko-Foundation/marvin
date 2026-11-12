@@ -300,3 +300,38 @@ class DocumentUploadTests(TestCase):
         self.client.force_login(make_user('uploadviewer', [GROUP_TSP]))
         page = self.client.get(reverse('request_detail', args=[self.req.pk]))
         self.assertNotContains(page, reverse('request_document_upload', args=[self.req.pk]))
+
+
+class HistoryVisibilityTests(TestCase):
+    """Requesters see what happened and which team did it; staff see who."""
+
+    def setUp(self):
+        from tsp.models import StateHistory
+        self.owner = make_user('historyowner', [GROUP_REQUESTER])
+        self.finance = make_user('historyfinance', [GROUP_FINANCE])
+        self.req = TravelRequest.objects.create(
+            user=self.owner, event=make_event(), state=RequestState.PAID, description='T')
+        StateHistory.objects.create(
+            request=self.req, user=self.finance, from_state='approved', to_state='accepted',
+            notes='Fine [over budget by 40 EUR]')
+        StateHistory.objects.create(
+            request=self.req, user=self.finance, from_state='submitted_for_payment',
+            to_state='paid', notes='Payment via Wise Batch CSV')
+
+    def page(self, user):
+        self.client.force_login(user)
+        return self.client.get(reverse('request_detail', args=[self.req.pk])).content.decode()
+
+    def test_the_requester_sees_the_team_not_the_username_or_internal_notes(self):
+        html = self.page(self.owner)
+        self.assertNotIn('historyfinance', html)
+        self.assertIn('Finance', html)
+        self.assertNotIn('Travel committee', html)
+        self.assertNotIn('over budget', html)
+        self.assertIn('Paid via Wise', html)
+        self.assertNotIn('Wise Batch CSV', html)
+
+    def test_staff_still_see_who_did_it(self):
+        html = self.page(make_user('historytsp', [GROUP_TSP]))
+        self.assertIn('historyfinance', html)
+        self.assertIn('over budget by 40 EUR', html)

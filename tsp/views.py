@@ -643,6 +643,27 @@ def _sees_internal_notes(user, profile, travel_request):
     return profile.is_committee and travel_request.user_id != user.id
 
 
+_OVERAGE_NOTE = re.compile(r'\s*\[over budget by [^\]]*\]')
+_WISE_NOTE = re.compile(r'Payment via Wise (Batch CSV|API Transfer)')
+
+
+def _history_for(travel_request, sees_internal):
+    """
+    The request's history. A requester sees which team acted rather than
+    who, and not the committee's internal budget note.
+    """
+    history = list(travel_request.state_history.select_related('user'))
+    if sees_internal:
+        return history
+    for entry in history:
+        notes = _OVERAGE_NOTE.sub('', entry.notes or '')
+        entry.notes = _WISE_NOTE.sub('Paid via Wise', notes).strip()
+        if entry.user_id != travel_request.user_id:
+            actor = get_profile(entry.user)
+            entry.actor = 'Finance' if actor.is_finance and not actor.is_tsp else 'TSP Committee'
+    return history
+
+
 def _review_lines(travel_request):
     """
     Each expense with the currencies it can be approved in, already converted.
@@ -699,7 +720,7 @@ def request_detail(request, pk, travel_request, profile):
         'comments': comments,
         'sees_internal_notes': sees_internal,
         'documents': travel_request.documents.select_related('uploaded_by'),
-        'state_history': travel_request.state_history.select_related('user'),
+        'state_history': _history_for(travel_request, sees_internal),
         'comment_form': comment_form,
         'doc_form': doc_form,
         'state_badge': _state_badge_class,

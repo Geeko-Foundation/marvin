@@ -378,7 +378,7 @@
           </div>
           <div class="timeline-end timeline-box text-sm">
             <span class="badge {{ entry.to_state|state_badge }} badge-xs whitespace-nowrap">{{ entry.to_state|state_label }}</span>
-            <p class="text-xs opacity-60">{{ entry.user.username }}</p>
+            <p class="text-xs opacity-60">{{ entry.actor|default:entry.user.username }}</p>
             {% if entry.notes %}<p class="text-xs mt-1">{{ entry.notes }}</p>{% endif %}
           </div>
           <hr/>
