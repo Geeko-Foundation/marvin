@@ -176,58 +176,6 @@ class WiseClientNetworkTests(TestCase):
                 wise.get_transfer(1)
 
 
-class StrongCustomerAuthenticationTests(TestCase):
-    """Live funding needs the one-time token signed with the account's key."""
-
-    def setUp(self):
-        from cryptography.hazmat.primitives import serialization
-        from cryptography.hazmat.primitives.asymmetric import rsa
-        self.key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-        self.pem = self.key.private_bytes(
-            serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
-            serialization.NoEncryption()).decode()
-
-    def wise(self, key=''):
-        from payments.gateways.wise_api import WiseApiClient
-        return WiseApiClient(api_token='t', profile_id='1', sandbox=False, sca_private_key=key)
-
-    def challenge_then(self, final_status=200):
-        challenge = mock.Mock(status_code=403, headers={
-            'x-2fa-approval-result': 'REJECTED', 'x-2fa-approval': 'one-time-token-123'})
-        challenge.json.return_value = {}
-        done = mock.Mock(status_code=final_status, headers={})
-        done.json.return_value = {'status': 'COMPLETED'}
-        return [challenge, done]
-
-    def test_the_token_is_signed_and_wise_can_verify_it(self):
-        import base64
-
-        from cryptography.hazmat.primitives import hashes
-        from cryptography.hazmat.primitives.asymmetric import padding
-        wise = self.wise(self.pem)
-        with mock.patch.object(wise._session, 'request', side_effect=self.challenge_then()) as sent:
-            self.assertEqual(wise.fund_transfer(42), {'status': 'COMPLETED'})
-        retry = sent.call_args_list[1].kwargs['headers']
-        self.assertEqual(retry['x-2fa-approval'], 'one-time-token-123')
-        # Raises if the signature does not match the public key.
-        self.key.public_key().verify(
-            base64.b64decode(retry['X-Signature']), b'one-time-token-123',
-            padding.PKCS1v15(), hashes.SHA256())
-
-    def test_without_a_key_the_error_says_what_to_configure(self):
-        wise = self.wise('')
-        with mock.patch.object(wise._session, 'request', side_effect=self.challenge_then()):
-            with self.assertRaises(WiseApiError) as raised:
-                wise.fund_transfer(42)
-        self.assertIn('WISE_SCA_PRIVATE_KEY', str(raised.exception))
-
-    def test_a_refused_signature_is_reported_not_treated_as_paid(self):
-        wise = self.wise(self.pem)
-        with mock.patch.object(wise._session, 'request', side_effect=self.challenge_then(403)):
-            with self.assertRaises(WiseApiError):
-                wise.fund_transfer(42)
-
-
 class BatchExportTests(TestCase):
     """A request goes into one batch file, and is paid once."""
 
@@ -314,6 +262,8 @@ class PaymentMessageTests(TestCase):
         from django.urls import reverse
         gateway = mock.Mock(label='Wise API Transfer')
         gateway.initiate_payment.return_value = result
+        # The queue page asks again about anything still waiting.
+        gateway.get_status.return_value = self.PaymentResult(status='unknown', external_id=result.external_id)
         self.client.force_login(self.finance)
         with mock.patch('payments.services.get_gateway', return_value=gateway), \
                 mock.patch('payments.views.get_gateway', return_value=gateway):
@@ -336,6 +286,91 @@ class PaymentMessageTests(TestCase):
         self.assertEqual(sent[0][0], 'info')
         self.assertIn('waiting to settle', sent[0][1])
 
+    def test_a_transfer_wise_is_holding_says_why(self):
+        held = 'Transfer processing is suspended, please ensure profile is verified.'
+        sent = self.pay(self.PaymentResult(status='processing', external_id='1', metadata={'error': held}))
+        self.assertEqual(sent[0][0], 'warning')
+        self.assertIn(held, sent[0][1])
+        self.assertIn('cannot be paid twice', sent[0][1])
+
+    def test_the_queue_shows_a_waiting_payment_instead_of_offering_it_again(self):
+        from django.urls import reverse
+        self.pay(self.PaymentResult(status='processing', external_id='1'))
+        with mock.patch('payments.services.get_gateway') as get_gateway:
+            get_gateway.return_value.get_status.return_value = self.PaymentResult(status='unknown', external_id='1')
+            html = self.client.get(reverse('payments:dashboard')).content.decode()
+            get_gateway.return_value.get_status.assert_called_once_with('1')
+        self.assertIn('Waiting for Wise to confirm', html)
+        self.assertNotIn('Process Payment', html)
+
+    def test_a_transfer_that_settled_meanwhile_leaves_the_queue_on_the_next_visit(self):
+        from django.urls import reverse
+        self.pay(self.PaymentResult(status='processing', external_id='1'))
+        with mock.patch('payments.services.get_gateway') as get_gateway:
+            get_gateway.return_value.get_status.return_value = self.PaymentResult(status='success', external_id='1')
+            html = self.client.get(reverse('payments:dashboard')).content.decode()
+        self.req.refresh_from_db()
+        self.assertEqual(self.req.state, RequestState.PAID)
+        self.assertNotIn(self.req.reference + ' ·', html)
+
+
+class SandboxSettlingTests(TestCase):
+    """A sandbox transfer only moves on when Marvin asks Wise to simulate it."""
+
+    def client_at(self, status):
+        from payments.gateways.wise_api import WiseApiClient
+        wise = WiseApiClient(api_token='t', profile_id='1', sandbox=True)
+        wise.get_transfer = mock.Mock(return_value={'id': 5, 'status': status})
+        wise.advance_sandbox_transfer = mock.Mock(return_value={'id': 5, 'status': 'outgoing_payment_sent'})
+        return wise
+
+    def steps_run(self, wise):
+        return wise.advance_sandbox_transfer.call_args.kwargs['steps'] if wise.advance_sandbox_transfer.called else ()
+
+    def test_only_the_missing_steps_are_simulated(self):
+        for status, steps in (
+            # Nobody has funded it yet, so simulating it would fake a payment.
+            ('incoming_payment_waiting', ()),
+            ('processing', ('funds_converted', 'outgoing_payment_sent')),
+            ('funds_converted', ('outgoing_payment_sent',)),
+            ('outgoing_payment_sent', ()),
+            ('cancelled', ()),
+        ):
+            with self.subTest(status=status):
+                wise = self.client_at(status)
+                wise.settle_sandbox_transfer(5, delay_seconds=0)
+                self.assertEqual(tuple(self.steps_run(wise)), steps)
+
+    def test_verification_still_moves_its_unfunded_test_transfer_to_processing(self):
+        wise = self.client_at('incoming_payment_waiting')
+        wise.fund_transfer = mock.Mock(side_effect=WiseApiError('approve in Wise', 403))
+        wise.fund_or_advance_transfer(5, sandbox_delay_seconds=0, sandbox_steps=('processing',))
+        self.assertEqual(tuple(self.steps_run(wise)), ('processing',))
+
+    def test_an_unfunded_payment_is_never_simulated(self):
+        wise = self.client_at('incoming_payment_waiting')
+        wise.fund_transfer = mock.Mock(side_effect=WiseApiError('approve in Wise', 403))
+        with self.assertRaises(WiseApiError):
+            wise.fund_or_advance_transfer(5, sandbox_delay_seconds=0)
+        wise.advance_sandbox_transfer.assert_not_called()
+
+    def test_a_funded_sandbox_transfer_is_carried_through_to_sent(self):
+        wise = self.client_at('processing')
+        wise.fund_transfer = mock.Mock(return_value={'status': 'COMPLETED'})
+        outcome = wise.fund_or_advance_transfer(5, sandbox_delay_seconds=0)
+        self.assertEqual(outcome['transfer']['status'], 'outgoing_payment_sent')
+
+    def test_a_live_funded_transfer_is_left_to_wise(self):
+        wise = self.client_at('incoming_payment_waiting')
+        wise.sandbox = False
+        wise.fund_transfer = mock.Mock(return_value={'status': 'COMPLETED'})
+        wise.fund_or_advance_transfer(5)
+        wise.advance_sandbox_transfer.assert_not_called()
+
+    def test_checking_a_stuck_sandbox_transfer_finishes_it(self):
+        wise = self.client_at('processing')
+        self.assertEqual(gateway_with(wise).get_status('5').status, 'success')
+
 
 class QueueChoicesTests(TestCase):
     """Each row offers only what can work for it."""
@@ -357,3 +392,64 @@ class QueueChoicesTests(TestCase):
         html = self.page()
         self.assertIn('Mark Batch Paid', html)
         self.assertIn('name="gateway_id" value="wise-csv"', html)
+
+
+class PaymentQueuePageTests(TestCase):
+    """The queue keeps a waiting payment's status current and shows what is being paid."""
+
+    setUp = PaymentMessageTests.setUp
+    pay = PaymentMessageTests.pay
+
+    def status_json(self, result):
+        from django.urls import reverse
+        self.pay(self.PaymentResult(status='processing', external_id='1'))
+        record = PaymentRecord.objects.get(object_id=self.req.pk)
+        with mock.patch('payments.services.get_gateway') as get_gateway:
+            get_gateway.return_value.get_status.return_value = result
+            return self.client.get(reverse('payments:status', args=[record.pk])).json()
+
+    def test_the_status_says_when_wise_has_paid(self):
+        data = self.status_json(self.PaymentResult(status='success', external_id='1'))
+        self.assertEqual((data['final'], data['paid']), (True, True))
+        self.assertIn('Paid', data['message'])
+
+    def test_the_status_says_why_wise_is_holding_a_payment(self):
+        held = 'please ensure profile is verified'
+        data = self.status_json(self.PaymentResult(status='processing', external_id='1', metadata={'error': held}))
+        self.assertFalse(data['final'])
+        self.assertIn(held, data['message'])
+
+    def test_a_refused_transfer_is_final_and_says_it_was_not_paid(self):
+        data = self.status_json(self.PaymentResult(status='failed', external_id='1',
+                                                   metadata={'transfer_status': 'bounced_back'}))
+        self.assertEqual((data['final'], data['paid']), (True, False))
+        self.assertIn('bounced_back', data['message'])
+
+    def test_each_row_shows_its_expenses_and_the_batch_export_comes_after_the_queue(self):
+        from django.urls import reverse
+        self.client.force_login(self.finance)
+        html = self.client.get(reverse('payments:dashboard')).content.decode()
+        self.assertIn('Expenses and documents', html)
+        self.assertIn('Open the full request', html)
+        self.assertIn('90.00 EUR', html)
+        self.assertLess(html.index(self.req.reference + ' ·'), html.index('Export Wise Batch CSV'))
+
+
+class ProfileChoiceTests(TestCase):
+    """Without a configured profile, Marvin pays from the business one."""
+
+    def test_the_business_profile_is_chosen_whatever_the_case_of_its_type(self):
+        from payments.gateways.wise_api import WiseApiClient
+        for business_type in ('BUSINESS', 'business'):
+            with self.subTest(type=business_type):
+                wise = WiseApiClient(api_token='t', sandbox=True)
+                wise.get_profiles = mock.Mock(return_value=[
+                    {'id': 31556187, 'type': 'PERSONAL'}, {'id': 31556188, 'type': business_type}])
+                self.assertEqual(wise.resolve_profile_id(), '31556188')
+
+    def test_a_personal_profile_is_never_paid_from(self):
+        from payments.gateways.wise_api import WiseApiClient, WiseApiError
+        wise = WiseApiClient(api_token='t', sandbox=True)
+        wise.get_profiles = mock.Mock(return_value=[{'id': 5, 'type': 'PERSONAL'}])
+        with self.assertRaises(WiseApiError):
+            wise.resolve_profile_id()

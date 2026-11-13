@@ -39,7 +39,7 @@ class TravelRequestPayableAdapter(PayableAdapter):
             Q(state=RequestState.SUBMITTED_FOR_PAYMENT)
             | Q(state=RequestState.ACCEPTED, advance_requested_at__isnull=False)
             & ~Exists(open_advance)
-        ).select_related('user', 'event', 'user__profile')
+        ).select_related('user', 'event', 'user__profile').prefetch_related('expenses', 'documents')
 
     def payment_purpose(self, obj) -> str:
         return 'advance' if obj.state == RequestState.ACCEPTED else 'payment'
@@ -135,6 +135,7 @@ class TravelRequestPayableAdapter(PayableAdapter):
         name = obj.user.get_full_name() or obj.user.username
         if self.payment_purpose(obj) == 'advance':
             return {
+                'details_template': 'tsp/payments/_queue_details.html',
                 'title': f'{obj.reference} · {name} · Advance before the event',
                 'subtitle': f'{obj.event.name} ({obj.event.start_date:%d %b %Y}) · {obj.user.email}',
                 'totals': [(obj.advance_currency, obj.advance_amount)],
@@ -144,6 +145,7 @@ class TravelRequestPayableAdapter(PayableAdapter):
             }
         advance = obj.advance_payment()
         return {
+            'details_template': 'tsp/payments/_queue_details.html',
             'title': f'{obj.reference} · {name}',
             'subtitle': (
                 f'{obj.event.name} · {obj.user.email}'

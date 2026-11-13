@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from django.contrib.contenttypes.models import ContentType
 from django.db import transaction
+from django.utils import timezone
 
 from payments.base import PaymentRequest
 from payments.models import PaymentRecord
@@ -163,6 +164,50 @@ class PaymentService:
                     changed_by=user,
                 )
         return export.content, export.content_type, export.filename
+
+    def send_wise_batch(self, user) -> tuple[list[PaymentRecord], list[str]]:
+        """
+        Put everything waiting into Wise batch groups for finance to fund in Wise.
+
+        Returns the payment records created and a line for each payment that
+        could not be added. Anything already being paid or in a file is left out.
+        """
+        gateway = get_gateway('wise-api')
+        if gateway is None:
+            raise ValueError('The Wise API gateway is not configured.')
+        pending = [obj for obj in self.get_queue() if not self._payments_under_way(obj).exists()]
+        if not pending:
+            raise ValueError('Nothing is waiting to be sent to Wise.')
+        requests = [self.build_payment_request(obj) for obj in pending]
+        name = f'Marvin {timezone.localtime():%d %b %Y %H:%M}'
+        results = gateway.send_batch(name, requests)
+
+        records, problems = [], []
+        with transaction.atomic():
+            for obj, payment_request, result in zip(pending, requests, results):
+                if not result.external_id:
+                    problems.append(f'{payment_request.reference}: {result.metadata.get("error", "not added")}')
+                    continue
+                records.append(PaymentRecord.objects.create(
+                    content_type=ContentType.objects.get_for_model(obj),
+                    object_id=obj.pk,
+                    gateway_id=gateway.gateway_id,
+                    amount=payment_request.amount,
+                    currency=payment_request.currency,
+                    recipient_name=payment_request.recipient_name,
+                    recipient_email=payment_request.recipient_email,
+                    reference=payment_request.reference,
+                    external_id=result.external_id,
+                    status=result.status,
+                    purpose=self.adapter.payment_purpose(obj),
+                    metadata=result.metadata,
+                    processed_by=user,
+                    created_by=user,
+                    changed_by=user,
+                ))
+        audit('payment.batch_sent', user=user, target=name,
+              detail=f'{len(records)} added, {len(problems)} not added')
+        return records, problems
 
     def refresh_status(self, record: PaymentRecord) -> PaymentRecord:
         """

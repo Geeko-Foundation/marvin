@@ -1,0 +1,30 @@
+{# What finance checks before paying, shown in the payment queue without leaving it. #}
+<div class="overflow-x-auto">
+  <table class="table table-sm">
+    <thead><tr><th>Expense</th><th>Approved</th><th>Actual</th><th>Payable</th></tr></thead>
+    <tbody>
+      {% for expense in travel_request.expenses.all %}
+      {% if expense.approved_amount is not None %}
+      <tr>
+        <td>{{ expense.get_category_display }}<span class="block text-xs opacity-60">{{ expense.description }}</span></td>
+        <td class="whitespace-nowrap">{{ expense.approved_amount|floatformat:"2g" }} {{ expense.approved_currency }}</td>
+        <td class="whitespace-nowrap">{% if expense.actual_amount is not None %}{{ expense.actual_amount|floatformat:"2g" }} {{ expense.actual_currency }}{% else %}-{% endif %}</td>
+        <td class="whitespace-nowrap">
+          {% if expense.has_currency_mismatch %}<span class="badge badge-warning badge-sm">finance to settle</span>
+          {% else %}{{ expense.payable_amount|floatformat:"2g" }} {{ expense.approved_currency }}{% endif %}
+        </td>
+      </tr>
+      {% endif %}
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% if travel_request.approval_percent %}<p class="text-xs opacity-70 mt-1">Approved at {{ travel_request.approval_percent }}% of what was asked for.</p>{% endif %}
+<p class="text-sm font-semibold mt-3">Documents</p>
+<ul class="text-sm">
+  {% for doc in travel_request.documents.all %}
+  <li>{{ doc.get_kind_display }}: <a href="{% url 'document_download' doc.pk %}" class="link link-primary">{{ doc.original_name }}</a></li>
+  {% empty %}
+  <li class="opacity-60">None uploaded.</li>
+  {% endfor %}
+</ul>

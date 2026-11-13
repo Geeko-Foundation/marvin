@@ -10,7 +10,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods, require_POST
 
 from payments.forms import ProcessPaymentForm
-from payments.models import PaymentRecord
+from payments.models import PaymentRecord, WiseLogEntry, masked, transfer_id_in
 from payments.registry import (
     check_payment_permission,
     get_all_gateways,
@@ -56,15 +56,23 @@ def dashboard(request):
     """
     service = PaymentService()
     adapter = service.adapter
-    queue = service.get_queue()
+
+    # Ask Wise about transfers still waiting, so a settled one leaves the queue
+    # without waiting for a webhook. shortcut: one Wise call per waiting
+    # transfer on each visit; fine for a short queue.
+    for obj in service.get_queue():
+        for record in service._payments_under_way(obj).exclude(status='exported').exclude(external_id=None):
+            service.refresh_status(record)
 
     queue_items = []
-    for obj in queue:
+    for obj in service.get_queue():
         ctx = adapter.get_queue_item_context(obj)
         ctx['object'] = obj
         ctx['object_id'] = obj.pk
         ctx['detail_url'] = adapter.get_detail_url(obj)
-        ctx['in_batch'] = service._payments_under_way(obj).filter(status='exported').first()
+        under_way = service._payments_under_way(obj)
+        ctx['in_batch'] = under_way.filter(status='exported').first()
+        ctx['sending'] = under_way.exclude(status='exported').first()
         queue_items.append(ctx)
 
     batch_gateways = [gw for gw in get_all_gateways() if gw.supports_batch_export]
@@ -78,6 +86,8 @@ def dashboard(request):
         'batch_gateways': batch_gateways,
         'process_form': ProcessPaymentForm(),
         'wise_sandbox': settings.WISE_API_SANDBOX,
+        'wise_url': 'https://wise-sandbox.com/' if settings.WISE_API_SANDBOX else 'https://wise.com/',
+        'can_send_to_wise': get_gateway('wise-api') is not None,
     })
 
 
@@ -112,6 +122,15 @@ def process_payment(request):
         elif record.status == 'failed':
             reason = record.metadata.get('error') or 'no reason was given'
             messages.error(request, f'{record.reference} was not paid. {label} refused it: {reason}')
+        elif record.metadata.get('awaiting_approval'):
+            messages.info(request, f'{record.reference}: approval sent to Wise. Approve it in Wise and it shows as paid here.')
+        elif record.metadata.get('error'):
+            # The transfer exists but Wise stopped it part way, so say why.
+            messages.warning(
+                request,
+                f'{record.reference} was created in {label} but Wise is holding it: '
+                f'{record.metadata["error"]} It stays in the queue and cannot be paid twice.',
+            )
         else:
             messages.info(
                 request,
@@ -121,6 +140,26 @@ def process_payment(request):
     except Exception as exc:
         messages.error(request, str(exc))
 
+    return redirect('payments:dashboard')
+
+
+@_require_payment_permission
+@require_POST
+def send_wise_batch(request):
+    """Create Wise batch groups for everything waiting, for finance to fund in Wise."""
+    try:
+        records, problems = PaymentService().send_wise_batch(request.user)
+    except ValueError as exc:
+        messages.error(request, str(exc))
+        return redirect('payments:dashboard')
+    if records:
+        messages.success(
+            request,
+            f'Sent {len(records)} payment{"s" if len(records) != 1 else ""} to Wise as a batch. '
+            'Open Wise, review the batch and fund it to send them.',
+        )
+    for problem in problems:
+        messages.error(request, f'Not added to the batch. {problem}')
     return redirect('payments:dashboard')
 
 
@@ -164,10 +203,26 @@ def payment_status(request, pk):
     record = get_object_or_404(PaymentRecord, pk=pk)
     service = PaymentService()
     record = service.refresh_status(record)
+    paid = record.status in ('success', 'completed')
+    failed = record.status in ('failed', 'cancelled')
+    if paid:
+        message = f'Paid. Wise confirmed the transfer for {record.reference}.'
+    elif failed:
+        reason = record.metadata.get('error') or record.metadata.get('transfer_status') or record.status
+        message = f'Not paid: {reason}. Reload the page to pay it again.'
+    elif record.metadata.get('error'):
+        message = f'Waiting for Wise. Wise is holding it: {record.metadata["error"]}'
+    elif record.metadata.get('transfer_status') == 'incoming_payment_waiting':
+        message = 'Approval sent to Wise. Approve it in Wise and it shows as paid here.'
+    else:
+        message = f'Waiting for Wise to confirm ({record.get_status_display()}).'
     return JsonResponse({
         'id': record.pk,
         'external_id': record.external_id,
         'status': record.status,
+        'paid': paid,
+        'final': paid or failed,
+        'message': message,
     })
 
 
@@ -182,6 +237,18 @@ def gateway_currencies(request, gateway_id):
     if gateway is None:
         return JsonResponse({'currencies': []})
     return JsonResponse({'currencies': gateway.supported_currencies()})
+
+
+def _log_webhook(request, signed):
+    """Keep every delivery Wise makes, signed or not, in the Wise log."""
+    try:
+        body = json.loads(request.body)
+    except ValueError:
+        body = {'text': request.body.decode('utf-8', 'replace')[:5000]}
+    WiseLogEntry.objects.create(
+        kind=WiseLogEntry.WEBHOOK, method='POST', path=request.path[:300],
+        request_body=masked(body), transfer_id=transfer_id_in('', body), signature_valid=signed,
+    )
 
 
 @csrf_exempt
@@ -202,11 +269,14 @@ def wise_webhook(request):
     if request.method != 'POST' or request.META.get(TEST_HEADER, '').lower() == 'true':
         return JsonResponse({'status': 'ok'})
 
+    signed = signing_key() is not None and verify_signature(request.body, request.META.get(SIGNATURE_HEADER))
+    _log_webhook(request, signed)
+
     if signing_key() is None:
         logger.error('Wise webhook received but WISE_WEBHOOK_PUBLIC_KEY is not set')
         return JsonResponse({'error': 'Webhook signing key not configured.'}, status=503)
 
-    if not verify_signature(request.body, request.META.get(SIGNATURE_HEADER)):
+    if not signed:
         logger.warning('Wise webhook rejected: bad signature')
         return JsonResponse({'error': 'Invalid signature.'}, status=400)
 
