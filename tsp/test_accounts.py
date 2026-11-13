@@ -147,3 +147,22 @@ class TwoStepSignInTests(TestCase):
         device = TOTPDevice.objects.get(user=user)
         self.client.post(reverse('two_factor_setup'), {'token': self.code(device)})
         self.assertTrue(TOTPDevice.objects.get(user=user).confirmed)
+
+
+class IncompleteAddressTests(TestCase):
+    """An account with Wise set up but part of its address missing can finish it."""
+
+    def test_the_missing_field_is_asked_for_instead_of_looping(self):
+        user = make_user('nopostcode', [GROUP_REQUESTER])
+        user.profile.postal_code = ''
+        user.profile.save()
+        self.client.force_login(user)
+        self.assertRedirects(self.client.get(reverse('dashboard')), reverse('signup_profile'),
+                             fetch_redirect_response=False)
+        self.assertEqual(self.client.get(reverse('signup_profile')).status_code, 200)
+        self.assertRedirects(self.client.get(reverse('signup_complete')), reverse('signup_profile'),
+                             fetch_redirect_response=False)
+
+        user.profile.postal_code = '411001'
+        user.profile.save()
+        self.assertEqual(self.client.get(reverse('dashboard')).status_code, 200)
