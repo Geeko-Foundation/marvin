@@ -131,6 +131,7 @@ def two_factor_setup(request):
     qr = qrcode.make(device.config_url, image_factory=qrcode.image.svg.SvgPathImage, box_size=8)
     return render(request, 'profile/two_factor_setup.html', {
         'qr_svg': qr.to_string(encoding='unicode'),
+        'config_url': device.config_url,
         'secret': base64.b32encode(device.bin_key).decode(),
         'required': two_factor_required(request.user),
         'next': request.GET.get('next', ''),
