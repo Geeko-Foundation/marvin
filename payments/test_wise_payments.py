@@ -447,8 +447,9 @@ class ProfileChoiceTests(TestCase):
                     {'id': 31556187, 'type': 'PERSONAL'}, {'id': 31556188, 'type': business_type}])
                 self.assertEqual(wise.resolve_profile_id(), '31556188')
 
-    def test_a_personal_profile_is_used_when_it_is_the_only_one(self):
-        from payments.gateways.wise_api import WiseApiClient
+    def test_a_personal_profile_is_never_paid_from(self):
+        from payments.gateways.wise_api import WiseApiClient, WiseApiError
         wise = WiseApiClient(api_token='t', sandbox=True)
         wise.get_profiles = mock.Mock(return_value=[{'id': 5, 'type': 'PERSONAL'}])
-        self.assertEqual(wise.resolve_profile_id(), '5')
+        with self.assertRaises(WiseApiError):
+            wise.resolve_profile_id()

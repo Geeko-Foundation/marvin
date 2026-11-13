@@ -33,7 +33,7 @@ TIMEOUT = (5, 30)
 
 WISE_LIVE_BASE_URL = 'https://api.transferwise.com'
 
-APPROVE_IN_WISE = 'Created in Wise. Approve it there to send it.'
+APPROVE_IN_WISE = 'Approval sent to Wise. Approve it in Wise and it shows as paid here.'
 
 
 WISE_SANDBOX_BASE_URL = 'https://api.wise-sandbox.com'
@@ -176,7 +176,7 @@ class WiseApiClient:
         return data
 
     def resolve_profile_id(self) -> str:
-        """Return configured profile ID or auto-select from GET /v2/profiles."""
+        """Return the configured profile ID, or the business profile from GET /v2/profiles."""
         if self._resolved_profile_id:
             return self._resolved_profile_id
 
@@ -188,11 +188,13 @@ class WiseApiClient:
         if not profiles:
             raise WiseApiError('No Wise profiles returned for this API token.')
 
-        # The v2 API writes the type in capitals, as in BUSINESS. A personal
-        # profile cannot fund payments through the API, so prefer the business one.
+        # The foundation pays from its business account only, never from the
+        # personal profile every Wise login also has. The v2 API writes the
+        # type in capitals, as in BUSINESS.
         business = next((p for p in profiles if str(p.get('type', '')).lower() == 'business'), None)
-        chosen = business or profiles[0]
-        self._resolved_profile_id = str(chosen['id'])
+        if business is None:
+            raise WiseApiError('This Wise token has no business profile. Marvin pays from the business account only.')
+        self._resolved_profile_id = str(business['id'])
         self.profile_id = self._resolved_profile_id
         return self._resolved_profile_id
 

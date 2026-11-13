@@ -43,7 +43,7 @@
           <span class="text-sm opacity-70 max-w-md" aria-live="polite"
                 data-payment-status="{% url 'payments:status' item.sending.pk %}">Sent {{ item.sending.created_at|date:"j M, H:i" }}. Waiting for Wise to confirm ({{ item.sending.get_status_display }}).
             {% if item.sending.metadata.error %}<span class="block text-warning">Wise is holding it: {{ item.sending.metadata.error }}</span>
-            {% elif item.sending.metadata.awaiting_approval and item.sending.status == 'processing' %}<span class="block">{% if item.sending.metadata.batch_name %}In the Wise batch "{{ item.sending.metadata.batch_name }}". {% endif %}<a href="{{ wise_url }}" class="link" target="_blank" rel="noopener">Approve it in Wise</a> to send it.</span>{% endif %}</span>
+            {% elif item.sending.metadata.awaiting_approval and item.sending.status == 'processing' %}<span class="block">{% if item.sending.metadata.batch_name %}In the Wise batch "{{ item.sending.metadata.batch_name }}". {% endif %}Approval sent to Wise. <a href="{{ wise_url }}" class="link" target="_blank" rel="noopener">Approve it in Wise</a> and it shows as paid here.</span>{% endif %}</span>
           {% elif item.in_batch %}
           <span class="text-sm opacity-70">In the batch file exported {{ item.in_batch.created_at|date:"j M Y" }}</span>
           <input type="hidden" name="gateway_id" value="{{ item.in_batch.gateway_id }}">

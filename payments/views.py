@@ -123,7 +123,7 @@ def process_payment(request):
             reason = record.metadata.get('error') or 'no reason was given'
             messages.error(request, f'{record.reference} was not paid. {label} refused it: {reason}')
         elif record.metadata.get('awaiting_approval'):
-            messages.info(request, f'{record.reference} was created in Wise. Approve it there to send it.')
+            messages.info(request, f'{record.reference}: approval sent to Wise. Approve it in Wise and it shows as paid here.')
         elif record.metadata.get('error'):
             # The transfer exists but Wise stopped it part way, so say why.
             messages.warning(
@@ -213,7 +213,7 @@ def payment_status(request, pk):
     elif record.metadata.get('error'):
         message = f'Waiting for Wise. Wise is holding it: {record.metadata["error"]}'
     elif record.metadata.get('transfer_status') == 'incoming_payment_waiting':
-        message = 'Created in Wise. Approve it there to send it.'
+        message = 'Approval sent to Wise. Approve it in Wise and it shows as paid here.'
     else:
         message = f'Waiting for Wise to confirm ({record.get_status_display()}).'
     return JsonResponse({
