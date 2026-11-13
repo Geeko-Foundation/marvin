@@ -9,6 +9,12 @@
 
 <form method="post" class="max-w-2xl">
   {% csrf_token %}
+  {% if form.errors %}
+  <div role="alert" class="alert alert-error mb-6 flex flex-col items-start gap-1">
+    {% for field in form %}{% for error in field.errors %}<span>{{ field.label }}: {{ error }}</span>{% endfor %}{% endfor %}
+    {% for error in form.non_field_errors %}<span>{{ error }}</span>{% endfor %}
+  </div>
+  {% endif %}
 
   <div class="card bg-base-100 shadow-sm mb-6">
     <div class="card-body">

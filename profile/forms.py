@@ -1,4 +1,5 @@
 from django import forms
+from django.contrib.auth.models import User
 
 from marvin.validators import BANK, NAME, PHONE, POSTCODE, line, restrict
 from profile.countries import COUNTRIES, STATE_CODES, normalise_country, state_code
@@ -75,6 +76,7 @@ class ProfileForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         """Pre-fill name and email from the linked ``User``; apply Tailwind input classes."""
         user = kwargs.pop('user', None)
+        self.user = user
         super().__init__(*args, **kwargs)
         if user:
             self.fields['first_name'].initial = user.first_name
@@ -82,6 +84,22 @@ class ProfileForm(forms.ModelForm):
             self.fields['email'].initial = user.email
         for name in ('first_name', 'last_name', 'email'):
             self.fields[name].widget.attrs.update({'class': INPUT_CLASS})
+
+    def clean_email(self):
+        """Reject an address another account already uses, as sign-up does."""
+        email = self.cleaned_data['email']
+        others = User.objects.filter(email__iexact=email)
+        if self.user:
+            others = others.exclude(pk=self.user.pk)
+        if others.exists():
+            raise forms.ValidationError('An account with this email already exists.')
+        return email
+
+    @property
+    def new_email(self):
+        """The address typed in, when it differs from the one on the account."""
+        email = self.cleaned_data.get('email', '')
+        return email if self.user and email.lower() != self.user.email.lower() else None
 
     def clean(self):
         """Wise refuses US and Australian payees without a state it recognises."""
@@ -93,12 +111,16 @@ class ProfileForm(forms.ModelForm):
         return cleaned
 
     def save(self, user, commit=True):
-        """Persist profile fields and sync ``User`` first name, last name, and email."""
+        """
+        Persist profile fields and sync the ``User`` name.
+
+        A new email address is not saved here: it waits until the link sent to
+        it is opened, see ``send_email_change_link``.
+        """
         profile = super().save(commit=False)
         user.first_name = self.cleaned_data['first_name']
         user.last_name = self.cleaned_data['last_name']
-        user.email = self.cleaned_data['email']
-        user.save()
+        user.save(update_fields=['first_name', 'last_name'])
         if commit:
             profile.save()
         return profile

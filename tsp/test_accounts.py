@@ -166,3 +166,45 @@ class IncompleteAddressTests(TestCase):
         user.profile.postal_code = '411001'
         user.profile.save()
         self.assertEqual(self.client.get(reverse('dashboard')).status_code, 200)
+
+
+class EmailChangeTests(TestCase):
+    """A new email address is used only once a link sent to it is opened."""
+
+    def setUp(self):
+        self.user = make_user('mover', [GROUP_TSP])
+        self.user.email = 'old@example.org'
+        self.user.save()
+        self.client.force_login(self.user)
+
+    def change_to(self, email):
+        return self.client.post(reverse('profile'), {'first_name': 'Mo', 'last_name': 'Ver', 'email': email})
+
+    def test_the_new_address_waits_for_its_link(self):
+        self.change_to('new@example.org')
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.email, 'old@example.org')
+        self.assertEqual(mail.outbox[-1].to, ['new@example.org'])
+        self.client.get(link_in(mail.outbox[-1]))
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.email, 'new@example.org')
+
+    def test_the_link_works_once(self):
+        self.change_to('new@example.org')
+        link = link_in(mail.outbox[-1])
+        self.client.get(link)
+        self.user.email = 'third@example.org'
+        self.user.save()
+        self.client.get(link)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.email, 'third@example.org')
+
+    def test_an_address_another_account_uses_is_refused(self):
+        make_user('other', [GROUP_TSP]).__class__.objects.filter(username='other').update(email='taken@example.org')
+        response = self.change_to('taken@example.org')
+        self.assertContains(response, 'An account with this email already exists.')
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_keeping_the_same_address_sends_nothing(self):
+        self.change_to('OLD@example.org')
+        self.assertEqual(len(mail.outbox), 0)
