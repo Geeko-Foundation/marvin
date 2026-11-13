@@ -37,8 +37,10 @@
           <p class="text-sm">To pay:
             {% for currency, amount in item.totals %}<strong>{{ amount|floatformat:"2g" }} {{ currency }}</strong>{% if not forloop.last %}, {% endif %}{% endfor %}
           </p>
-          {% if item.mixed_currencies %}
-          <p class="text-xs text-warning">Mixed currencies. Each one has to be paid separately.</p>
+          {% if item.converted.error %}
+          <p class="text-xs text-error">{{ item.converted.error }}</p>
+          {% elif item.converted %}
+          <p class="text-xs text-warning">Paid as one transfer of {{ item.converted.amount|floatformat:"2g" }} {{ item.converted.currency }}, converted at the 90-day average rate.</p>
           {% endif %}
           {% endif %}
           {% if item.banking %}<p class="text-sm opacity-60">Banking: {{ item.banking }}</p>{% endif %}

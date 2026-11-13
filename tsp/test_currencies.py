@@ -30,6 +30,11 @@ class MixedCurrencyTests(TestCase):
             description='Trip',
         )
 
+    def _pays_into(self, currency):
+        self.owner.profile.banking_currency = currency
+        self.owner.profile.wise_account_id = 7
+        self.owner.profile.save()
+
     def _expense(self, amount, currency):
         return Expense.objects.create(
             request=self.request, category='flight', description='plane',
@@ -66,14 +71,52 @@ class MixedCurrencyTests(TestCase):
         self.assertIn('3.00 USD', html)
         self.assertNotIn('3.00 EUR', html)
 
-    def test_a_mixed_request_is_not_paid_with_a_guessed_currency(self):
+    def test_a_mixed_request_is_paid_in_the_payees_currency_at_the_average_rate(self):
+        from tsp.models import ExchangeRate
+        from tsp.payables import TravelRequestPayableAdapter
+
+        # One euro buys 1.25 USD on one day and 1.00 USD on another: 1 USD averages 0.9 EUR.
+        ExchangeRate.objects.create(date=date(2026, 1, 5), currency='USD', rate=Decimal('1.25'))
+        ExchangeRate.objects.create(date=date(2026, 1, 6), currency='USD', rate=Decimal('1.00'))
+        self._pays_into('EUR')
+        self._expense(Decimal('250.00'), 'EUR')
+        self._expense(Decimal('100.00'), 'USD')
+        payment = TravelRequestPayableAdapter().build_payment_request(self.request)
+        self.assertEqual((payment.amount, payment.currency), (Decimal('340.00'), 'EUR'))
+        self.assertEqual(payment.metadata['converted_from']['USD']['rate'], '0.90000000')
+
+    def test_a_request_in_one_currency_is_paid_in_the_bank_accounts_currency(self):
+        from tsp.models import ExchangeRate
+        from tsp.payables import TravelRequestPayableAdapter
+
+        ExchangeRate.objects.create(date=date(2026, 1, 5), currency='IDR', rate=Decimal('20000'))
+        self._pays_into('EUR')
+        self._expense(Decimal('1000000.00'), 'IDR')
+        payment = TravelRequestPayableAdapter().build_payment_request(self.request)
+        # The gateway turns it into euros at Wise's rate; the page shows the estimate.
+        self.assertEqual((payment.currency, payment.metadata['account_currency']), ('IDR', 'EUR'))
+        self.client.force_login(self.owner)
+        html = self.client.get(reverse('request_detail', args=[self.request.pk])).content.decode()
+        self.assertIn('Paid to the bank account as about <strong>50.00 EUR</strong>', html)
+
+    def test_the_bank_accounts_currency_needs_no_conversion(self):
+        from tsp.payables import TravelRequestPayableAdapter
+
+        self._pays_into('USD')
+        self._expense(Decimal('3.00'), 'USD')
+        payment = TravelRequestPayableAdapter().build_payment_request(self.request)
+        self.assertEqual((payment.amount, payment.currency), (Decimal('3.00'), 'USD'))
+        self.assertNotIn('converted_from', payment.metadata)
+        self.assertIsNone(self.request.payout_preview())
+
+    def test_a_mixed_request_without_rates_is_not_paid_with_a_guess(self):
         from tsp.payables import TravelRequestPayableAdapter
 
         self._expense(Decimal('250.00'), 'EUR')
         self._expense(Decimal('3.00'), 'USD')
         with self.assertRaises(ValueError) as caught:
             TravelRequestPayableAdapter().build_payment_request(self.request)
-        self.assertIn('mixes currencies', str(caught.exception))
+        self.assertIn('exchange rate', str(caught.exception))
 
     def test_a_single_currency_request_still_pays(self):
         from tsp.payables import TravelRequestPayableAdapter
@@ -175,3 +218,4 @@ class ExpenseCategoryTests(TestCase):
         stay.refresh_from_db()
         self.assertEqual(stay.category, 'lodging')
         self.assertEqual(stay.description, 'Hostel')
+
