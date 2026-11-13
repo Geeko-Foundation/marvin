@@ -94,6 +94,9 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'django_tables2',
     'webpush',
+    'django_otp',
+    'django_otp.plugins.otp_totp',
+    'django_otp.plugins.otp_static',
     'payments',
     'profile',
     'tsp',
@@ -106,6 +109,8 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'django_otp.middleware.OTPMiddleware',
+    'profile.two_factor.TwoFactorMiddleware',
     'marvin.audit.AuditUserMiddleware',
     'tsp.middleware.RequesterOnboardingMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
@@ -174,6 +179,11 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 LOGIN_URL = '/admin/login/'
+# The name authenticator apps show next to the six-digit code.
+OTP_TOTP_ISSUER = env('BRAND_APP_NAME', 'Marvin')
+# Off under `manage.py test`, so tests can sign staff in directly; the
+# two-step sign-in tests turn it back on.
+TWO_FACTOR_ENFORCED = env_bool('TWO_FACTOR_ENFORCED', sys.argv[1:2] != ['test'])
 APP_LOGIN_URL = 'login'
 LOGIN_REDIRECT_URL = 'dashboard'
 

@@ -120,6 +120,37 @@
     </div>
   </div>
 </div>
+
+<div id="security" class="card bg-base-100 shadow-sm mt-6 max-w-2xl">
+  <div class="card-body">
+    <h2 class="card-title text-lg">Sign-in and Security</h2>
+    <p class="text-sm opacity-70">To change your password, we email a link to {{ user.email }}. Choose the new password from there.</p>
+    <form method="post" action="{% url 'password_change_email' %}" class="mt-2">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-outline btn-sm">Email me a password change link</button>
+    </form>
+
+    <div class="divider my-2"></div>
+    {% if two_factor_on %}
+    <p class="text-sm"><span class="badge badge-success badge-sm">On</span> Two-step sign-in asks for a code from your authenticator app.</p>
+    <div class="flex flex-wrap gap-2 mt-2">
+      <form method="post" action="{% url 'two_factor_backup_codes' %}" data-confirm="Make new backup codes?" data-confirm-detail="Your old backup codes stop working." data-confirm-action="Make new codes">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-outline btn-sm">New backup codes</button>
+      </form>
+      {% if not two_factor_required %}
+      <form method="post" action="{% url 'two_factor_disable' %}" data-confirm="Turn off two-step sign-in?" data-confirm-detail="Your password alone will be enough to sign in." data-confirm-action="Turn off">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-ghost btn-sm">Turn off</button>
+      </form>
+      {% endif %}
+    </div>
+    {% else %}
+    <p class="text-sm opacity-70">Two-step sign-in asks for a code from your phone as well as your password, so a stolen password is not enough.</p>
+    <a href="{% url 'two_factor_setup' %}" class="btn btn-outline btn-sm w-fit mt-2">Turn on two-step sign-in</a>
+    {% endif %}
+  </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}

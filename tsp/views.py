@@ -21,7 +21,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.dateparse import parse_date
-from django.utils.http import url_has_allowed_host_and_scheme
+from django.utils.http import url_has_allowed_host_and_scheme, urlsafe_base64_decode
 from django.views.decorators.http import require_POST
 from django_tables2 import RequestConfig
 
@@ -45,6 +45,7 @@ from profile.services.wise_verification import (
     init_verification_state,
     run_verification_step,
 )
+from tsp.accounts import activation_token, send_activation_email
 from tsp.decorators import group_required, login_required, staff_or_owner
 from tsp.forms import (
     AcceptForm,
@@ -167,7 +168,7 @@ def _signup_redirect_for_user(user):
 
 
 def signup_account(request):
-    """Sign-up wizard step 1: create a requestor account and log in."""
+    """Sign-up wizard step 1: create a requestor account, switched on by an emailed link."""
     if request.user.is_authenticated:
         return _signup_redirect_for_user(request.user)
 
@@ -175,9 +176,10 @@ def signup_account(request):
         form = SignupAccountForm(request.POST)
         if form.is_valid():
             user = form.save()
-            login(request, user)
-            messages.success(request, 'Account created. Tell us a bit more about yourself.')
-            return redirect('signup_profile')
+            user.is_active = False
+            user.save(update_fields=['is_active'])
+            send_activation_email(request, user)
+            return render(request, 'tsp/signup/check_email.html', {'email': user.email, 'wizard_step': 1})
     else:
         form = SignupAccountForm()
 
@@ -185,6 +187,37 @@ def signup_account(request):
         'form': form,
         'wizard_step': 1,
     })
+
+
+def signup_activate(request, uidb64, token):
+    """Switch on the account an emailed link names, then sign its owner in."""
+    try:
+        user = User.objects.get(pk=urlsafe_base64_decode(uidb64).decode())
+    except (User.DoesNotExist, ValueError, TypeError, OverflowError):
+        user = None
+    if user is None or not activation_token.check_token(user, token):
+        messages.error(request, 'That link has expired or was already used. Sign in, or ask for a new link.')
+        return redirect('login')
+    user.is_active = True
+    user.save(update_fields=['is_active'])
+    login(request, user, backend='django.contrib.auth.backends.ModelBackend')
+    messages.success(request, 'Email confirmed. Tell us a bit more about yourself.')
+    return redirect('signup_profile')
+
+
+@require_POST
+def signup_resend(request):
+    """
+    Send the confirmation link again.
+
+    The page says the same whether or not the address has an account, so it
+    cannot be used to find out who has signed up.
+    """
+    email = request.POST.get('email', '').strip()
+    user = User.objects.filter(email__iexact=email, is_active=False).first()
+    if user:
+        send_activation_email(request, user)
+    return render(request, 'tsp/signup/check_email.html', {'email': email, 'wizard_step': 1})
 
 
 @login_required
