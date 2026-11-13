@@ -34,7 +34,7 @@ def _requirement_values(method: str, key: str, details: dict | None = None) -> l
     try:
         requirements = get_wise_client().account_requirements(
             target_currency=currency,
-            source_currency=getattr(settings, 'WISE_SOURCE_CURRENCY', 'GBP'),
+            source_currency=settings.WISE_SOURCE_CURRENCY,
             payload=payload,
         )
     except WiseApiError:
