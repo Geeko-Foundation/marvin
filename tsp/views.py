@@ -225,7 +225,10 @@ def signup_resend(request):
 def signup_profile(request):
     """Sign-up wizard step 2: collect required personal and address details."""
     profile = get_profile(request.user)
-    if profile.is_wise_recipient_ready():
+    # Skip ahead only when nothing is missing here either. An address that a
+    # later rule made incomplete, such as a postcode, still has to be filled in,
+    # or the dashboard and this step would send the user back and forth.
+    if profile.is_profile_complete() and profile.is_wise_recipient_ready():
         return redirect('signup_complete')
 
     if request.method == 'POST':
@@ -419,9 +422,9 @@ def signup_banking_step(request):
 def signup_complete(request):
     """Sign-up wizard step 4: confirmation when profile and banking are ready."""
     profile = get_profile(request.user)
+    if not profile.is_profile_complete():
+        return redirect('signup_profile')
     if profile.requires_wise_banking and not profile.is_wise_recipient_ready():
-        if not profile.is_profile_complete():
-            return redirect('signup_profile')
         return redirect('signup_banking')
 
     return render(request, 'tsp/signup/complete.html', {'wizard_step': 4})
