@@ -1,6 +1,7 @@
-"""Confirming a new account's email address before it can be used."""
+"""Confirming that an email address belongs to the person using it."""
 
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
+from django.core import signing
 from django.core.mail import send_mail
 from django.template.loader import render_to_string
 from django.urls import reverse
@@ -37,3 +38,33 @@ def send_activation_email(request, user):
         None,
         [user.email],
     )
+
+
+EMAIL_CHANGE_SALT = 'marvin.accounts.email_change'
+EMAIL_CHANGE_MAX_AGE = 3 * 24 * 60 * 60
+
+
+def send_email_change_link(request, user, new_email):
+    """
+    Email ``new_email`` a link that moves the account over to it.
+
+    The link names the old address too, so it stops working once the change
+    has been made or the address has changed some other way.
+    """
+    token = signing.dumps({'user': user.pk, 'from': user.email, 'to': new_email}, salt=EMAIL_CHANGE_SALT)
+    link = request.build_absolute_uri(reverse('email_change_confirm', kwargs={'token': token}))
+    send_mail(
+        'Confirm your new email address for Marvin',
+        render_to_string('email/confirm_email_change.txt', {'user': user, 'link': link}),
+        None,
+        [new_email],
+    )
+
+
+def read_email_change_link(token):
+    """Return ``(user_pk, old_email, new_email)`` from a link, or ``None`` if it is bad or old."""
+    try:
+        data = signing.loads(token, salt=EMAIL_CHANGE_SALT, max_age=EMAIL_CHANGE_MAX_AGE)
+    except signing.BadSignature:
+        return None
+    return data['user'], data['from'], data['to']

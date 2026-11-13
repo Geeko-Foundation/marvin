@@ -32,6 +32,7 @@ from profile.audit_log import record as audit
 from profile.decorators import get_profile
 from profile.forms import OnboardingPersonalForm, WiseRecipientForm
 from profile.groups import GROUP_FINANCE, GROUP_REQUESTER, GROUP_TSP
+from profile.views import ask_to_confirm_email
 from profile.services.wise_banking_options import bank_choices, branch_choices
 from profile.services.wise_recipient import (
     RETURN_TO_SESSION_KEY,
@@ -235,6 +236,7 @@ def signup_profile(request):
         form = OnboardingPersonalForm(request.POST, instance=profile, user=request.user)
         if form.is_valid():
             form.save(request.user)
+            ask_to_confirm_email(request, form)
             profile = get_profile(request.user)
             _mark_profile_completed(profile)
             action = request.POST.get('action', 'continue')

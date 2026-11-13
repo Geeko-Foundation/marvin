@@ -4,6 +4,7 @@ import qrcode
 import qrcode.image.svg
 from django.contrib import messages
 from django.contrib.auth.forms import PasswordResetForm
+from django.contrib.auth.models import User
 from django.shortcuts import redirect, render
 from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
@@ -17,6 +18,7 @@ from profile.audit_log import record as audit
 from profile.decorators import get_profile
 from profile.forms import ProfileForm, StaffBankingForm
 from profile.two_factor import has_authenticator, two_factor_required
+from tsp.accounts import read_email_change_link, send_email_change_link
 from tsp.decorators import login_required
 
 
@@ -49,6 +51,7 @@ def profile_view(request):
                 profile.profile_completed_at = timezone.now()
                 profile.save(update_fields=['profile_completed_at'])
             messages.success(request, 'Profile updated successfully.')
+            ask_to_confirm_email(request, form)
             return redirect('profile')
     else:
         form = ProfileForm(instance=profile, user=request.user)
@@ -63,6 +66,27 @@ def profile_view(request):
         'two_factor_on': has_authenticator(request.user),
         'two_factor_required': two_factor_required(request.user),
     })
+
+
+def ask_to_confirm_email(request, form):
+    """Send the confirmation link when the form asked for a new email address."""
+    if form.new_email:
+        send_email_change_link(request, request.user, form.new_email)
+        messages.info(request, f'We sent a link to {form.new_email}. Your email changes once you open it.')
+
+
+def email_change_confirm(request, token):
+    """Move an account to the email address the link was sent to."""
+    link = read_email_change_link(token)
+    user = link and User.objects.filter(pk=link[0], email=link[1]).first()
+    if not user or User.objects.filter(email__iexact=link[2]).exclude(pk=user.pk).exists():
+        messages.error(request, 'That link has expired or was already used. Change your email again to get a new one.')
+        return redirect('profile')
+    user.email = link[2]
+    user.save(update_fields=['email'])
+    audit('account.email_changed', user=user, target=user.username, detail=f'{link[1]} to {link[2]}')
+    messages.success(request, f'Your email is now {user.email}.')
+    return redirect('profile')
 
 
 @login_required
