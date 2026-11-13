@@ -22,7 +22,7 @@
     {% if paid.status == 'success' or paid.status == 'completed' %}Paid{% else %}Sending{% endif %}
     <strong>{{ paid.amount|floatformat:"2g" }} {{ paid.currency }}</strong> on {{ paid.created_at|date:"j M Y" }}.
     {% with m=paid.metadata %}
-    {% if m.fee %}Wise fee {{ m.fee }} {{ m.fee_currency|default:paid.currency }}.{% endif %}
+    {% if m.fee %}Wise's fee of {{ m.fee }} {{ m.fee_currency|default:paid.currency }} was paid by the foundation.{% endif %}
     {% if m.target_currency and m.target_currency != paid.currency %}
     Converted at 1 {{ paid.currency }} = {{ m.exchange_rate }} {{ m.target_currency }}, so {{ m.target_amount }} {{ m.target_currency }} reaches the account.
     {% endif %}

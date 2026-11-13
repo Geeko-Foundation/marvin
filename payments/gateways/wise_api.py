@@ -383,6 +383,14 @@ class WiseApiClient:
         result = self._request(method, path, payload, extra_headers=headers)
         return result if isinstance(result, list) else []
 
+    def get_rate(self, source_currency: str, target_currency: str) -> Decimal:
+        """Wise's current rate for one unit of ``source_currency`` in ``target_currency``."""
+        rates = self._request('GET', f'/v1/rates?source={source_currency}&target={target_currency}')
+        try:
+            return Decimal(str(rates[0]['rate']))
+        except (IndexError, KeyError, TypeError) as exc:
+            raise WiseApiError(f'Wise gave no rate from {source_currency} to {target_currency}.') from exc
+
     def create_quote(
         self,
         *,
