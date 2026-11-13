@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% block title %}Enter Your Code{% endblock %}
+
+{% block content %}
+<div class="card bg-base-100 shadow-sm max-w-md">
+  <div class="card-body">
+    <h1 class="card-title text-2xl">Enter your code</h1>
+    <p class="text-sm opacity-70">Open your authenticator app and enter the six-digit code for {{ app_name }}. Lost your phone? Use one of your backup codes instead.</p>
+    <form method="post" class="grid gap-3 mt-2">
+      {% csrf_token %}
+      <input type="hidden" name="next" value="{{ next }}">
+      <label class="form-control">
+        <span class="label-text mb-1">Code</span>
+        <input type="text" name="token" inputmode="numeric" autocomplete="one-time-code" maxlength="16" required
+               class="input input-bordered w-48" autofocus>
+      </label>
+      {% if error %}<p class="text-sm text-error" role="alert">{{ error }}</p>{% endif %}
+      <button type="submit" class="btn btn-primary w-fit">Continue</button>
+    </form>
+    <form method="post" action="{% url 'logout' %}" class="mt-2">
+      {% csrf_token %}
+      <button type="submit" class="link text-sm">Sign out</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

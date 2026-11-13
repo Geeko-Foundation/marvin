@@ -1,0 +1,9 @@
+Hello {{ user.first_name|default:user.get_username }},
+
+Thanks for creating an account to request travel support. To confirm this is
+your email address and start using it, open this link:
+
+{{ link }}
+
+The link works once and expires after a few days. If you did not sign up,
+ignore this email and the account stays switched off.

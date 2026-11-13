@@ -1,0 +1,20 @@
+{% extends "tsp/signup/wizard_base.html" %}
+
+{% block title %}Confirm your email{% endblock %}
+
+{% block wizard_content %}
+<div class="card bg-base-100 shadow-xl">
+  <div class="card-body">
+    <h2 class="card-title">Confirm your email</h2>
+    <p class="text-sm opacity-70">
+      We sent a link to <strong>{{ email }}</strong>. Open it to switch your account on and carry on with the next steps.
+    </p>
+    <p class="text-sm opacity-70">Nothing arrived after a few minutes? Check your spam folder, or send it again.</p>
+    <form method="post" action="{% url 'signup_resend' %}" class="mt-2">
+      {% csrf_token %}
+      <input type="hidden" name="email" value="{{ email }}">
+      <button type="submit" class="btn btn-outline btn-sm">Send the link again</button>
+    </form>
+  </div>
+</div>
+{% endblock %}
