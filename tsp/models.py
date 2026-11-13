@@ -391,6 +391,51 @@ class TravelRequest(AuditModel):
         totals = self.totals_payable()
         return totals[0][0] if len(totals) == 1 else None
 
+    def payout_currency(self):
+        """The currency of the requester's bank account, which every payment to them is sent in."""
+        profile = getattr(self.user, 'profile', None)
+        return profile.banking_currency if profile and profile.wise_account_id else None
+
+    def in_payout_currency(self, totals):
+        """
+        ``(currency, amount, conversion)`` for paying ``totals`` as one transfer.
+
+        Whatever currencies the costs were in, the requester is paid in the
+        currency of their bank account. Other currencies are converted at the
+        90-day average rate, and ``conversion`` records each amount and rate
+        used. Raises ``ValueError`` when no rate is stored for a pair.
+        """
+        from tsp.services.exchange_rates import summary, window_end_for
+
+        target = self.payout_currency() or max(totals, key=lambda item: item[1])[0]
+        end = window_end_for(self.event)
+        total = Decimal('0')
+        conversion = {}
+        for code, amount in totals:
+            if code == target:
+                total += amount
+                continue
+            rates = summary(code, target, end)
+            if rates is None:
+                raise ValueError(f'No {code} to {target} exchange rate is stored, so {self.reference} cannot be '
+                                 'converted. Try again once the daily rates have been fetched.')
+            rate = rates.average.quantize(Decimal('0.00000001'))
+            total += (amount * rate).quantize(Decimal('0.01'))
+            conversion[code] = {'amount': str(amount), 'rate': str(rate), 'rate_date': end.isoformat()}
+        return target, total, conversion
+
+    def payout_preview(self, totals=None):
+        """What the requester will receive when it differs from what they asked in, for the pages."""
+        totals = totals or self.amounts_to_pay() or self.totals_estimated()
+        target = self.payout_currency()
+        if not totals or (len(totals) == 1 and totals[0][0] == (target or totals[0][0])):
+            return None
+        try:
+            currency, amount, _ = self.in_payout_currency(totals)
+        except ValueError as problem:
+            return {'error': str(problem)}
+        return {'currency': currency, 'amount': amount}
+
     def has_mixed_currencies(self):
         """True when the approved lines are not all in the same currency."""
         return len(self.totals_payable()) > 1

@@ -694,6 +694,14 @@ def _tell_about_refund(request, owing):
 
 @login_required
 @group_required(GROUP_REQUESTER, GROUP_TSP)
+def _payout(profile):
+    """The requester's payout currency and today's average rates into it, for the form's estimate."""
+    if not (profile.is_requester and profile.wise_account_id):
+        return None
+    exchange_rates.ensure_recent()
+    return {'currency': profile.banking_currency, 'rates': exchange_rates.averages_into(profile.banking_currency)}
+
+
 def request_create(request):
     """Create a new travel request as draft with expense line items."""
     profile = get_profile(request.user)
@@ -729,6 +737,7 @@ def request_create(request):
         'event_categories': _categories_by_event(form),
         'profile': profile,
         'is_edit': False,
+        'payout': _payout(profile),
         'show_account_check': profile.is_requester,
         'banking_form': WiseRecipientForm(profile=profile) if profile.is_requester else None,
     })
@@ -885,6 +894,7 @@ def request_edit(request, pk):
         'profile': profile,
         'travel_request': travel_request,
         'is_edit': True,
+        'payout': _payout(get_profile(travel_request.user)),
         'needs_review_again': needs_review_again,
     })
 

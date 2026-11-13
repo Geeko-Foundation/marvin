@@ -168,6 +168,16 @@ def summary(source, target, end=None, days=AVERAGE_DAYS):
     )
 
 
+def averages_into(target, end=None):
+    """``{code: average rate into target}`` for every currency with stored rates, for estimates."""
+    averages = {}
+    for code in supported_currencies():
+        rates = summary(code, target, end)
+        if rates:
+            averages[code] = str(rates.average)
+    return averages
+
+
 def lock_approval_rate(expense, end):
     """Fix the averaged rate from the approved currency back to the requested one."""
     if not expense.approved_currency or expense.approved_currency == expense.estimated_currency:
