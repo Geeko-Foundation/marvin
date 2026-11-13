@@ -1,11 +1,31 @@
+from django.contrib.auth import views as auth_views
 from django.urls import path
 
 from tsp import views
+from tsp.forms import NewPasswordForm, PasswordResetRequestForm
 
 urlpatterns = [
     path('login/', views.login_view, name='login'),
     path('logout/', views.logout_view, name='logout'),
+    path('password/reset/', auth_views.PasswordResetView.as_view(
+        template_name='tsp/password/reset_form.html',
+        email_template_name='email/password_reset.txt',
+        subject_template_name='email/password_reset_subject.txt',
+        form_class=PasswordResetRequestForm,
+    ), name='password_reset'),
+    path('password/reset/sent/', auth_views.PasswordResetDoneView.as_view(
+        template_name='tsp/password/reset_done.html',
+    ), name='password_reset_done'),
+    path('password/reset/<uidb64>/<token>/', auth_views.PasswordResetConfirmView.as_view(
+        template_name='tsp/password/reset_confirm.html',
+        form_class=NewPasswordForm,
+    ), name='password_reset_confirm'),
+    path('password/reset/done/', auth_views.PasswordResetCompleteView.as_view(
+        template_name='tsp/password/reset_complete.html',
+    ), name='password_reset_complete'),
     path('signup/', views.signup_account, name='signup'),
+    path('signup/confirm/<uidb64>/<token>/', views.signup_activate, name='signup_activate'),
+    path('signup/confirm/resend/', views.signup_resend, name='signup_resend'),
     path('signup/profile/', views.signup_profile, name='signup_profile'),
     path('signup/banking/', views.signup_banking, name='signup_banking'),
     path('signup/banking/progress/', views.signup_banking_progress, name='signup_banking_progress'),

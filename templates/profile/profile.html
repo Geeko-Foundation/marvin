@@ -15,39 +15,39 @@
       <h2 class="card-title text-lg">Personal Information</h2>
       <div class="grid gap-4 md:grid-cols-2">
         <div class="form-control">
-          <label class="label"><span class="label-text">First Name</span></label>
+          <label class="label" for="{{ form.first_name.id_for_label }}"><span class="label-text">First Name</span></label>
           {{ form.first_name }}
         </div>
         <div class="form-control">
-          <label class="label"><span class="label-text">Last Name</span></label>
+          <label class="label" for="{{ form.last_name.id_for_label }}"><span class="label-text">Last Name</span></label>
           {{ form.last_name }}
         </div>
         <div class="form-control md:col-span-2">
-          <label class="label"><span class="label-text">Email</span></label>
+          <label class="label" for="{{ form.email.id_for_label }}"><span class="label-text">Email</span></label>
           {{ form.email }}
         </div>
         <div class="form-control md:col-span-2">
-          <label class="label"><span class="label-text">Street Address</span></label>
+          <label class="label" for="{{ form.address_line.id_for_label }}"><span class="label-text">Street Address</span></label>
           {{ form.address_line }}
         </div>
         <div class="form-control">
-          <label class="label"><span class="label-text">City</span></label>
+          <label class="label" for="{{ form.city.id_for_label }}"><span class="label-text">City</span></label>
           {{ form.city }}
         </div>
         <div class="form-control">
-          <label class="label"><span class="label-text">State/Province</span></label>
+          <label class="label" for="{{ form.state.id_for_label }}"><span class="label-text">State/Province</span></label>
           {{ form.state }}
         </div>
         <div class="form-control">
-          <label class="label"><span class="label-text">Postal Code</span></label>
+          <label class="label" for="{{ form.postal_code.id_for_label }}"><span class="label-text">Postal Code</span></label>
           {{ form.postal_code }}
         </div>
         <div class="form-control">
-          <label class="label"><span class="label-text">Country</span></label>
+          <label class="label" for="{{ form.country.id_for_label }}"><span class="label-text">Country</span></label>
           {{ form.country }}
         </div>
         <div class="form-control md:col-span-2">
-          <label class="label"><span class="label-text">Phone</span></label>
+          <label class="label" for="{{ form.phone.id_for_label }}"><span class="label-text">Phone</span></label>
           {{ form.phone }}
         </div>
       </div>
@@ -83,11 +83,11 @@
       <p class="text-sm opacity-60 mb-4">Only the currency and payout method are stored here. Account numbers stay with Wise.</p>
       <div class="grid gap-4 md:grid-cols-2">
         <div class="form-control">
-          <label class="label"><span class="label-text">Banking Method</span></label>
+          <label class="label" for="{{ banking_form.banking_method.id_for_label }}"><span class="label-text">Banking Method</span></label>
           {{ banking_form.banking_method }}
         </div>
         <div class="form-control">
-          <label class="label"><span class="label-text">Currency</span></label>
+          <label class="label" for="{{ banking_form.banking_currency.id_for_label }}"><span class="label-text">Currency</span></label>
           {{ banking_form.banking_currency }}
         </div>
       </div>
@@ -118,6 +118,37 @@
       <button type="button" class="btn btn-primary btn-sm" data-alerts-toggle disabled>Turn on alerts</button>
       <span class="text-sm opacity-70" data-alerts-status aria-live="polite">Alerts are off for this device.</span>
     </div>
+  </div>
+</div>
+
+<div id="security" class="card bg-base-100 shadow-sm mt-6 max-w-2xl">
+  <div class="card-body">
+    <h2 class="card-title text-lg">Sign-in and Security</h2>
+    <p class="text-sm opacity-70">To change your password, we email a link to {{ user.email }}. Choose the new password from there.</p>
+    <form method="post" action="{% url 'password_change_email' %}" class="mt-2">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-outline btn-sm">Email me a password change link</button>
+    </form>
+
+    <div class="divider my-2"></div>
+    {% if two_factor_on %}
+    <p class="text-sm"><span class="badge badge-success badge-sm">On</span> Two-step sign-in asks for a code from your authenticator app.</p>
+    <div class="flex flex-wrap gap-2 mt-2">
+      <form method="post" action="{% url 'two_factor_backup_codes' %}" data-confirm="Make new backup codes?" data-confirm-detail="Your old backup codes stop working." data-confirm-action="Make new codes">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-outline btn-sm">New backup codes</button>
+      </form>
+      {% if not two_factor_required %}
+      <form method="post" action="{% url 'two_factor_disable' %}" data-confirm="Turn off two-step sign-in?" data-confirm-detail="Your password alone will be enough to sign in." data-confirm-action="Turn off">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-ghost btn-sm">Turn off</button>
+      </form>
+      {% endif %}
+    </div>
+    {% else %}
+    <p class="text-sm opacity-70">Two-step sign-in asks for a code from your phone as well as your password, so a stolen password is not enough.</p>
+    <a href="{% url 'two_factor_setup' %}" class="btn btn-outline btn-sm w-fit mt-2">Turn on two-step sign-in</a>
+    {% endif %}
   </div>
 </div>
 {% endblock %}

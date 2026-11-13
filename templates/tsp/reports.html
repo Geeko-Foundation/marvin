@@ -10,19 +10,19 @@
   <div class="card-body">
     <div class="flex flex-wrap gap-4 items-end">
       <div class="form-control">
-        <label class="label py-0"><span class="label-text">From</span></label>
+        <label class="label py-0" for="{{ form.date_from.id_for_label }}"><span class="label-text">From</span></label>
         {{ form.date_from }}
       </div>
       <div class="form-control">
-        <label class="label py-0"><span class="label-text">To</span></label>
+        <label class="label py-0" for="{{ form.date_to.id_for_label }}"><span class="label-text">To</span></label>
         {{ form.date_to }}
       </div>
       <div class="form-control">
-        <label class="label py-0"><span class="label-text">Status</span></label>
+        <label class="label py-0" for="{{ form.status.id_for_label }}"><span class="label-text">Status</span></label>
         {{ form.status }}
       </div>
       <div class="form-control">
-        <label class="label"><span class="label-text">Search</span></label>
+        <label class="label" for="{{ form.q.id_for_label }}"><span class="label-text">Search</span></label>
         {{ form.q }}
       </div>
       <button type="submit" class="btn btn-primary btn-sm">Filter</button>
@@ -71,8 +71,8 @@
             <td>{{ req.user.profile.country|default:"-" }}</td>
             <td><span class="badge {{ req.state|state_badge }} badge-sm whitespace-nowrap">{{ req.get_state_display }}</span></td>
             <td class="whitespace-nowrap">{% for currency, amount in req.totals_approved %}{{ amount|floatformat:"2g" }} {{ currency }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
-            <td class="whitespace-nowrap">{% if req.payment %}{{ req.payment.amount|floatformat:"2g" }} {{ req.payment.currency }}{% else %}-{% endif %}</td>
-            <td>{% if req.payment %}{{ req.payment.method_label }}{% else %}-{% endif %}</td>
+            <td class="whitespace-nowrap">{% with paid=req.settled_payment %}{% if paid %}{{ paid.amount|floatformat:"2g" }} {{ paid.currency }}{% else %}-{% endif %}</td>
+            <td>{% if paid %}{{ paid.method_label }}{% else %}-{% endif %}{% endwith %}</td>
           </tr>
           {% empty %}
           <tr><td colspan="8" class="text-center opacity-60 py-8">No requests match these filters.</td></tr>

@@ -8,6 +8,8 @@ from profile.decorators import get_profile
 ONBOARDING_URL_NAMES = {
     'signup',
     'signup_account',
+    'signup_activate',
+    'signup_resend',
     'signup_profile',
     'signup_banking',
     'signup_banking_options',

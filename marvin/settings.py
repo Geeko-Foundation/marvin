@@ -38,7 +38,7 @@ def env_list(key: str, default: str) -> list[str]:
 
 ALLOWED_HOSTS = env_list(
     'ALLOWED_HOSTS',
-    'localhost,127.0.0.1,testserver, 10.1.10.50',
+    'localhost,127.0.0.1,testserver',
 )
 
 # Any host beyond this machine means people can reach the site, so it must
@@ -72,9 +72,15 @@ CSRF_TRUSTED_ORIGINS = env_list('CSRF_TRUSTED_ORIGINS', '') or [
     if host not in ('localhost', '127.0.0.1', 'testserver', '*')
 ]
 
-# Railway terminates TLS at its proxy; trust X-Forwarded-Proto.
-if env('RAILWAY_PUBLIC_DOMAIN'):
+# A public site sits behind a proxy that terminates TLS, as Railway's and
+# ngrok's do, so trust its X-Forwarded-Proto and tell browsers to stay on
+# HTTPS. Plain HTTP is redirected on Railway by default; elsewhere the same
+# machine may also be reached as http://localhost, so it is opt-in there.
+if env('RAILWAY_PUBLIC_DOMAIN') or (SERVED_PUBLICLY and not DEBUG):
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+SECURE_SSL_REDIRECT = env_bool('SECURE_SSL_REDIRECT', bool(env('RAILWAY_PUBLIC_DOMAIN')))
+if SERVED_PUBLICLY and not DEBUG:
+    SECURE_HSTS_SECONDS = int(env('SECURE_HSTS_SECONDS', str(30 * 24 * 60 * 60)))
 
 
 # --- Application ---
@@ -88,6 +94,9 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'django_tables2',
     'webpush',
+    'django_otp',
+    'django_otp.plugins.otp_totp',
+    'django_otp.plugins.otp_static',
     'payments',
     'profile',
     'tsp',
@@ -100,6 +109,8 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'django_otp.middleware.OTPMiddleware',
+    'profile.two_factor.TwoFactorMiddleware',
     'marvin.audit.AuditUserMiddleware',
     'tsp.middleware.RequesterOnboardingMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
@@ -168,6 +179,11 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 LOGIN_URL = '/admin/login/'
+# The name authenticator apps show next to the six-digit code.
+OTP_TOTP_ISSUER = env('BRAND_APP_NAME', 'Marvin')
+# Off under `manage.py test`, so tests can sign staff in directly; the
+# two-step sign-in tests turn it back on.
+TWO_FACTOR_ENFORCED = env_bool('TWO_FACTOR_ENFORCED', sys.argv[1:2] != ['test'])
 APP_LOGIN_URL = 'login'
 LOGIN_REDIRECT_URL = 'dashboard'
 
@@ -190,7 +206,9 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 WHITENOISE_USE_FINDERS = True
 
 MEDIA_URL = 'uploads/'
-MEDIA_ROOT = BASE_DIR / 'uploads'
+# Receipts and signed forms live here. On a host whose disk is replaced on
+# every deploy, such as Railway, point this at a mounted volume.
+MEDIA_ROOT = Path(env('MEDIA_ROOT') or BASE_DIR / 'uploads')
 
 DJANGO_TABLES2_TEMPLATE = 'django_tables2/daisyui.html'
 
@@ -252,11 +270,8 @@ WEBPUSH_SETTINGS = {
 # Development sandbox token. Set WISE_API_TOKEN in .env for production.
 WISE_API_TOKEN = env(
     'WISE_API_TOKEN',
-  'bdde76cb-fe9b-4664-974b-c7b52f66294d',
+    'bdde76cb-fe9b-4664-974b-c7b52f66294d',
 )
-# old: '4420b1fd-2246-4644-9730-56e7c9e4b41b',
-
-
 WISE_API_PROFILE_ID = env('WISE_API_PROFILE_ID', '')
 WISE_API_SANDBOX = env_bool('WISE_API_SANDBOX', default=True)
 WISE_SOURCE_CURRENCY = env('WISE_SOURCE_CURRENCY', 'GBP')
@@ -302,9 +317,13 @@ LOGGING = {
             'class': 'logging.StreamHandler',
             'formatter': 'wise',
         },
+        # Kept to about 25 MB. On a host that replaces its disk per deploy,
+        # the console copy, which the host keeps, is the one that survives.
         'wise_file': {
-            'class': 'logging.FileHandler',
+            'class': 'logging.handlers.RotatingFileHandler',
             'filename': LOG_DIR / 'wise.log',
+            'maxBytes': 5 * 1024 * 1024,
+            'backupCount': 4,
             'formatter': 'wise',
         },
     },
