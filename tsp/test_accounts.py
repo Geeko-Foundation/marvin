@@ -147,3 +147,64 @@ class TwoStepSignInTests(TestCase):
         device = TOTPDevice.objects.get(user=user)
         self.client.post(reverse('two_factor_setup'), {'token': self.code(device)})
         self.assertTrue(TOTPDevice.objects.get(user=user).confirmed)
+
+
+class IncompleteAddressTests(TestCase):
+    """An account with Wise set up but part of its address missing can finish it."""
+
+    def test_the_missing_field_is_asked_for_instead_of_looping(self):
+        user = make_user('nopostcode', [GROUP_REQUESTER])
+        user.profile.postal_code = ''
+        user.profile.save()
+        self.client.force_login(user)
+        self.assertRedirects(self.client.get(reverse('dashboard')), reverse('signup_profile'),
+                             fetch_redirect_response=False)
+        self.assertEqual(self.client.get(reverse('signup_profile')).status_code, 200)
+        self.assertRedirects(self.client.get(reverse('signup_complete')), reverse('signup_profile'),
+                             fetch_redirect_response=False)
+
+        user.profile.postal_code = '411001'
+        user.profile.save()
+        self.assertEqual(self.client.get(reverse('dashboard')).status_code, 200)
+
+
+class EmailChangeTests(TestCase):
+    """A new email address is used only once a link sent to it is opened."""
+
+    def setUp(self):
+        self.user = make_user('mover', [GROUP_TSP])
+        self.user.email = 'old@example.org'
+        self.user.save()
+        self.client.force_login(self.user)
+
+    def change_to(self, email):
+        return self.client.post(reverse('profile'), {'first_name': 'Mo', 'last_name': 'Ver', 'email': email})
+
+    def test_the_new_address_waits_for_its_link(self):
+        self.change_to('new@example.org')
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.email, 'old@example.org')
+        self.assertEqual(mail.outbox[-1].to, ['new@example.org'])
+        self.client.get(link_in(mail.outbox[-1]))
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.email, 'new@example.org')
+
+    def test_the_link_works_once(self):
+        self.change_to('new@example.org')
+        link = link_in(mail.outbox[-1])
+        self.client.get(link)
+        self.user.email = 'third@example.org'
+        self.user.save()
+        self.client.get(link)
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.email, 'third@example.org')
+
+    def test_an_address_another_account_uses_is_refused(self):
+        make_user('other', [GROUP_TSP]).__class__.objects.filter(username='other').update(email='taken@example.org')
+        response = self.change_to('taken@example.org')
+        self.assertContains(response, 'An account with this email already exists.')
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_keeping_the_same_address_sends_nothing(self):
+        self.change_to('OLD@example.org')
+        self.assertEqual(len(mail.outbox), 0)

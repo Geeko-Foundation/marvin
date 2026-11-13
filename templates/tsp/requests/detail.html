@@ -152,6 +152,13 @@
             </tfoot>
           </table>
         </div>
+        {% with paid_as=travel_request.payout_preview %}
+        {% if paid_as.error %}
+        <p class="text-sm text-warning mt-2">Paid in {{ travel_request.payout_currency }}. {{ paid_as.error }}</p>
+        {% elif paid_as %}
+        <p class="text-sm opacity-70 mt-2">Paid to the bank account as about <strong>{{ paid_as.amount|floatformat:"2g" }} {{ paid_as.currency }}</strong>, converted at the 90-day average rate.</p>
+        {% endif %}
+        {% endwith %}
         {% if travel_request.approval_percent %}
         <p class="text-sm opacity-70 mt-2">Approved at {{ travel_request.approval_percent }}% of what was asked for.</p>
         {% endif %}

@@ -3,32 +3,65 @@
 {% block title %}Set Up Two-Step Sign-In{% endblock %}
 
 {% block content %}
-<div class="card bg-base-100 shadow-sm max-w-xl">
-  <div class="card-body">
-    <h1 class="card-title text-2xl">Set up two-step sign-in</h1>
-    {% if required %}
-    <p class="text-sm opacity-70">Your role can approve requests or send money, so signing in needs a code from your phone as well as your password.</p>
-    {% else %}
-    <p class="text-sm opacity-70">Signing in will also ask for a code from your phone, so your password alone is not enough to get in.</p>
-    {% endif %}
-    <ol class="list-decimal list-inside text-sm space-y-1 mt-2">
-      <li>Open an authenticator app, such as Google Authenticator, Microsoft Authenticator, Aegis or 1Password.</li>
-      <li>Scan this code, or type in the key below it.</li>
-      <li>Enter the six-digit code the app shows.</li>
-    </ol>
-    <div class="bg-white p-3 rounded-box w-fit my-3" aria-label="QR code for your authenticator app">{{ qr_svg|safe }}</div>
-    <p class="text-xs opacity-70">Key: <code class="select-all">{{ secret }}</code></p>
-    <form method="post" class="grid gap-3 mt-4">
-      {% csrf_token %}
-      <input type="hidden" name="next" value="{{ next }}">
-      <label class="form-control">
-        <span class="label-text mb-1">Six-digit code</span>
-        <input type="text" name="token" inputmode="numeric" autocomplete="one-time-code" maxlength="8" required
-               class="input input-bordered w-40" autofocus>
-      </label>
-      {% if error %}<p class="text-sm text-error" role="alert">{{ error }}</p>{% endif %}
-      <button type="submit" class="btn btn-primary w-fit">Turn on two-step sign-in</button>
-    </form>
+<div class="card bg-base-100 shadow-sm max-w-3xl mx-auto">
+  <div class="card-body gap-4">
+    <div>
+      <h1 class="card-title text-2xl">Set up two-step sign-in</h1>
+      {% if required %}
+      <p class="text-sm opacity-70 mt-1">Your role can approve requests or send money, so signing in needs a code from your phone as well as your password.</p>
+      {% else %}
+      <p class="text-sm opacity-70 mt-1">Signing in will also ask for a code from your phone, so your password alone is not enough to get in.</p>
+      {% endif %}
+    </div>
+
+    <div class="grid gap-6 md:grid-cols-[auto_1fr] md:items-start">
+      <div class="flex flex-col items-center gap-3">
+        <div class="bg-white p-3 rounded-box w-52 [&>svg]:w-full [&>svg]:h-auto" role="img" aria-label="QR code for your authenticator app">{{ qr_svg|safe }}</div>
+        {# On a phone the app is usually on the same screen, so it cannot scan this. #}
+        <a href="{{ config_url }}" class="btn btn-outline btn-sm w-full md:hidden">Open in authenticator app</a>
+      </div>
+
+      <div class="grid gap-4 min-w-0">
+        <ol class="list-decimal list-inside text-sm space-y-1">
+          <li>Install an authenticator app, such as Google Authenticator, Microsoft Authenticator, Aegis or 1Password.</li>
+          <li>Scan the QR code<span class="md:hidden">, tap <em>Open in authenticator app</em>,</span> or type in the key below.</li>
+          <li>Enter the six-digit code the app shows.</li>
+        </ol>
+
+        <div>
+          <p class="text-xs opacity-70 mb-1">Key</p>
+          <div class="flex items-center gap-2 bg-base-200 rounded-box px-3 py-2">
+            <code class="font-mono text-sm break-all flex-1 select-all" data-secret>{{ secret }}</code>
+            <button type="button" class="btn btn-ghost btn-xs" data-copy-secret>Copy</button>
+          </div>
+        </div>
+
+        <form method="post" class="grid gap-2">
+          {% csrf_token %}
+          <input type="hidden" name="next" value="{{ next }}">
+          <label for="id_token" class="label-text">Six-digit code</label>
+          <div class="flex flex-wrap gap-2">
+            <input id="id_token" type="text" name="token" inputmode="numeric" pattern="[0-9 ]*" autocomplete="one-time-code"
+                   maxlength="7" required autofocus placeholder="123 456"
+                   class="input input-bordered w-full sm:w-40 font-mono text-lg tracking-widest text-center">
+            <button type="submit" class="btn btn-primary w-full sm:w-auto">Turn on</button>
+          </div>
+          {% if error %}<p class="text-sm text-error" role="alert">{{ error }}</p>{% endif %}
+        </form>
+      </div>
+    </div>
   </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  document.querySelector('[data-copy-secret]')?.addEventListener('click', function () {
+    var button = this;
+    navigator.clipboard.writeText(document.querySelector('[data-secret]').textContent.trim()).then(function () {
+      button.textContent = 'Copied';
+      setTimeout(function () { button.textContent = 'Copy'; }, 2000);
+    });
+  });
+</script>
 {% endblock %}
