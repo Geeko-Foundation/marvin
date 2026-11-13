@@ -139,35 +139,19 @@ class WiseApiGateway(PaymentGateway):
                 )
             account_id = int(account_id)
 
-            account_currency = metadata.get('account_currency') or payment_request.currency
-            if account_currency == payment_request.currency:
-                quote = client.create_quote(
-                    source_currency=metadata.get(
-                        'source_currency',
-                        getattr(settings, 'WISE_SOURCE_CURRENCY', 'GBP'),
-                    ),
-                    target_currency=payment_request.currency,
-                    target_amount=payment_request.amount,
-                    target_account=account_id,
-                )
-            else:
-                # The account only takes its own currency. The requester is owed
-                # the approved sum in full and the foundation pays Wise's fee, so
-                # ask for the approved amount's worth at Wise's rate to arrive.
-                quote = client.create_quote(
-                    source_currency=payment_request.currency,
-                    target_currency=account_currency,
-                    target_amount=converted(client, payment_request.amount, payment_request.currency,
-                                            account_currency),
-                    target_account=account_id,
-                )
+            quote = self._quote(payment_request, account_id)
             transfer = client.create_transfer(
                 quote_id=quote['id'],
                 target_account=account_id,
                 reference=payment_request.reference,
                 customer_transaction_id=transaction_id_for(payment_request, account_id),
             )
-            funded = client.fund_or_advance_transfer(transfer['id'])
+            try:
+                funded = client.fund_or_advance_transfer(transfer['id'])
+            except WiseApiError as exc:
+                if exc.status_code != 403:
+                    raise
+                return self._awaiting_approval(transfer, quote, account_id)
             transfer = funded.get('transfer') or client.get_transfer(transfer['id'])
 
             return PaymentResult(
@@ -193,6 +177,98 @@ class WiseApiGateway(PaymentGateway):
                 metadata={'wise_account_id': account_id, **error},
             )
 
+    def _awaiting_approval(self, transfer: dict, quote: dict, account_id: int, **extra) -> PaymentResult:
+        """A transfer created in Wise that someone still has to fund there."""
+        return PaymentResult(
+            status='processing',
+            external_id=str(transfer['id']),
+            metadata={
+                'wise_account_id': account_id,
+                'transfer_status': transfer.get('status', 'incoming_payment_waiting').lower(),
+                'awaiting_approval': True,
+                'sandbox': self._client.sandbox,
+                **settlement_details(transfer, quote),
+                **extra,
+            },
+        )
+
+    def send_batch(self, name: str, payment_requests: list[PaymentRequest]) -> list[PaymentResult]:
+        """
+        Put the payments into Wise batch groups, one per source currency, to fund in Wise.
+
+        Returns a result for each payment, in the same order. A payment that could
+        not be added fails on its own, without stopping the others.
+        """
+        client = self._client
+        results: list[PaymentResult | None] = [None] * len(payment_requests)
+        groups: dict[str, list[tuple[int, PaymentRequest, int, dict]]] = {}
+        for index, payment_request in enumerate(payment_requests):
+            account_id = payment_request.metadata.get('wise_account_id')
+            if not account_id:
+                results[index] = PaymentResult(status='failed', metadata={
+                    'error': 'The requester has not set up their Wise recipient account.'})
+                continue
+            try:
+                quote = self._quote(payment_request, int(account_id))
+            except (WiseApiError, requests.RequestException) as exc:
+                results[index] = PaymentResult(status='failed', metadata={'error': str(exc)})
+                continue
+            groups.setdefault(quote['sourceCurrency'], []).append((index, payment_request, int(account_id), quote))
+
+        for currency, members in groups.items():
+            try:
+                group = client.create_batch_group(f'{name} ({currency})', currency)
+            except (WiseApiError, requests.RequestException) as exc:
+                for index, *_ in members:
+                    results[index] = PaymentResult(status='failed', metadata={'error': str(exc)})
+                continue
+            for index, payment_request, account_id, quote in members:
+                try:
+                    transfer = client.add_batch_transfer(
+                        group['id'], quote_id=quote['id'], target_account=account_id,
+                        reference=payment_request.reference,
+                        customer_transaction_id=transaction_id_for(payment_request, account_id),
+                    )
+                except (WiseApiError, requests.RequestException) as exc:
+                    results[index] = PaymentResult(status='failed', metadata={'error': str(exc)})
+                    continue
+                results[index] = self._awaiting_approval(
+                    transfer, quote, account_id, batch_group_id=group['id'], batch_name=group.get('name', name))
+            try:
+                client.complete_batch_group(group['id'])
+            except (WiseApiError, requests.RequestException) as exc:
+                # The transfers exist, so they stay recorded; the batch just has to
+                # be closed in Wise before it can be funded.
+                for index, *_ in members:
+                    if results[index] and results[index].external_id:
+                        results[index].metadata['error'] = f'The batch could not be closed: {exc}'
+        return results
+
+    def _quote(self, payment_request: PaymentRequest, account_id: int) -> dict:
+        """The quote for one payment, in the currency its recipient's account takes."""
+        metadata = payment_request.metadata
+        client = self._client
+        account_currency = metadata.get('account_currency') or payment_request.currency
+        if account_currency == payment_request.currency:
+            return client.create_quote(
+                source_currency=metadata.get(
+                    'source_currency',
+                    settings.WISE_SOURCE_CURRENCY,
+                ),
+                target_currency=payment_request.currency,
+                target_amount=payment_request.amount,
+                target_account=account_id,
+            )
+        # The account only takes its own currency. The requester is owed the
+        # approved sum in full and the foundation pays Wise's fee, so ask for
+        # the approved amount's worth at Wise's rate to arrive.
+        return client.create_quote(
+            source_currency=payment_request.currency,
+            target_currency=account_currency,
+            target_amount=converted(client, payment_request.amount, payment_request.currency, account_currency),
+            target_account=account_id,
+        )
+
     def get_status(self, external_id: str) -> PaymentResult:
         """
         Poll Wise for the current transfer status by transfer ID.
@@ -210,6 +286,7 @@ class WiseApiGateway(PaymentGateway):
                 external_id=external_id,
                 metadata={
                     'transfer_status': transfer['status'],
+                    'awaiting_approval': transfer['status'] == 'incoming_payment_waiting',
                     **settlement_details(transfer),
                 },
             )

@@ -1,3 +1,5 @@
+import re
+
 from django.contrib.auth import get_user_model
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
@@ -62,3 +64,76 @@ class PaymentRecord(AuditModel):
         if self.processed_by_id and not self.created_by_id:
             self.created_by = self.processed_by
         super().save(*args, **kwargs)
+
+
+# Keys whose values are bank details. They are kept to the last four
+# characters, so the log can show which account without storing it.
+MASKED_KEYS = {
+    'iban', 'accountnumber', 'sortcode', 'routingnumber', 'ifsccode', 'bsbcode',
+    'bankcode', 'branchcode', 'swiftcode', 'bic', 'cpf', 'taxid',
+}
+
+
+def masked(value):
+    """``value`` with bank details cut down to their last four characters."""
+    if isinstance(value, dict):
+        return {
+            key: (f'…{str(item)[-4:]}' if key.lower() in MASKED_KEYS and item else masked(item))
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [masked(item) for item in value]
+    return value
+
+
+class WiseLogEntry(models.Model):
+    """
+    One exchange with Wise, written once and never changed.
+
+    Every API call Marvin makes and every webhook Wise sends, with what was
+    sent and what came back, so a payment's whole story can be read later.
+    The API token and signature headers are never stored.
+    """
+
+    API = 'api'
+    WEBHOOK = 'webhook'
+
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    kind = models.CharField(max_length=10, choices=[(API, 'API call'), (WEBHOOK, 'Webhook')])
+    mode = models.CharField(max_length=10, blank=True)
+    method = models.CharField(max_length=10, blank=True)
+    path = models.CharField(max_length=300)
+    status_code = models.PositiveSmallIntegerField(null=True, blank=True)
+    duration_ms = models.PositiveIntegerField(null=True, blank=True)
+    request_body = models.JSONField(null=True, blank=True)
+    response_body = models.JSONField(null=True, blank=True)
+    transfer_id = models.CharField(max_length=40, blank=True, db_index=True)
+    signature_valid = models.BooleanField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name_plural = 'Wise log entries'
+
+    def __str__(self):
+        return f'{self.created_at:%Y-%m-%d %H:%M:%S} {self.method} {self.path} {self.status_code}'
+
+    def save(self, *args, **kwargs):
+        if self.pk is not None:
+            raise ValueError('Wise log entries cannot be changed once written.')
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValueError('Wise log entries cannot be deleted.')
+
+
+def transfer_id_in(path, body):
+    """The transfer an exchange is about, from its path or its body."""
+    found = re.search(r'/transfers/(\d+)', path)
+    if found:
+        return found.group(1)
+    if isinstance(body, dict):
+        resource = (body.get('data') or {}).get('resource') or {}
+        for candidate in (resource.get('id'), body.get('id') if body.get('targetAccount') else None):
+            if candidate:
+                return str(candidate)
+    return ''

@@ -18,7 +18,6 @@ simulation endpoints (see Wise Simulation API docs).
 
 from __future__ import annotations
 
-import base64
 import time
 import uuid
 from decimal import Decimal
@@ -26,7 +25,7 @@ from typing import Any
 
 import requests
 
-from payments.gateways.wise_logging import log_wise_request
+from payments.gateways.wise_logging import record_wise_call
 
 # Seconds to connect, then to wait for a reply. Without a limit a slow Wise
 # call holds a server worker until it is killed, part way through a payment.
@@ -34,20 +33,7 @@ TIMEOUT = (5, 30)
 
 WISE_LIVE_BASE_URL = 'https://api.transferwise.com'
 
-
-def sign_one_time_token(token: str, private_key_pem: str) -> str:
-    """
-    Sign Wise's one-time token for Strong Customer Authentication.
-
-    Wise checks the signature against the public key uploaded to the account,
-    which proves the request comes from whoever holds the private key.
-    """
-    from cryptography.hazmat.primitives import hashes, serialization
-    from cryptography.hazmat.primitives.asymmetric import padding
-
-    key = serialization.load_pem_private_key(private_key_pem.encode(), password=None)
-    signature = key.sign(token.encode('ascii'), padding.PKCS1v15(), hashes.SHA256())
-    return base64.b64encode(signature).decode('ascii')
+APPROVE_IN_WISE = 'Created in Wise. Approve it there to send it.'
 
 
 WISE_SANDBOX_BASE_URL = 'https://api.wise-sandbox.com'
@@ -62,8 +48,9 @@ SANDBOX_SIMULATION_STEPS = (
     'outgoing_payment_sent',
 )
 # How many of those steps a sandbox transfer in each state has already passed.
+# A transfer still waiting for its money is left alone: simulating it would
+# show a payment as sent when nobody funded it.
 SANDBOX_STEPS_DONE_BY_STATUS = {
-    'incoming_payment_waiting': 0,
     'processing': 1,
     'funds_converted': 2,
 }
@@ -100,13 +87,11 @@ class WiseApiClient:
         profile_id: str | None = None,
         *,
         sandbox: bool = True,
-        sca_private_key: str = '',
     ):
         if not api_token:
             raise WiseApiError('WISE_API_TOKEN is not configured.')
 
         self.api_token = api_token
-        self.sca_private_key = (sca_private_key or '').strip()
         self.profile_id = str(profile_id) if profile_id else ''
         self.sandbox = sandbox
         self.base_url = WISE_SANDBOX_BASE_URL if sandbox else WISE_LIVE_BASE_URL
@@ -134,10 +119,16 @@ class WiseApiClient:
         A network failure becomes a WiseApiError, so every caller handles an
         unreachable Wise the same way it handles Wise refusing a request.
         """
+        started = time.monotonic()
         try:
-            return self._session.request(method, self._url(path), timeout=TIMEOUT, **kwargs)
+            response = self._session.request(method, self._url(path), timeout=TIMEOUT, **kwargs)
         except requests.RequestException as exc:
+            record_wise_call(method, path, kwargs.get('json') or kwargs.get('params'), None,
+                             mode=self.mode_label, error=str(exc), started=started)
             raise WiseApiError(f'Could not reach Wise: {exc}') from exc
+        record_wise_call(method, path, kwargs.get('json') or kwargs.get('params'), response,
+                         mode=self.mode_label, started=started)
+        return response
 
     def _request(
         self,
@@ -152,11 +143,10 @@ class WiseApiClient:
         Issue a JSON request and parse the response.
 
         Raises ``WiseApiError`` on HTTP 4xx/5xx unless ``allow_error`` is True.
-        Logs every request via ``log_wise_request``.
+        Every call is recorded by ``_send``.
         """
         headers = dict(extra_headers or {})
         response = self._send(method, path, json=payload, headers=headers or None)
-        log_wise_request(method, path, response.status_code, mode=self.mode_label)
 
         try:
             data = response.json()
@@ -214,7 +204,6 @@ class WiseApiClient:
         """
         profile_id = self.resolve_profile_id()
         response = self._send('GET', f'/v4/profiles/{profile_id}/balances', params={'types': types})
-        log_wise_request('GET', f'/v4/profiles/{profile_id}/balances', response.status_code, mode=self.mode_label)
         try:
             data = response.json()
         except ValueError:
@@ -438,43 +427,45 @@ class WiseApiClient:
         }
         return self._request('POST', '/v1/transfers', payload)
 
+    def create_batch_group(self, name: str, source_currency: str) -> dict:
+        """POST /v3/profiles/{profileId}/batch-groups: an empty batch, funded later in Wise."""
+        profile_id = self.resolve_profile_id()
+        return self._request('POST', f'/v3/profiles/{profile_id}/batch-groups',
+                             {'name': name, 'sourceCurrency': source_currency})
+
+    def add_batch_transfer(self, group_id: str, *, quote_id, target_account: int, reference: str,
+                           customer_transaction_id: str) -> dict:
+        """POST /v3/profiles/{profileId}/batch-groups/{id}/transfers"""
+        profile_id = self.resolve_profile_id()
+        return self._request('POST', f'/v3/profiles/{profile_id}/batch-groups/{group_id}/transfers', {
+            'targetAccount': target_account,
+            'quoteUuid': str(quote_id),
+            'customerTransactionId': customer_transaction_id,
+            'details': {'reference': reference},
+        })
+
+    def complete_batch_group(self, group_id: str) -> dict:
+        """Close a batch so it can be funded in Wise. Wise asks for its current version."""
+        profile_id = self.resolve_profile_id()
+        path = f'/v3/profiles/{profile_id}/batch-groups/{group_id}'
+        version = self._request('GET', path)['version']
+        return self._request('PATCH', path, {'version': version, 'status': 'COMPLETED'})
+
     def fund_transfer(self, transfer_id: int, funding_type: str = 'BALANCE') -> dict:
         """
         POST /v3/profiles/{profileId}/transfers/{transferId}/payments
 
-        Handles Wise SCA (403 + One-Time-Token) when approval is already granted.
+        Wise refuses with 403 when the payment has to be approved in Wise.
         """
         profile_id = self.resolve_profile_id()
         path = f'/v3/profiles/{profile_id}/transfers/{transfer_id}/payments'
         body = {'type': funding_type}
 
         response = self._send('POST', path, json=body)
-        log_wise_request('POST', path, response.status_code, mode=self.mode_label)
-
         if response.status_code == 403:
-            approval = response.headers.get('x-2fa-approval-result')
-            ott = response.headers.get('x-2fa-approval')
-            if approval == 'APPROVED' and ott:
-                response = self._send('POST', path, json=body, headers={'One-Time-Token': ott})
-                log_wise_request('POST', path, response.status_code, mode=self.mode_label)
-            elif ott and self.sca_private_key:
-                response = self._send('POST', path, json=body, headers={
-                    'x-2fa-approval': ott,
-                    'X-Signature': sign_one_time_token(ott, self.sca_private_key),
-                })
-                log_wise_request('POST', path, response.status_code, mode=self.mode_label)
-            elif ott:
-                raise WiseApiError(
-                    'Wise needs this payment signed, and WISE_SCA_PRIVATE_KEY is not set. '
-                    'Fund the transfer in Wise, or configure the signing key.',
-                    status_code=403,
-                )
-            else:
-                raise WiseApiError(
-                    'Transfer funding requires manual approval in Wise (UK/EU non-bank). '
-                    'Log in to Wise to fund this transfer, or use sandbox simulation.',
-                    status_code=403,
-                )
+            # Wise funds payments for personal-token users only in its own
+            # website or app (PSD2), so the transfer waits there for approval.
+            raise WiseApiError(APPROVE_IN_WISE, status_code=403)
 
         try:
             data = response.json()
@@ -534,7 +525,9 @@ class WiseApiClient:
         try:
             fund = self.fund_transfer(transfer_id)
         except WiseApiError as exc:
-            if self.sandbox and exc.status_code in (403, 422):
+            # Only a throwaway check, such as recipient verification, is moved on
+            # without funding; a payment waits for someone to fund it in Wise.
+            if self.sandbox and sandbox_steps and exc.status_code in (403, 422):
                 transfer = self.advance_sandbox_transfer(
                     transfer_id,
                     delay_seconds=sandbox_delay_seconds,
@@ -693,7 +686,6 @@ def get_wise_client(**kwargs) -> WiseApiClient:
     if django_settings:
         kwargs.setdefault('api_token', getattr(django_settings, 'WISE_API_TOKEN', None))
         kwargs.setdefault('profile_id', getattr(django_settings, 'WISE_API_PROFILE_ID', None))
-        kwargs.setdefault('sca_private_key', getattr(django_settings, 'WISE_SCA_PRIVATE_KEY', ''))
         if 'sandbox' not in kwargs:
             kwargs['sandbox'] = getattr(django_settings, 'WISE_API_SANDBOX', True)
 
