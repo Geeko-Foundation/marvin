@@ -1,0 +1,401 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   width="266.15558"
+   height="306.21841"
+   viewBox="0 0 266.15558 306.21842"
+   role="img"
+   aria-label="Marvin, a friendly grey travel robot with smiling amber eyes and a map-pin antenna, waving a boarding pass and pulling a padlocked wheely suitcase"
+   version="1.1"
+   id="svg53"
+   sodipodi:docname="marvin-logo.svg"
+   inkscape:version="1.4.4 (unknown)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns:xlink="http://www.w3.org/1999/xlink"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns:c2pa="http://c2pa.org/manifest">
+  <sodipodi:namedview
+     id="namedview53"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     showgrid="false"
+     inkscape:zoom="1.6259259"
+     inkscape:cx="133.76993"
+     inkscape:cy="175.89977"
+     inkscape:window-width="1920"
+     inkscape:window-height="1131"
+     inkscape:window-x="0"
+     inkscape:window-y="0"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="svg53" />
+  <defs
+     id="defs1">
+    <pattern
+       inkscape:collect="always"
+       xlink:href="#scan"
+       id="pattern53"
+       patternTransform="translate(-60.253729,-106.21858)" />
+    <pattern
+       id="scan"
+       width="4"
+       height="4"
+       patternUnits="userSpaceOnUse">
+      <rect
+         width="4"
+         height="2"
+         fill="#ffffff"
+         opacity="0.03"
+         id="rect1" />
+    </pattern>
+  </defs>
+  <!-- flight path -->
+  <!-- torso -->
+  <path
+     d="m 65.655577,153.71841 q 0,-12 14,-12 H 187.65558 q 14,0 14,12 l 8,120 q 0,20 -20,20 H 77.655577 q -20,0 -20,-20 z"
+     fill="#9aa5b4"
+     stroke="#11151c"
+     stroke-width="3"
+     id="path16" />
+  <path
+     d="m 69.655577,155.71841 -4,118 q 0,12 12,12 h 16 v -136 h -14 q -8,0 -10,6 z"
+     fill="#11151c"
+     opacity="0.12"
+     id="path17" />
+  <line
+     x1="61.655579"
+     y1="205.7184"
+     x2="205.65558"
+     y2="205.7184"
+     stroke="#11151c"
+     stroke-width="2"
+     opacity="0.4"
+     id="line17" />
+  <g
+     fill="#11151c"
+     opacity="0.5"
+     id="g20"
+     transform="translate(-66.344423,-94.281593)">
+    <circle
+       cx="146"
+       cy="250"
+       r="2.5"
+       id="circle17" />
+    <circle
+       cx="254"
+       cy="250"
+       r="2.5"
+       id="circle18" />
+    <circle
+       cx="140"
+       cy="372"
+       r="2.5"
+       id="circle19" />
+    <circle
+       cx="260"
+       cy="372"
+       r="2.5"
+       id="circle20" />
+  </g>
+  <rect
+     x="99.655579"
+     y="159.7184"
+     width="68"
+     height="40"
+     rx="8"
+     fill="#0e1218"
+     stroke="#11151c"
+     stroke-width="3"
+     id="rect20" />
+  <path
+     d="m 109.65558,191.71841 a 24,24 0 0 1 48,0"
+     fill="none"
+     stroke="#3a4352"
+     stroke-width="4"
+     id="path20" />
+  <path
+     d="m 109.65558,191.71841 a 24,24 0 0 1 36,-21"
+     fill="none"
+     stroke="#f2b544"
+     stroke-width="4"
+     id="path21" />
+  <line
+     x1="133.65558"
+     y1="191.7184"
+     x2="145.65558"
+     y2="172.7184"
+     stroke="#e8ecf2"
+     stroke-width="2.5"
+     stroke-linecap="round"
+     id="line21" />
+  <circle
+     cx="133.65558"
+     cy="191.7184"
+     r="3"
+     fill="#e8ecf2"
+     id="circle21" />
+  <!-- suitcase -->
+  <!-- arms -->
+  <g
+     stroke="#11151c"
+     stroke-width="3"
+     fill="#9aa5b4"
+     id="g38"
+     transform="translate(-66.344423,-94.281593)">
+    <circle
+       cx="118"
+       cy="262"
+       r="14"
+       id="circle34" />
+    <path
+       d="m 112,256 -26,-50 12,-6 26,52 z"
+       id="path34" />
+    <circle
+       cx="92"
+       cy="204"
+       r="9"
+       id="circle35" />
+    <path
+       d="m 86,202 6,-50 12,2 -6,50 z"
+       id="path35" />
+    <circle
+       cx="282"
+       cy="262"
+       r="14"
+       id="circle36" />
+    <path
+       d="m 288,270 18,60 -12,4 -20,-62 z"
+       id="path36" />
+    <circle
+       cx="300"
+       cy="334"
+       r="9"
+       id="circle37" />
+    <path
+       d="m 300,328 22,56 -12,4 -18,-52 z"
+       id="path37" />
+    <path
+       d="m 308,382 2,16 m 8,-18 2,18 m 8,-16 2,14"
+       fill="none"
+       stroke-linecap="round"
+       stroke-width="5"
+       id="path38" />
+  </g>
+  <!-- boarding pass -->
+  <g
+     transform="rotate(-12,-383.68693,396.47171)"
+     id="g41">
+    <rect
+       x="70"
+       y="112"
+       width="58"
+       height="32"
+       rx="4"
+       fill="#e8ecf2"
+       stroke="#11151c"
+       stroke-width="3"
+       id="rect38" />
+    <rect
+       x="70"
+       y="112"
+       width="58"
+       height="9"
+       rx="3"
+       fill="#f2b544"
+       stroke="#11151c"
+       stroke-width="3"
+       id="rect39" />
+    <line
+       x1="112"
+       y1="124"
+       x2="112"
+       y2="142"
+       stroke="#11151c"
+       stroke-width="2"
+       stroke-dasharray="3, 3"
+       id="line39" />
+    <rect
+       x="78"
+       y="128"
+       width="26"
+       height="3"
+       rx="1.5"
+       fill="#11151c"
+       opacity="0.5"
+       id="rect40" />
+    <rect
+       x="78"
+       y="135"
+       width="18"
+       height="3"
+       rx="1.5"
+       fill="#11151c"
+       opacity="0.5"
+       id="rect41" />
+  </g>
+  <path
+     d="m 23.655577,55.718407 -4,-10 m 12,10 v -10 m 8,12 2,-10"
+     fill="none"
+     stroke="#11151c"
+     stroke-linecap="round"
+     stroke-width="5"
+     id="path41" />
+  <!-- neck -->
+  <g
+     fill="#5b6676"
+     stroke="#11151c"
+     stroke-width="3"
+     id="g43"
+     transform="translate(-66.344423,-94.281593)">
+    <rect
+       x="188"
+       y="214"
+       width="24"
+       height="12"
+       rx="4"
+       id="rect42" />
+    <rect
+       x="186"
+       y="224"
+       width="28"
+       height="14"
+       rx="4"
+       id="rect43" />
+  </g>
+  <!-- head -->
+  <line
+     x1="138.5363"
+     y1="19.931503"
+     x2="140.1051"
+     y2="2"
+     stroke="#11151c"
+     stroke-width="4"
+     stroke-linecap="round"
+     id="line43" />
+  <rect
+     x="61.746269"
+     y="7.7814236"
+     width="156"
+     height="106"
+     rx="18"
+     fill="#9aa5b4"
+     stroke="#11151c"
+     stroke-width="3"
+     id="rect44"
+     transform="rotate(5)" />
+  <rect
+     x="73.746269"
+     y="19.781424"
+     width="132"
+     height="76"
+     rx="10"
+     fill="#0e1218"
+     stroke="#11151c"
+     stroke-width="3"
+     id="rect45"
+     transform="rotate(5)" />
+  <rect
+     x="73.746269"
+     y="19.781424"
+     width="132"
+     height="76"
+     rx="10"
+     fill="url(#scan)"
+     id="rect46"
+     transform="rotate(5)"
+     style="fill:url(#pattern53)" />
+  <path
+     d="M 92.512647,64.08831 Q 107.03198,47.289828 118.41371,66.35436"
+     fill="none"
+     stroke="#f2b544"
+     stroke-width="6"
+     stroke-linecap="round"
+     id="path46" />
+  <path
+     d="M 150.29194,69.14334 Q 164.81128,52.344861 176.193,71.40939"
+     fill="none"
+     stroke="#f2b544"
+     stroke-width="6"
+     stroke-linecap="round"
+     id="path47" />
+  <path
+     d="m 117.01922,82.29347 q 14.54462,17.33361 31.87823,2.78899"
+     fill="none"
+     stroke="#f2b544"
+     stroke-width="4"
+     stroke-linecap="round"
+     id="path48" />
+  <circle
+     cx="91.746269"
+     cy="69.781425"
+     r="5"
+     fill="#f2b544"
+     opacity="0.35"
+     id="circle48"
+     transform="rotate(5)" />
+  <circle
+     cx="187.74628"
+     cy="69.781425"
+     r="5"
+     fill="#f2b544"
+     opacity="0.35"
+     id="circle49"
+     transform="rotate(5)" />
+  <circle
+     cx="85.746269"
+     cy="104.78143"
+     r="4"
+     fill="#11151c"
+     opacity="0.6"
+     id="circle50"
+     transform="rotate(5)" />
+  <circle
+     cx="99.746277"
+     cy="104.78143"
+     r="4"
+     fill="#11151c"
+     opacity="0.6"
+     id="circle51"
+     transform="rotate(5)" />
+  <rect
+     x="171.74628"
+     y="101.78143"
+     width="32"
+     height="5"
+     rx="2.5"
+     fill="#11151c"
+     opacity="0.45"
+     id="rect51"
+     transform="rotate(5)" />
+  <rect
+     x="51.746269"
+     y="45.781422"
+     width="12"
+     height="30"
+     rx="4"
+     fill="#5b6676"
+     stroke="#11151c"
+     stroke-width="3"
+     id="rect52"
+     transform="rotate(5)" />
+  <rect
+     x="215.74628"
+     y="45.781422"
+     width="12"
+     height="30"
+     rx="4"
+     fill="#5b6676"
+     stroke="#11151c"
+     stroke-width="3"
+     id="rect53"
+     transform="rotate(5)" />
+  <metadata
+     id="metadata53">
+    <c2pa:manifest>AAAWgmp1bWIAAAAeanVtZGMycGEAEQAQgAAAqgA4m3EDYzJwYQAAABZcanVtYgAAAEdqdW1kYzJtYQARABCAAACqADibcQN1cm46YzJwYTo3NTViZDM4OC03MzU4LTQ0MTItOTI3YS1kYzRjZjQxZTc0MGUAAAADl2p1bWIAAAApanVtZGMyYXMAEQAQgAAAqgA4m3EDYzJwYS5hc3NlcnRpb25zAAAAALxqdW1iAAAARGp1bWRjYm9yABEAEIAAAKoAOJtxE2MycGEuaW5ncmVkaWVudC52MwAAAAAYYzJzaMVMBiSOHtx4C+A0lrIOqvYAAABwY2JvcqNpZGM6Zm9ybWF0bWltYWdlL3N2Zyt4bWxqaW5zdGFuY2VJRHgseG1wOmlpZDo0ZjVjYWJhZi0wYzJjLTQ4NzEtOGNkZi1kMWY3ZmUyZmQ2M2NscmVsYXRpb25zaGlwaHBhcmVudE9mAAAB4mp1bWIAAABBanVtZGNib3IAEQAQgAAAqgA4m3ETYzJwYS5hY3Rpb25zLnYyAAAAABhjMnNo0Abd6Px2aZ4vV5bvic/yhAAAAZljYm9yomdhY3Rpb25zgqJmYWN0aW9ua2MycGEub3BlbmVkanBhcmFtZXRlcnOha2luZ3JlZGllbnRzgaJjdXJseC1zZWxmI2p1bWJmPWMycGEuYXNzZXJ0aW9ucy9jMnBhLmluZ3JlZGllbnQudjNkaGFzaFgghUTebwopygWytn3j6pA3GYyR8ArnOU+w9sjrwu6CXgmkZmFjdGlvbngdY29tLmFudGhyb3BpYy5jbGF1ZGUucHJvdmlkZWRqcGFyYW1ldGVyc6F4H2NvbS5hbnRocm9waWMub3JpZ2luLWNvbmZpZGVuY2VndW5rbm93bmtkZXNjcmlwdGlvbnhmQ2xhdWRlIHByb3ZpZGVkIHRoaXMgZmlsZSBhdCB0aGUgcmVxdWVzdCBvZiBhIHVzZXIgYW5kIG1heSBoYXZlIGNyZWF0ZWQgb3IgbW9kaWZpZWQgdGhlIGZpbGUgY29udGVudHMubXNvZnR3YXJlQWdlbnShZG5hbWVmQ2xhdWRlcmFsbEFjdGlvbnNJbmNsdWRlZPUAAADIanVtYgAAAEBqdW1kY2JvcgARABCAAACqADibcRNjMnBhLmhhc2guZGF0YQAAAAAYYzJzaFa65lVbIv+zQGHngGr2oAEAAACAY2JvcqVjYWxnZnNoYTI1NmNwYWRMAAAAAAAAAAAAAAAAZGhhc2hYIDiKEmUG/cJaK9KbFlC/KPRlHWkqVt/4DxcxRi8/k1leZG5hbWVuanVtYmYgbWFuaWZlc3RqZXhjbHVzaW9uc4GiZXN0YXJ0GRrqZmxlbmd0aBkeBAAAAj5qdW1iAAAAJ2p1bWRjMmNsABEAEIAAAKoAOJtxA2MycGEuY2xhaW0udjIAAAACD2Nib3KlY2FsZ2ZzaGEyNTZpc2lnbmF0dXJleE1zZWxmI2p1bWJmPS9jMnBhL3VybjpjMnBhOjc1NWJkMzg4LTczNTgtNDQxMi05MjdhLWRjNGNmNDFlNzQwZS9jMnBhLnNpZ25hdHVyZWppbnN0YW5jZUlEeCx4bXA6aWlkOjgyMjQ3YThjLTI4MzgtNGJlOS1iNGM0LThlMDg1OTQwZjhiN3JjcmVhdGVkX2Fzc2VydGlvbnODomN1cmx4LXNlbGYjanVtYmY9YzJwYS5hc3NlcnRpb25zL2MycGEuaW5ncmVkaWVudC52M2RoYXNoWCCFRN5vCinKBbK2fePqkDcZjJHwCuc5T7D2yOvC7oJeCaJjdXJseCpzZWxmI2p1bWJmPWMycGEuYXNzZXJ0aW9ucy9jMnBhLmFjdGlvbnMudjJkaGFzaFggcFVrpwkiHUuDG4ELaw2f3ne/CjvVqOXkMDRikNgrujyiY3VybHgpc2VsZiNqdW1iZj1jMnBhLmFzc2VydGlvbnMvYzJwYS5oYXNoLmRhdGFkaGFzaFggWE17rW5zqht70CKwgsPJXbqc9YCw02Vgs3u5xaRVlWh0Y2xhaW1fZ2VuZXJhdG9yX2luZm+jZG5hbWVvQW50aHJvcGljIEZpbGVzZ3ZlcnNpb25lMS4wLjBrc3BlY1ZlcnNpb25lMi40LjAAABA4anVtYgAAAChqdW1kYzJjcwARABCAAACqADibcQNjMnBhLnNpZ25hdHVyZQAAABAIY2JvctKEWQISogEmGCFZAgowggIGMIIBjaADAgECAhRA5aAK7sI50L64g/oGQgU9Z1UTADAKBggqhkjOPQQDAzBJMRcwFQYDVQQKEw5BbnRocm9waWMsIFBCQzEuMCwGA1UEAxMlQW50aHJvcGljIENvbnRlbnQgQ3JlZGVudGlhbHMgUm9vdCBDQTAeFw0yNjA4MDcxODQzNTZaFw0yODA4MDYxOTQzNTZaMEQxFzAVBgNVBAoTDkFudGhyb3BpYywgUEJDMSkwJwYDVQQDEyBBbnRocm9waWMgQ2xhdWRlIENvbnRlbnQgU2lnbmluZzBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IABJh6CmvLUBgFFNU0vUKlOVtE6djd17L5SuwX0LemFisBM3dkd/3cyjxFA3Qo5S46fX0/ihY0VZ7mfb9KF703t5OjWDBWMA4GA1UdDwEB/wQEAwIHgDAVBgNVHSUEDjAMBgorBgEEAYPoXgIBMAwGA1UdEwEB/wQCMAAwHwYDVR0jBBgwFoAUzlHiBIFOZFsj+OPEz5o+nMHXXMIwCgYIKoZIzj0EAwMDZwAwZAIwMXMdFJ4BetLLVY7ORuE9noqbbAZOZn/aArXyTwFAZfKrPzxF2vPoJNf1+UCdg1XGAjBwX1zd9WGqYkqmL5SFqw1QySjr1zJfpJM9+1rdDwSPLMOPOjKuiXjoU/pUUeG9RwmhY3BhZFkNngAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPZYQKvPZseid+d6BCJF/+QrQATaf4+/jBU+awBrTHdyXVgJvxFRKKH9TK0JMhxS21i+NajaWVQRQUZH5tm+UfF0ryg=</c2pa:manifest>
+  </metadata>
+</svg>

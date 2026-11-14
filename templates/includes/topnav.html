@@ -1,3 +1,4 @@
+      {% load static %}
       <!--top nav bar -->
       <div class="navbar bg-base-100 shadow-sm px-4 lg:px-6">
         <div class="flex-none lg:hidden">
@@ -6,7 +7,7 @@
           </label>
         </div>
         <div class="flex-1 flex items-center gap-3">
-          <span class="text-lg font-bold lg:hidden">{{ app_name }}</span>
+          <span class="text-lg font-bold lg:hidden">
           <form method="get" action="{% url 'search' %}" class="hidden md:flex flex-1 max-w-xs ml-4">
             <input type="search" name="q" value="{{ request.GET.q }}" placeholder="Search..." class="input input-bordered input-sm w-full" aria-label="Search">
           </form>
