@@ -557,7 +557,13 @@ class WiseApiClient:
         steps = SANDBOX_SIMULATION_STEPS[done:SANDBOX_SIMULATION_STEPS.index(up_to) + 1] if done is not None else ()
         if not steps:
             return transfer
-        return self.advance_sandbox_transfer(transfer_id, delay_seconds=delay_seconds, steps=steps)
+        try:
+            return self.advance_sandbox_transfer(transfer_id, delay_seconds=delay_seconds, steps=steps)
+        except WiseApiError:
+            # The sandbox's simulation fails now and then. Report where Wise
+            # really has the transfer rather than nothing, so a funded one no
+            # longer shows as waiting for approval.
+            return self.get_transfer(transfer_id)
 
     def get_transfer(self, transfer_id: int) -> dict:
         """GET /v1/transfers/{transferId}"""
