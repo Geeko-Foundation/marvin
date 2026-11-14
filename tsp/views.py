@@ -32,6 +32,7 @@ from profile.audit_log import record as audit
 from profile.decorators import get_profile
 from profile.forms import OnboardingPersonalForm, WiseRecipientForm
 from profile.groups import GROUP_FINANCE, GROUP_REQUESTER, GROUP_TSP
+from profile.views import ask_to_confirm_email
 from profile.services.wise_banking_options import bank_choices, branch_choices
 from profile.services.wise_recipient import (
     RETURN_TO_SESSION_KEY,
@@ -225,13 +226,17 @@ def signup_resend(request):
 def signup_profile(request):
     """Sign-up wizard step 2: collect required personal and address details."""
     profile = get_profile(request.user)
-    if profile.is_wise_recipient_ready():
+    # Skip ahead only when nothing is missing here either. An address that a
+    # later rule made incomplete, such as a postcode, still has to be filled in,
+    # or the dashboard and this step would send the user back and forth.
+    if profile.is_profile_complete() and profile.is_wise_recipient_ready():
         return redirect('signup_complete')
 
     if request.method == 'POST':
         form = OnboardingPersonalForm(request.POST, instance=profile, user=request.user)
         if form.is_valid():
             form.save(request.user)
+            ask_to_confirm_email(request, form)
             profile = get_profile(request.user)
             _mark_profile_completed(profile)
             action = request.POST.get('action', 'continue')
@@ -419,9 +424,9 @@ def signup_banking_step(request):
 def signup_complete(request):
     """Sign-up wizard step 4: confirmation when profile and banking are ready."""
     profile = get_profile(request.user)
+    if not profile.is_profile_complete():
+        return redirect('signup_profile')
     if profile.requires_wise_banking and not profile.is_wise_recipient_ready():
-        if not profile.is_profile_complete():
-            return redirect('signup_profile')
         return redirect('signup_banking')
 
     return render(request, 'tsp/signup/complete.html', {'wizard_step': 4})
@@ -691,6 +696,14 @@ def _tell_about_refund(request, owing):
 
 @login_required
 @group_required(GROUP_REQUESTER, GROUP_TSP)
+def _payout(profile):
+    """The requester's payout currency and today's average rates into it, for the form's estimate."""
+    if not (profile.is_requester and profile.wise_account_id):
+        return None
+    exchange_rates.ensure_recent()
+    return {'currency': profile.banking_currency, 'rates': exchange_rates.averages_into(profile.banking_currency)}
+
+
 def request_create(request):
     """Create a new travel request as draft with expense line items."""
     profile = get_profile(request.user)
@@ -726,6 +739,7 @@ def request_create(request):
         'event_categories': _categories_by_event(form),
         'profile': profile,
         'is_edit': False,
+        'payout': _payout(profile),
         'show_account_check': profile.is_requester,
         'banking_form': WiseRecipientForm(profile=profile) if profile.is_requester else None,
     })
@@ -882,6 +896,7 @@ def request_edit(request, pk):
         'profile': profile,
         'travel_request': travel_request,
         'is_edit': True,
+        'payout': _payout(get_profile(travel_request.user)),
         'needs_review_again': needs_review_again,
     })
 

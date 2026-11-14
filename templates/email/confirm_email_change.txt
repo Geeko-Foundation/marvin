@@ -1,0 +1,9 @@
+Hello {{ user.first_name|default:user.get_username }},
+
+Someone asked to use this address for a Marvin account. If it was you, open
+this link to confirm it:
+
+{{ link }}
+
+Until then, emails keep going to the old address. The link works once and
+expires after three days. If you did not ask for this, ignore this email.

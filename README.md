@@ -163,7 +163,7 @@ Environment variables (all optional):
 export WISE_API_TOKEN=your-sandbox-token
 export WISE_API_PROFILE_ID=          # auto-resolved when empty
 export WISE_API_SANDBOX=true
-export WISE_SOURCE_CURRENCY=GBP
+export WISE_SOURCE_CURRENCY=EUR
 ```
 
 Wise API activity is logged to the console and `logs/wise.log`.

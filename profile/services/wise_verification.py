@@ -73,7 +73,7 @@ def run_verification_step(profile: UserProfile, state: dict, step_id: str) -> di
     bank = bank_details_kwargs_from_banking(banking)
     recipient_type = recipient_type_for_method(banking.get('banking_method'))
     banking_currency = banking.get('banking_currency') or profile.banking_currency
-    source_currency = getattr(settings, 'WISE_SOURCE_CURRENCY', 'GBP')
+    source_currency = settings.WISE_SOURCE_CURRENCY
     label = dict(VERIFICATION_STEPS)[step_id]
 
     log_wise_step(

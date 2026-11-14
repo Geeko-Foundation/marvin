@@ -40,7 +40,7 @@ class Command(BaseCommand):
                 currency=options['currency'],
                 iban=options['iban'],
                 bic=options['bic'],
-                source_currency=getattr(settings, 'WISE_SOURCE_CURRENCY', 'GBP'),
+                source_currency=settings.WISE_SOURCE_CURRENCY,
                 test_amount=options['amount'],
                 country=options['iban'][:2].upper() if options.get('iban') else None,
                 address_line=options['address'],

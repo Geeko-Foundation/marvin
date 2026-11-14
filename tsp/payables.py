@@ -39,7 +39,7 @@ class TravelRequestPayableAdapter(PayableAdapter):
             Q(state=RequestState.SUBMITTED_FOR_PAYMENT)
             | Q(state=RequestState.ACCEPTED, advance_requested_at__isnull=False)
             & ~Exists(open_advance)
-        ).select_related('user', 'event', 'user__profile')
+        ).select_related('user', 'event', 'user__profile').prefetch_related('expenses', 'documents')
 
     def payment_purpose(self, obj) -> str:
         return 'advance' if obj.state == RequestState.ACCEPTED else 'payment'
@@ -65,18 +65,16 @@ class TravelRequestPayableAdapter(PayableAdapter):
                     f'The advance already covers {obj.reference}. '
                     'Close it from the request page instead of paying it.'
                 )
-        if len(totals) > 1:
-            # One transfer moves one currency, so a mixed request needs a
-            # person, not a guess at which currency to label the sum with.
-            mixed = ', '.join(f'{amount} {code}' for code, amount in totals)
-            raise ValueError(
-                f'{obj.reference} mixes currencies ({mixed}). '
-                'Pay each currency separately or re-approve it in one currency.'
-            )
-        currency, amount = totals[0] if totals else ('EUR', Decimal('0'))
-
         profile = getattr(user, 'profile', None)
-        metadata = {}
+        conversion = {}
+        if len(totals) > 1:
+            # One transfer moves one currency. A single currency is converted
+            # into the bank account's by the gateway at Wise's own rate.
+            currency, amount, conversion = obj.in_payout_currency(totals)
+        else:
+            currency, amount = totals[0] if totals else ('EUR', Decimal('0'))
+
+        metadata = {'converted_from': conversion} if conversion else {}
         if profile:
             metadata['banking_summary'] = profile.banking_summary()
             metadata['banking_method'] = profile.banking_method or ''
@@ -137,21 +135,24 @@ class TravelRequestPayableAdapter(PayableAdapter):
         name = obj.user.get_full_name() or obj.user.username
         if self.payment_purpose(obj) == 'advance':
             return {
+                'details_template': 'tsp/payments/_queue_details.html',
                 'title': f'{obj.reference} · {name} · Advance before the event',
                 'subtitle': f'{obj.event.name} ({obj.event.start_date:%d %b %Y}) · {obj.user.email}',
                 'totals': [(obj.advance_currency, obj.advance_amount)],
+                'converted': obj.payout_preview([(obj.advance_currency, obj.advance_amount)]),
                 'banking': profile.banking_summary() if profile else 'Not configured',
                 'wise_ready': wise_ready,
             }
         advance = obj.advance_payment()
         return {
+            'details_template': 'tsp/payments/_queue_details.html',
             'title': f'{obj.reference} · {name}',
             'subtitle': (
                 f'{obj.event.name} · {obj.user.email}'
                 + (f' · advance of {advance.amount} {advance.currency} already paid' if advance else '')
             ),
             'totals': obj.amounts_to_pay(),
-            'mixed_currencies': obj.has_mixed_currencies(),
+            'converted': obj.payout_preview(),
             'banking': profile.banking_summary() if profile else 'Not configured',
             'wise_ready': wise_ready,
         }

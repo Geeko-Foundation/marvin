@@ -159,6 +159,9 @@
         {% endfor %}
       </div>
       <p class="text-sm mt-4 text-right" aria-live="polite">Total <strong id="expense-total" class="ml-2">0.00</strong></p>
+      {% if payout %}
+      <p class="text-sm text-right opacity-70" id="payout-estimate" aria-live="polite" hidden></p>
+      {% endif %}
     </div>
   </div>
 
@@ -171,6 +174,7 @@
 
 {% block extra_js %}
 {{ event_categories|json_script:"event-categories" }}
+{{ payout|json_script:"payout" }}
 <script>
   // Each event offers its own categories, so the choices follow the chosen event.
   const categoriesByEvent = JSON.parse(document.getElementById('event-categories').textContent);
@@ -266,6 +270,24 @@
     const parts = Object.entries(sums).map(([c, a]) =>
       a.toLocaleString('en', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' ' + c);
     totalEl.textContent = parts.length ? parts.join(' · ') : '0.00';
+    showPayout(sums);
+  }
+
+  // You are paid in your bank account's currency, so show roughly what arrives there.
+  const payout = JSON.parse(document.getElementById('payout').textContent);
+  const payoutEl = document.getElementById('payout-estimate');
+  function showPayout(sums) {
+    if (!payout || !payoutEl) return;
+    const foreign = Object.keys(sums).filter(c => c !== payout.currency);
+    payoutEl.hidden = !foreign.length;
+    if (!foreign.length) return;
+    const missing = foreign.filter(c => !payout.rates[c]);
+    if (missing.length) {
+      payoutEl.textContent = `Paid to your bank account in ${payout.currency}. ${missing.join(', ')} will be converted at payment.`;
+      return;
+    }
+    const total = Object.entries(sums).reduce((t, [c, a]) => t + (c === payout.currency ? a : a * payout.rates[c]), 0);
+    payoutEl.textContent = `Paid to your bank account as about ${total.toLocaleString('en', {minimumFractionDigits: 2, maximumFractionDigits: 2})} ${payout.currency}, at the 90-day average rate.`;
   }
   document.getElementById('expense-rows')?.addEventListener('input', updateTotal);
   document.getElementById('expense-rows')?.addEventListener('change', updateTotal);
