@@ -341,6 +341,11 @@ class SandboxSettlingTests(TestCase):
                 wise.settle_sandbox_transfer(5, delay_seconds=0)
                 self.assertEqual(tuple(self.steps_run(wise)), steps)
 
+    def test_a_failing_simulation_still_reports_where_wise_has_the_transfer(self):
+        wise = self.client_at('processing')
+        wise.advance_sandbox_transfer.side_effect = WiseApiError('Something went wrong in our side', 500)
+        self.assertEqual(wise.settle_sandbox_transfer(5, delay_seconds=0)['status'], 'processing')
+
     def test_verification_still_moves_its_unfunded_test_transfer_to_processing(self):
         wise = self.client_at('incoming_payment_waiting')
         wise.fund_transfer = mock.Mock(side_effect=WiseApiError('approve in Wise', 403))
