@@ -1,0 +1,31 @@
+      <!--top nav bar -->
+      <div class="navbar bg-base-100 shadow-sm px-4 lg:px-6">
+        <div class="flex-none lg:hidden">
+          <label for="sidebar-drawer" class="btn btn-square btn-ghost">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="inline-block w-5 h-5 stroke-current"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+          </label>
+        </div>
+        <div class="flex-1 flex items-center gap-3">
+          <span class="text-lg font-bold lg:hidden">{{ app_name }}</span>
+          <form method="get" action="{% url 'search' %}" class="hidden md:flex flex-1 max-w-xs ml-4">
+            <input type="search" name="q" value="{{ request.GET.q }}" placeholder="Search..." class="input input-bordered input-sm w-full" aria-label="Search">
+          </form>
+        </div>
+        <div class="flex-none gap-2">
+          {% include "partials/theme_toggle.html" %}
+          <div class="dropdown dropdown-end">
+            <div tabindex="0" role="button" class="btn btn-ghost btn-circle avatar placeholder">
+              <div class="bg-primary text-primary-content rounded-full w-10">
+                <span class="text-sm">{{ user.first_name|slice:":1"|default:user.username|slice:":1"|upper }}</span>
+              </div>
+            </div>
+            <ul tabindex="0" class="menu menu-sm dropdown-content mt-3 z-[1] p-2 shadow bg-base-100 rounded-box w-52">
+              <li class="menu-title flex flex-col gap-0.5"><span>{{ user.get_full_name|default:user.username }}</span><span class="font-normal normal-case opacity-70">{{ profile.role_label|default:"User" }}</span></li>
+              <li><a href="{% url 'profile' %}">Profile</a></li>
+              <li><a href="{% url 'logout' %}">Sign out</a></li>
+            </ul>
+          </div>
+        </div>
+      </div>
+      <!-- end of topnav-->
+
