@@ -29,6 +29,12 @@ VERIFICATION_STEPS = [
 
 SESSION_KEY = 'wise_verification_state'
 
+# The test transfer moves money. In the sandbox that money is pretend and the
+# steps show the whole flow works; on a live account each attempt would send
+# real money to whatever account was typed in, so there Wise's own check of
+# the bank details when the payee is created has to be enough.
+MONEY_STEPS = {'create_quote', 'create_test_transfer', 'fund_transfer', 'reverse_transfer'}
+
 
 class WiseVerificationError(Exception):
     """Raised when a single verification step fails; carries the failing step id."""
@@ -84,7 +90,10 @@ def run_verification_step(profile: UserProfile, state: dict, step_id: str) -> di
     )
 
     try:
-        if step_id == 'create_payee':
+        if step_id in MONEY_STEPS and not client.sandbox:
+            result = {'skipped': 'No test transfer is sent from a live account.'}
+        elif step_id == 'create_payee':
+
             payee_country = resolve_country(profile, banking)
             payee = client.create_payee(
                 full_name=user.get_full_name() or user.username,

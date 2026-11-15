@@ -139,7 +139,10 @@ class WiseLogTests(TestCase):
         self.client.post(reverse('payments:wise_webhook'), data=b'{"data": {"resource": {"id": 9}}}',
                          content_type='application/json')
         entry = WiseLogEntry.objects.get(kind=WiseLogEntry.WEBHOOK)
-        self.assertEqual((entry.transfer_id, entry.signature_valid), ('9', False))
+        # Anyone can post here, so what an unsigned delivery says is not kept.
+        self.assertEqual((entry.transfer_id, entry.signature_valid), ('', False))
+        self.assertNotIn('resource', str(entry.request_body))
+
 
     def test_entries_cannot_be_changed_or_deleted(self):
         entry = WiseLogEntry.objects.create(kind=WiseLogEntry.API, path='/x')

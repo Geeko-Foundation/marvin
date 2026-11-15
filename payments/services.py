@@ -12,7 +12,13 @@ from payments.registry import get_adapter, get_default_adapter, get_gateway
 from profile.audit_log import record as audit
 
 
+def _is_own(obj, user) -> bool:
+    """True when ``user`` would be paying something of their own, which another person has to do."""
+    return user is not None and getattr(obj, 'user_id', None) == user.pk
+
+
 class PaymentService:
+
     """
     High-level coordinator between payable adapters and payment gateways.
 
@@ -56,6 +62,8 @@ class PaymentService:
         obj = type(obj)._default_manager.select_for_update().get(pk=obj.pk)
         if not self.adapter.get_queue().filter(pk=obj.pk).exists():
             raise ValueError('This request is no longer awaiting payment.')
+        if _is_own(obj, user):
+            raise ValueError('You cannot pay your own request. Another finance member has to.')
         ct = ContentType.objects.get_for_model(obj)
         purpose = self.adapter.payment_purpose(obj)
         existing = self._payments_under_way(obj)
@@ -138,7 +146,8 @@ class PaymentService:
         # exporting again cannot put the same person in two files.
         # shortcut: two exports at the same instant could both include a request;
         # fine for one finance team, lock the queue rows if that ever changes.
-        pending = [obj for obj in self.get_queue() if not self._payments_under_way(obj).exists()]
+        pending = [obj for obj in self.get_queue()
+                   if not self._payments_under_way(obj).exists() and not _is_own(obj, user)]
         if not pending:
             raise ValueError('Everything awaiting payment is already in an exported file or being paid.')
         requests = [self.build_payment_request(obj) for obj in pending]
@@ -175,7 +184,8 @@ class PaymentService:
         gateway = get_gateway('wise-api')
         if gateway is None:
             raise ValueError('The Wise API gateway is not configured.')
-        pending = [obj for obj in self.get_queue() if not self._payments_under_way(obj).exists()]
+        pending = [obj for obj in self.get_queue()
+                   if not self._payments_under_way(obj).exists() and not _is_own(obj, user)]
         if not pending:
             raise ValueError('Nothing is waiting to be sent to Wise.')
         requests = [self.build_payment_request(obj) for obj in pending]

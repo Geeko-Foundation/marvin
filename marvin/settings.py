@@ -82,6 +82,18 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'marvin.wsgi.application'
 
+CACHES = {
+    'default': {'BACKEND': 'django.core.cache.backends.locmem.LocMemCache'},
+    # Sign-in and other limits, kept apart so filling the default cache with
+    # anything else cannot reset them.
+    'limits': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'limits',
+        'OPTIONS': {'MAX_ENTRIES': 100_000},
+    },
+}
+
+
 
 # --- DEV Database: sql-lite ---
 
@@ -101,7 +113,7 @@ AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
 ]
 
-LOGIN_URL = '/admin/login/'
+LOGIN_URL = 'login'
 # The name authenticator apps show next to the six-digit code.
 OTP_TOTP_ISSUER = env('BRAND_APP_NAME', 'Marvin')
 TWO_FACTOR_ENFORCED = env_bool('TWO_FACTOR_ENFORCED', default=False)
