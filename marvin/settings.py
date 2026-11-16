@@ -7,80 +7,25 @@ Copy `.env.example` to `.env` and set production values there.
 """
 
 import os
-import sys
 from pathlib import Path
+from .utils import *
 
-from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 load_dotenv(BASE_DIR / '.env')
 
+# --- Security & Core Defaults ---
 
-def env(key: str, default: str = '') -> str:
-    return os.environ.get(key, default)
-
-
-def env_bool(key: str, default: bool = False) -> bool:
-    value = os.environ.get(key)
-    if value is None:
-        return default
-    return value.lower() in ('1', 'true', 'yes')
-
-
-def env_list(key: str, default: str) -> list[str]:
-    raw = env(key, default)
-    return [item.strip() for item in raw.split(',') if item.strip()]
-
-
-# --- Security (override in .env for production) ---
-
-ALLOWED_HOSTS = env_list(
-    'ALLOWED_HOSTS',
-    'localhost,127.0.0.1,testserver',
-)
-
-# Any host beyond this machine means people can reach the site, so it must
-# not run with developer settings even if nobody remembered to change them.
-LOCAL_HOSTS = {'localhost', '127.0.0.1', '[::1]', '0.0.0.0', 'testserver'}
-SERVED_PUBLICLY = any(host not in LOCAL_HOSTS for host in ALLOWED_HOSTS)
-
-# Published in this repository, so they sign nothing anyone outside can trust:
-# the development default, and the placeholder in .env.example.
 DEV_SECRET_KEY = 'django-insecure-dev-only-change-me-in-env'
 PUBLISHED_SECRET_KEYS = {DEV_SECRET_KEY, 'change-me-to-a-long-random-string'}
-SECRET_KEY = env('DJANGO_SECRET_KEY') or DEV_SECRET_KEY
-if SERVED_PUBLICLY and SECRET_KEY in PUBLISHED_SECRET_KEYS:
-    raise ImproperlyConfigured(
-        'DJANGO_SECRET_KEY must be set when ALLOWED_HOSTS includes a public host. '
-        'Anyone can forge a login with the published development key.'
-    )
+LOCAL_HOSTS = {'localhost', '127.0.0.1', '[::1]', '0.0.0.0', 'testserver'}
 
-DEBUG = env_bool('DEBUG', default=not SERVED_PUBLICLY)
-
-# Sent only over HTTPS once the site is live, so a visit over plain HTTP
-# cannot give the session away.
-SESSION_COOKIE_SECURE = CSRF_COOKIE_SECURE = not DEBUG
-
-# Django checks the Origin header on POSTs and wants the scheme, which
-# ALLOWED_HOSTS does not carry. Assume https for every real host so a
-# deployment only has to set ALLOWED_HOSTS to be able to log in.
-CSRF_TRUSTED_ORIGINS = env_list('CSRF_TRUSTED_ORIGINS', '') or [
-    'https://' + ('*' + host if host.startswith('.') else host)
-    for host in ALLOWED_HOSTS
-    if host not in ('localhost', '127.0.0.1', 'testserver', '*')
-]
-
-# A public site sits behind a proxy that terminates TLS, as Railway's and
-# ngrok's do, so trust its X-Forwarded-Proto and tell browsers to stay on
-# HTTPS. Plain HTTP is redirected on Railway by default; elsewhere the same
-# machine may also be reached as http://localhost, so it is opt-in there.
-if env('RAILWAY_PUBLIC_DOMAIN') or (SERVED_PUBLICLY and not DEBUG):
-    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-SECURE_SSL_REDIRECT = env_bool('SECURE_SSL_REDIRECT', bool(env('RAILWAY_PUBLIC_DOMAIN')))
-if SERVED_PUBLICLY and not DEBUG:
-    SECURE_HSTS_SECONDS = int(env('SECURE_HSTS_SECONDS', str(30 * 24 * 60 * 60)))
+SECRET_KEY = env('DJANGO_SECRET_KEY', DEV_SECRET_KEY)
+DEBUG = env_bool('DEBUG', default=True)
+ALLOWED_HOSTS = env_list('ALLOWED_HOSTS', 'localhost,127.0.0.1,testserver')
+CSRF_TRUSTED_ORIGINS = env_list('CSRF_TRUSTED_ORIGINS', '')
 
 
 # --- Application ---
@@ -154,19 +99,8 @@ DATABASES = {
     }
 }
 
-# Hosts such as Railway hand over one URL, postgresql://user:password@host:port/name.
 if env('DATABASE_URL'):
-    from urllib.parse import unquote, urlsplit
-
-    _url = urlsplit(env('DATABASE_URL'))
-    DATABASES['default'].update({
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': unquote(_url.path.lstrip('/')),
-        'USER': unquote(_url.username or ''),
-        'PASSWORD': unquote(_url.password or ''),
-        'HOST': _url.hostname or '',
-        'PORT': str(_url.port or ''),
-    })
+    DATABASES['default'].update(parse_database_url(env('DATABASE_URL')))
 
 
 # --- Auth ---
@@ -181,9 +115,7 @@ AUTH_PASSWORD_VALIDATORS = [
 LOGIN_URL = '/admin/login/'
 # The name authenticator apps show next to the six-digit code.
 OTP_TOTP_ISSUER = env('BRAND_APP_NAME', 'Marvin')
-# Off under `manage.py test`, so tests can sign staff in directly; the
-# two-step sign-in tests turn it back on.
-TWO_FACTOR_ENFORCED = env_bool('TWO_FACTOR_ENFORCED', sys.argv[1:2] != ['test'])
+TWO_FACTOR_ENFORCED = env_bool('TWO_FACTOR_ENFORCED', default=False)
 APP_LOGIN_URL = 'login'
 LOGIN_REDIRECT_URL = 'dashboard'
 
@@ -242,25 +174,10 @@ _DEV_VAPID_PRIVATE_KEY = (
 )
 
 
-def vapid_private_key(value):
-    """
-    The private key in the form pywebpush reads: URL-safe base64 of the DER bytes.
-
-    It cannot load a PEM key, so one pasted in that form is converted here.
-    """
-    import base64
-
-    value = value.replace('\\n', '\n').strip()
-    if '-----BEGIN' not in value:
-        return value
-    body = ''.join(line for line in value.splitlines() if not line.startswith('-----'))
-    return base64.urlsafe_b64encode(base64.b64decode(body)).decode().rstrip('=')
-
-
 WEBPUSH_APP_BASE_URL = env('WEBPUSH_APP_BASE_URL', 'http://127.0.0.1:8000')
 WEBPUSH_SETTINGS = {
     'VAPID_PUBLIC_KEY': env('VAPID_PUBLIC_KEY', _DEV_VAPID_PUBLIC_KEY),
-    'VAPID_PRIVATE_KEY': vapid_private_key(env('VAPID_PRIVATE_KEY') or _DEV_VAPID_PRIVATE_KEY),
+    'VAPID_PRIVATE_KEY': normalize_vapid_private_key(env('VAPID_PRIVATE_KEY') or _DEV_VAPID_PRIVATE_KEY),
     'VAPID_ADMIN_EMAIL': env('VAPID_ADMIN_EMAIL', 'admin@marvin.local'),
 }
 
@@ -289,8 +206,7 @@ PAYOUT_CURRENCIES = env_list('PAYOUT_CURRENCIES', 'EUR,USD,GBP')
 EXCHANGE_RATE_API_KEY = env('EXCHANGE_RATE_API_KEY')
 EXCHANGE_RATE_API_URL = env('EXCHANGE_RATE_API_URL', 'https://v6.exchangerate-api.com/v6')
 EXCHANGE_RATES_URL = env('EXCHANGE_RATES_URL', 'https://api.frankfurter.dev/v1')
-# Off under `manage.py test`, so no test depends on a live rates service.
-EXCHANGE_RATES_FETCH = env_bool('EXCHANGE_RATES_FETCH', sys.argv[1:2] != ['test'])
+EXCHANGE_RATES_FETCH = env_bool('EXCHANGE_RATES_FETCH', default=False)
 
 
 # --- Logging ---
@@ -354,22 +270,13 @@ BRAND_THEME_DARK = env('BRAND_THEME_DARK', 'business')
 
 # --- Email ---
 
+EMAIL_BACKEND = env('EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend')
+EMAIL_HOST = env('EMAIL_HOST', 'localhost')
+EMAIL_PORT = int(env('EMAIL_PORT', '587'))
+EMAIL_USE_TLS = env_bool('EMAIL_USE_TLS', default=True)
+EMAIL_HOST_USER = env('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD', '')
 DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', 'marvin@localhost')
 
 # Where links in notification emails point.
 SITE_BASE_URL = env('SITE_BASE_URL', env('WEBPUSH_APP_BASE_URL', 'http://127.0.0.1:8000'))
-
-_email_backend = env('EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend')
-_mailer = {'BACKEND': _email_backend}
-
-# Only the SMTP backend accepts these; the others reject unknown options.
-if _email_backend.endswith('smtp.EmailBackend'):
-    _mailer['OPTIONS'] = {
-        'host': env('EMAIL_HOST', 'localhost'),
-        'port': int(env('EMAIL_PORT', '587')),
-        'username': env('EMAIL_HOST_USER'),
-        'password': env('EMAIL_HOST_PASSWORD'),
-        'use_tls': env_bool('EMAIL_USE_TLS', True),
-    }
-
-MAILERS = {'default': _mailer}

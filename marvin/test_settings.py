@@ -12,7 +12,6 @@ ROOT = Path(__file__).resolve().parent.parent
 PROBE = '''
 import os, dotenv
 dotenv.load_dotenv = lambda *a, **k: None
-os.environ['DJANGO_SETTINGS_MODULE'] = 'marvin.settings'
 import django
 try:
     django.setup()
@@ -23,9 +22,10 @@ except Exception as exc:
 '''
 
 
-def start(**env):
+def start(settings_module='marvin.settings', **env):
     clean = {k: v for k, v in os.environ.items()
-             if k not in ('DJANGO_SECRET_KEY', 'DEBUG', 'ALLOWED_HOSTS')}
+             if k not in ('DJANGO_SECRET_KEY', 'DEBUG', 'ALLOWED_HOSTS', 'DJANGO_SETTINGS_MODULE')}
+    clean['DJANGO_SETTINGS_MODULE'] = settings_module
     clean.update(env)
     result = subprocess.run([sys.executable, '-c', PROBE], cwd=ROOT, env=clean,
                             capture_output=True, text=True, timeout=60)
@@ -35,18 +35,31 @@ def start(**env):
 class ProductionSettingsTests(SimpleTestCase):
     """A site people can reach never runs on a key published in this repository."""
 
-    def test_a_public_site_refuses_a_published_or_missing_key(self):
+    def test_a_fresh_clone_runs_with_dev_defaults(self):
+        self.assertEqual(start(), 'DEBUG False')
+
+    def test_prod_settings_refuses_default_or_missing_secret_key(self):
         for key in (None, '', 'django-insecure-dev-only-change-me-in-env',
                     'change-me-to-a-long-random-string'):
             with self.subTest(key=key):
                 env = {'ALLOWED_HOSTS': 'tsp.example.org'}
                 if key is not None:
                     env['DJANGO_SECRET_KEY'] = key
-                self.assertEqual(start(**env), 'REFUSED ImproperlyConfigured')
+                self.assertEqual(start(settings_module='marvin.prod_settings', **env),
+                                 'REFUSED ImproperlyConfigured')
 
-    def test_a_public_site_with_its_own_key_runs_live_with_secure_cookies(self):
-        self.assertEqual(start(ALLOWED_HOSTS='tsp.example.org', DJANGO_SECRET_KEY='its-own-key'),
-                         'LIVE True')
+    def test_prod_settings_refuses_localhost_only_hosts(self):
+        self.assertEqual(
+            start(settings_module='marvin.prod_settings',
+                  DJANGO_SECRET_KEY='valid-production-secret-key',
+                  ALLOWED_HOSTS='localhost,127.0.0.1'),
+            'REFUSED ImproperlyConfigured'
+        )
 
-    def test_a_fresh_clone_still_runs_with_no_configuration(self):
-        self.assertEqual(start(), 'DEBUG False')
+    def test_prod_settings_runs_live_with_production_configuration(self):
+        self.assertEqual(
+            start(settings_module='marvin.prod_settings',
+                  DJANGO_SECRET_KEY='valid-production-secret-key',
+                  ALLOWED_HOSTS='tsp.example.org'),
+            'LIVE True'
+        )
