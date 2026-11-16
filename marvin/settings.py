@@ -1,86 +1,30 @@
 """
-Django settings for marvin project.
+Django Development settings for marvin project.
 
 Sensitive values are read from environment variables (loaded from `.env` via
 python-dotenv). Defaults in this file are for local development and tests only.
 Copy `.env.example` to `.env` and set production values there.
+These setting are inherited by prod_settings.py and selectively overridden.
 """
 
 import os
-import sys
 from pathlib import Path
-
-from django.core.exceptions import ImproperlyConfigured
+from .utils import *
 from dotenv import load_dotenv
-
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 load_dotenv(BASE_DIR / '.env')
 
+# --- Security & Core Defaults ---
 
-def env(key: str, default: str = '') -> str:
-    return os.environ.get(key, default)
-
-
-def env_bool(key: str, default: bool = False) -> bool:
-    value = os.environ.get(key)
-    if value is None:
-        return default
-    return value.lower() in ('1', 'true', 'yes')
-
-
-def env_list(key: str, default: str) -> list[str]:
-    raw = env(key, default)
-    return [item.strip() for item in raw.split(',') if item.strip()]
-
-
-# --- Security (override in .env for production) ---
-
-ALLOWED_HOSTS = env_list(
-    'ALLOWED_HOSTS',
-    'localhost,127.0.0.1,testserver',
-)
-
-# Any host beyond this machine means people can reach the site, so it must
-# not run with developer settings even if nobody remembered to change them.
-LOCAL_HOSTS = {'localhost', '127.0.0.1', '[::1]', '0.0.0.0', 'testserver'}
-SERVED_PUBLICLY = any(host not in LOCAL_HOSTS for host in ALLOWED_HOSTS)
-
-# Published in this repository, so they sign nothing anyone outside can trust:
-# the development default, and the placeholder in .env.example.
 DEV_SECRET_KEY = 'django-insecure-dev-only-change-me-in-env'
 PUBLISHED_SECRET_KEYS = {DEV_SECRET_KEY, 'change-me-to-a-long-random-string'}
-SECRET_KEY = env('DJANGO_SECRET_KEY') or DEV_SECRET_KEY
-if SERVED_PUBLICLY and SECRET_KEY in PUBLISHED_SECRET_KEYS:
-    raise ImproperlyConfigured(
-        'DJANGO_SECRET_KEY must be set when ALLOWED_HOSTS includes a public host. '
-        'Anyone can forge a login with the published development key.'
-    )
+LOCAL_HOSTS = {'localhost', '127.0.0.1', '[::1]', '0.0.0.0', 'testserver'}
 
-DEBUG = env_bool('DEBUG', default=not SERVED_PUBLICLY)
-
-# Sent only over HTTPS once the site is live, so a visit over plain HTTP
-# cannot give the session away.
-SESSION_COOKIE_SECURE = CSRF_COOKIE_SECURE = not DEBUG
-
-# Django checks the Origin header on POSTs and wants the scheme, which
-# ALLOWED_HOSTS does not carry. Assume https for every real host so a
-# deployment only has to set ALLOWED_HOSTS to be able to log in.
-CSRF_TRUSTED_ORIGINS = env_list('CSRF_TRUSTED_ORIGINS', '') or [
-    'https://' + ('*' + host if host.startswith('.') else host)
-    for host in ALLOWED_HOSTS
-    if host not in ('localhost', '127.0.0.1', 'testserver', '*')
-]
-
-# A public site sits behind a proxy that terminates TLS, as Railway's and
-# ngrok's do, so trust its X-Forwarded-Proto and tell browsers to stay on
-# HTTPS. Plain HTTP is redirected on Railway by default; elsewhere the same
-# machine may also be reached as http://localhost, so it is opt-in there.
-if env('RAILWAY_PUBLIC_DOMAIN') or (SERVED_PUBLICLY and not DEBUG):
-    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-SECURE_SSL_REDIRECT = env_bool('SECURE_SSL_REDIRECT', bool(env('RAILWAY_PUBLIC_DOMAIN')))
-if SERVED_PUBLICLY and not DEBUG:
-    SECURE_HSTS_SECONDS = int(env('SECURE_HSTS_SECONDS', str(30 * 24 * 60 * 60)))
+SECRET_KEY = env('DJANGO_SECRET_KEY', DEV_SECRET_KEY)
+DEBUG = env_bool('DEBUG', default=True)
+ALLOWED_HOSTS = env_list('ALLOWED_HOSTS', 'localhost,127.0.0.1,testserver')
+CSRF_TRUSTED_ORIGINS = env_list('CSRF_TRUSTED_ORIGINS', '')
 
 
 # --- Application ---
@@ -139,38 +83,17 @@ TEMPLATES = [
 WSGI_APPLICATION = 'marvin.wsgi.application'
 
 
-# --- Database ---
+# --- DEV Database: sql-lite ---
 
 DATABASES = {
     'default': {
-        'ENGINE': env('DATABASE_ENGINE', 'django.db.backends.sqlite3'),
-        'NAME': env('DATABASE_NAME', str(BASE_DIR / 'db.sqlite3')),
-        # Ignored by SQLite, needed by every networked database.
-        'USER': env('DATABASE_USER'),
-        'PASSWORD': env('DATABASE_PASSWORD'),
-        'HOST': env('DATABASE_HOST'),
-        'PORT': env('DATABASE_PORT'),
-        'CONN_MAX_AGE': int(env('DATABASE_CONN_MAX_AGE', '0')),
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME':  'db.sqlite3',
     }
 }
 
-# Hosts such as Railway hand over one URL, postgresql://user:password@host:port/name.
-if env('DATABASE_URL'):
-    from urllib.parse import unquote, urlsplit
-
-    _url = urlsplit(env('DATABASE_URL'))
-    DATABASES['default'].update({
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': unquote(_url.path.lstrip('/')),
-        'USER': unquote(_url.username or ''),
-        'PASSWORD': unquote(_url.password or ''),
-        'HOST': _url.hostname or '',
-        'PORT': str(_url.port or ''),
-    })
-
 
 # --- Auth ---
-
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
     {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
@@ -181,15 +104,12 @@ AUTH_PASSWORD_VALIDATORS = [
 LOGIN_URL = '/admin/login/'
 # The name authenticator apps show next to the six-digit code.
 OTP_TOTP_ISSUER = env('BRAND_APP_NAME', 'Marvin')
-# Off under `manage.py test`, so tests can sign staff in directly; the
-# two-step sign-in tests turn it back on.
-TWO_FACTOR_ENFORCED = env_bool('TWO_FACTOR_ENFORCED', sys.argv[1:2] != ['test'])
+TWO_FACTOR_ENFORCED = env_bool('TWO_FACTOR_ENFORCED', default=False)
 APP_LOGIN_URL = 'login'
 LOGIN_REDIRECT_URL = 'dashboard'
 
 
 # --- i18n ---
-
 LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'UTC'
 USE_I18N = True
@@ -198,7 +118,6 @@ FORMAT_MODULE_PATH = ['marvin.formats']
 
 
 # --- Static / media ---
-
 STATIC_URL = 'static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
 STATIC_ROOT = BASE_DIR / 'staticfiles'
@@ -213,22 +132,22 @@ MEDIA_ROOT = Path(env('MEDIA_ROOT') or BASE_DIR / 'uploads')
 DJANGO_TABLES2_TEMPLATE = 'django_tables2/daisyui.html'
 
 
-# --- Payments ---
-
+# --- Wise Payments ---
 PAYMENTS_GATEWAYS = [
     'payments.gateways.wise.WiseApiGateway',
     'payments.gateways.wise.WiseCsvGateway',
     'payments.gateways.manual.ManualTransferGateway',
 ]
+
 PAYMENTS_ADAPTERS = [
     'tsp.payables.TravelRequestPayableAdapter',
 ]
+
 PAYMENTS_DEFAULT_ADAPTER = 'tsp.travelrequest'
 PAYMENTS_PERMISSION_CHECK = 'profile.permissions.finance_can_process_payments'
 
 
 # --- Web Push (django-webpush) ---
-
 # Development VAPID keys. Generate your own for production, see .env.example.
 _DEV_VAPID_PUBLIC_KEY = (
     'BF8UddgDIQ_Y5lfOLbOqFLyb5inEudxst2ynx6tM5G7VyPMZwBn0JjpmOfbAdfKcvpVqYZXm5D1wRP-qZVPubu4'
@@ -242,28 +161,12 @@ _DEV_VAPID_PRIVATE_KEY = (
 )
 
 
-def vapid_private_key(value):
-    """
-    The private key in the form pywebpush reads: URL-safe base64 of the DER bytes.
-
-    It cannot load a PEM key, so one pasted in that form is converted here.
-    """
-    import base64
-
-    value = value.replace('\\n', '\n').strip()
-    if '-----BEGIN' not in value:
-        return value
-    body = ''.join(line for line in value.splitlines() if not line.startswith('-----'))
-    return base64.urlsafe_b64encode(base64.b64decode(body)).decode().rstrip('=')
-
-
 WEBPUSH_APP_BASE_URL = env('WEBPUSH_APP_BASE_URL', 'http://127.0.0.1:8000')
 WEBPUSH_SETTINGS = {
     'VAPID_PUBLIC_KEY': env('VAPID_PUBLIC_KEY', _DEV_VAPID_PUBLIC_KEY),
-    'VAPID_PRIVATE_KEY': vapid_private_key(env('VAPID_PRIVATE_KEY') or _DEV_VAPID_PRIVATE_KEY),
+    'VAPID_PRIVATE_KEY': normalize_vapid_private_key(env('VAPID_PRIVATE_KEY') or _DEV_VAPID_PRIVATE_KEY),
     'VAPID_ADMIN_EMAIL': env('VAPID_ADMIN_EMAIL', 'admin@marvin.local'),
 }
-
 
 # --- Wise API ---
 
@@ -289,12 +192,10 @@ PAYOUT_CURRENCIES = env_list('PAYOUT_CURRENCIES', 'EUR,USD,GBP')
 EXCHANGE_RATE_API_KEY = env('EXCHANGE_RATE_API_KEY')
 EXCHANGE_RATE_API_URL = env('EXCHANGE_RATE_API_URL', 'https://v6.exchangerate-api.com/v6')
 EXCHANGE_RATES_URL = env('EXCHANGE_RATES_URL', 'https://api.frankfurter.dev/v1')
-# Off under `manage.py test`, so no test depends on a live rates service.
-EXCHANGE_RATES_FETCH = env_bool('EXCHANGE_RATES_FETCH', sys.argv[1:2] != ['test'])
+EXCHANGE_RATES_FETCH = env_bool('EXCHANGE_RATES_FETCH', default=False)
 
 
 # --- Logging ---
-
 LOG_DIR = BASE_DIR / 'logs'
 LOG_DIR.mkdir(exist_ok=True)
 
@@ -345,7 +246,7 @@ BRAND_APP_NAME = env('BRAND_APP_NAME', 'Marvin')
 BRAND_ORG_NAME = env('BRAND_ORG_NAME', 'Geeko Foundation')
 BRAND_TAGLINE = env('BRAND_TAGLINE', 'Travel Support Program')
 # Marvin's own joke. A fork sets this empty to drop the line.
-BRAND_STRAPLINE = env('BRAND_STRAPLINE', 'The Paranoid Android')
+BRAND_STRAPLINE = env('BRAND_STRAPLINE', 'Your Travel Assistant')
 
 # Any daisyUI theme name: https://daisyui.com/docs/themes/
 BRAND_THEME_LIGHT = env('BRAND_THEME_LIGHT', 'corporate')
@@ -353,23 +254,18 @@ BRAND_THEME_DARK = env('BRAND_THEME_DARK', 'business')
 
 
 # --- Email ---
-
-DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', 'marvin@localhost')
+MAILERS = {
+    'default': {
+        'BACKEND': "django.core.mail.backends.smtp.EmailBackend",
+        'OPTIONS': {
+            'host': env('EMAIL_HOST', 'localhost'),
+            'use_tls': True,    # port is not needed: it defaults to 587 with use_tls True.
+            'username': env('EMAIL_HOST_USER', ''),
+            'password': env('EMAIL_HOST_PASSWORD', ''),
+            'default_from_email': env('DEFAULT_FROM_EMAIL', ''),
+        },
+    },
+}
 
 # Where links in notification emails point.
 SITE_BASE_URL = env('SITE_BASE_URL', env('WEBPUSH_APP_BASE_URL', 'http://127.0.0.1:8000'))
-
-_email_backend = env('EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend')
-_mailer = {'BACKEND': _email_backend}
-
-# Only the SMTP backend accepts these; the others reject unknown options.
-if _email_backend.endswith('smtp.EmailBackend'):
-    _mailer['OPTIONS'] = {
-        'host': env('EMAIL_HOST', 'localhost'),
-        'port': int(env('EMAIL_PORT', '587')),
-        'username': env('EMAIL_HOST_USER'),
-        'password': env('EMAIL_HOST_PASSWORD'),
-        'use_tls': env_bool('EMAIL_USE_TLS', True),
-    }
-
-MAILERS = {'default': _mailer}

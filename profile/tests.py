@@ -48,10 +48,11 @@ class PushDeliveryTests(TestCase):
         self.assertEqual(base64.urlsafe_b64encode(public).decode().rstrip('='), keys['VAPID_PUBLIC_KEY'])
 
     def test_a_pem_key_is_converted(self):
-        from marvin.settings import _DEV_VAPID_PRIVATE_KEY, vapid_private_key
-        converted = vapid_private_key(_DEV_VAPID_PRIVATE_KEY.replace('\n', '\\n'))
+        from marvin.settings import _DEV_VAPID_PRIVATE_KEY
+        from marvin.utils import normalize_vapid_private_key
+        converted = normalize_vapid_private_key(_DEV_VAPID_PRIVATE_KEY.replace('\n', '\\n'))
         self.assertNotIn('BEGIN', converted)
-        self.assertEqual(vapid_private_key(converted), converted)
+        self.assertEqual(normalize_vapid_private_key(converted), converted)
 
     def test_a_subscribed_user_is_sent_an_alert(self):
         from unittest import mock
