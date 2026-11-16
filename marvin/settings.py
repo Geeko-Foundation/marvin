@@ -168,7 +168,6 @@ if env('DATABASE_URL'):
         'PORT': str(_url.port or ''),
     })
 
-
 # --- Auth ---
 
 AUTH_PASSWORD_VALIDATORS = [
