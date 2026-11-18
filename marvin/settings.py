@@ -32,8 +32,8 @@ CSRF_COOKIE_SECURE = True
 SESSION_COOKIE_HTTPONLY = True
 CSRF_COOKIE_HTTPONLY = False  # Set to True unless client-side JavaScript reads the CSRF token
 
-SECURE_SSL_REDIRECT = env_bool('SECURE_SSL_REDIRECT', default=True)
-SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+#SECURE_SSL_REDIRECT = env_bool('SECURE_SSL_REDIRECT', default=False)
+#SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 # --- Application ---
 
