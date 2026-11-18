@@ -96,13 +96,18 @@ TWO_FACTOR_ENFORCED = env_bool('TWO_FACTOR_ENFORCED', default=True)
 EXCHANGE_RATES_FETCH = env_bool('EXCHANGE_RATES_FETCH', default=True)
 
 # Email Delivery Configuration
-EMAIL_BACKEND = env('EMAIL_BACKEND', 'django.core.mail.backends.smtp.EmailBackend')
-EMAIL_HOST = env('EMAIL_HOST', 'smtp.gmail.com')
-EMAIL_PORT = int(env('EMAIL_PORT', '587'))
-EMAIL_USE_TLS = env_bool('EMAIL_USE_TLS', default=True)
-EMAIL_HOST_USER = env('EMAIL_HOST_USER', '')
-EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD', '')
-DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', 'no-reply@geekos.org')
+MAILERS = {
+    'default': {
+        'BACKEND': "django.core.mail.backends.smtp.EmailBackend",
+        'OPTIONS': {
+            'host': env('EMAIL_HOST', 'localhost'),
+            'use_tls': True,    # port is not needed: it defaults to 587 with use_tls True.
+            'username': env('EMAIL_HOST_USER', ''),
+            'password': env('EMAIL_HOST_PASSWORD', ''),
+            'default_from_email': env('DEFAULT_FROM_EMAIL', ''),
+        },
+    },
+}
 
 # ==============================================================================
 # LOGGING
