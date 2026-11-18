@@ -1,0 +1,9 @@
+@import "tailwindcss";
+@import "./src/themes.css";
+@import "./src/custom.css";
+@source "../templates/**/*.html";
+@source "../**/templates/**/*.html";
+@source "./*sample.html";
+@plugin "daisyui" {
+  themes: i-layer-light, i-layer-dark;
+}

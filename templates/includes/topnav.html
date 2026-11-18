@@ -5,10 +5,14 @@
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="inline-block w-5 h-5 stroke-current"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
           </label>
         </div>
-        <div class="flex-1 flex items-center gap-3">
-          <span class="text-lg font-bold lg:hidden">{{ app_name }}</span>
-          <form method="get" action="{% url 'search' %}" class="hidden md:flex flex-1 max-w-xs ml-4">
-            <input type="search" name="q" value="{{ request.GET.q }}" placeholder="Search..." class="input input-bordered input-sm w-full" aria-label="Search">
+        <div class="flex-1 flex items-end gap-2">
+          <span class="text-2xl font-bold text-primary lg:hidden">{{ app_name }}</span>
+          <form method="get" action="{% url 'search' %}" class="md:flex max-w-xs ml-auto">
+              <label class="input input-bordered flex w-full items-end mr-4">
+                  <input type="search" name="q" value="{{ request.GET.q }}" placeholder="Search..."
+                         class="input" aria-label="Search">
+                  <kbd class="kbd" aria-hidden="true">/</kbd>
+              </label>
           </form>
         </div>
         <div class="flex-none gap-2">

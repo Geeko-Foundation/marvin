@@ -1,0 +1,83 @@
+/* i-layer themes - single source of truth for colour, radius and borders.
+   Dark is the default and also follows the OS preference; light is selected explicitly.
+
+   Rules both themes follow:
+   - Elevation: base-300 = page, base-200 = card, base-100 = raised surface / inputs.
+     Surfaces get LIGHTER as they rise, in both themes.
+   - Each status keeps one hue in both themes: info = sky (240), success = green (152),
+     warning = amber (72), error = red (22-27). Only lightness and chroma change.
+   - Every *-content colour is at least 4.5:1 against its fill (WCAG AA). */
+
+@plugin "daisyui/theme" {
+  name: "i-layer-dark";
+  default: true;
+  prefersdark: true;
+  color-scheme: dark;
+  /* Base scale flipped: page is darkest, raised surfaces are lighter. Faint blue tint to match light theme. */
+  --color-base-100: oklch(24% 0.01 260);
+  --color-base-200: oklch(19.5% 0.008 260);
+  --color-base-300: oklch(15% 0.006 260);
+  --color-base-content: oklch(96% 0.005 260);
+  /* Slightly lighter and less saturated than the light-theme blue so it stops vibrating on dark surfaces. */
+  --color-primary: oklch(57.5% 0.215 262.9);
+  --color-primary-content: oklch(100% 0 0);
+  --color-secondary: oklch(74% 0.13 293.5);
+  --color-secondary-content: oklch(20% 0.06 291);
+  --color-accent: oklch(78% 0.11 185);
+  --color-accent-content: oklch(20% 0.04 185);
+  --color-neutral: oklch(32% 0.012 260);
+  --color-neutral-content: oklch(97% 0.003 260);
+  /* Status colours: softer pastel fills with dark text. */
+  --color-info: oklch(76% 0.115 235);
+  --color-info-content: oklch(20% 0.04 240);
+  --color-success: oklch(78% 0.15 152);
+  --color-success-content: oklch(20% 0.05 152);
+  --color-warning: oklch(81% 0.14 72);
+  --color-warning-content: oklch(22% 0.05 60);
+  --color-error: oklch(72% 0.16 22);
+  --color-error-content: oklch(20% 0.05 22);
+  --radius-selector: 0rem;
+  --radius-field: 0rem;
+  --radius-box: 0rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.1875rem;
+  --border: 1px;
+  --depth: 0;
+  --noise: 0;
+}
+
+@plugin "daisyui/theme" {
+  name: "i-layer-light";
+  color-scheme: light;
+  --color-base-100: oklch(100% 0 0);
+  --color-base-200: oklch(96% 0.007 247.896);
+  /* Page a step darker so cards separate from it without relying on shadows. */
+  --color-base-300: oklch(90% 0.016 255.508);
+  --color-base-content: oklch(20% 0.042 265.755);
+  --color-primary: oklch(54% 0.245 262.881);
+  --color-primary-content: oklch(100% 0 0);
+  --color-secondary: oklch(52% 0.2 293.5);
+  --color-secondary-content: oklch(100% 0 0);
+  --color-accent: oklch(52% 0.09 185);
+  --color-accent-content: oklch(100% 0 0);
+  --color-neutral: oklch(44% 0.043 257.281);
+  --color-neutral-content: oklch(98% 0.003 247.858);
+  /* Status colours: fills dark enough for white text; amber keeps dark text. */
+  --color-info: oklch(52% 0.115 240);
+  --color-info-content: oklch(100% 0 0);
+  --color-success: oklch(52% 0.125 152);
+  --color-success-content: oklch(100% 0 0);
+  --color-warning: oklch(80% 0.16 72);
+  --color-warning-content: oklch(25% 0.06 60);
+  --color-error: oklch(56% 0.22 27);
+  --color-error-content: oklch(100% 0 0);
+  /* Matches the dark theme and the square fields/boxes. */
+  --radius-selector: 0rem;
+  --radius-field: 0rem;
+  --radius-box: 0rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.1875rem;
+  --border: 1px;
+  --depth: 1;
+  --noise: 0;
+}
