@@ -26,6 +26,14 @@ DEBUG = env_bool('DEBUG', default=True)
 ALLOWED_HOSTS = env_list('ALLOWED_HOSTS', 'localhost,127.0.0.1,testserver')
 CSRF_TRUSTED_ORIGINS = env_list('CSRF_TRUSTED_ORIGINS', '')
 
+# Strict Cookie & Transport Security
+SESSION_COOKIE_SECURE = True
+CSRF_COOKIE_SECURE = True
+SESSION_COOKIE_HTTPONLY = True
+CSRF_COOKIE_HTTPONLY = False  # Set to True unless client-side JavaScript reads the CSRF token
+
+SECURE_SSL_REDIRECT = env_bool('SECURE_SSL_REDIRECT', default=True)
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 # --- Application ---
 
