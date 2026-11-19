@@ -6,3 +6,4 @@ uploads/
 .env
 staticfiles/
 /.skills/
+node_modules/

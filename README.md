@@ -224,8 +224,10 @@ BRAND_THEME_LIGHT=emerald
 BRAND_THEME_DARK=forest
 ```
 
-The two theme values are [daisyUI theme names](https://daisyui.com/docs/themes/),
-and the light and dark toggle keeps working with whichever pair you choose.
+The two theme values are [daisyUI theme names](https://daisyui.com/docs/themes/).
+Only themes listed in `css_build/app.css` are in the stylesheet, so add the pair
+there and rebuild it (see `css_build/README.md`). The light and dark toggle keeps
+working with whichever pair you choose.
 
 ## Environment variables
 
