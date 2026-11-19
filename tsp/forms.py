@@ -154,7 +154,7 @@ class EventForm(forms.ModelForm):
                 'class': 'input input-bordered w-full', 'type': 'date',
             }),
             'visa_letters_offered': forms.CheckboxInput(attrs={'class': 'checkbox'}),
-            'organizers': forms.SelectMultiple(attrs={'class': 'select select-bordered w-full h-32'}),
+            'organizers': forms.CheckboxSelectMultiple(attrs={'class': 'checkbox checkbox-sm'}),
         }
 
     offered_categories = forms.MultipleChoiceField(

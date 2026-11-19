@@ -877,6 +877,7 @@ def request_detail(request, pk, travel_request, profile):
         'comment_form': comment_form,
         'doc_form': doc_form,
         'missing_docs': travel_request.missing_document_kinds(),
+        'has_actuals': travel_request.has_all_actual_amounts(),
     })
 
 
@@ -1270,13 +1271,18 @@ def request_accept(request, pk):
     if form.is_valid():
         try:
             transition_request(travel_request, RequestState.ACCEPTED, request.user)
-            messages.success(request, 'Request accepted. Please upload required documents.')
         except StateTransitionError as e:
             messages.error(request, str(e))
-    else:
-        messages.error(request, 'All confirmations are required.')
-        return redirect('request_accept_page', pk=pk)
-    return redirect('request_detail', pk=pk)
+            return redirect('request_detail', pk=pk)
+        messages.success(
+            request,
+            f'You are all set for {travel_request.event.name}. Enjoy the event! '
+            f'Afterwards, choose "Ask for reimbursement" on {travel_request.reference} '
+            'to send us your actual costs and receipts.',
+        )
+        return redirect('dashboard')
+    messages.error(request, 'All confirmations are required.')
+    return redirect('request_accept_page', pk=pk)
 
 
 @login_required
@@ -1294,8 +1300,12 @@ def request_actuals(request, pk):
         formset = ExpenseActualFormSet(request.POST, instance=travel_request, queryset=queryset)
         if formset.is_valid():
             formset.save()
-            messages.success(request, 'Actual costs saved.')
-            return redirect('request_detail', pk=pk)
+            messages.success(
+                request,
+                'Actual costs saved. Next, upload your receipts and invoice, and the signed form '
+                '(print it from this page, sign it and upload it).',
+            )
+            return redirect(reverse('request_detail', args=[pk]) + '#reimbursement')
     else:
         formset = ExpenseActualFormSet(instance=travel_request, queryset=queryset)
 
@@ -1465,7 +1475,10 @@ def request_document_upload(request, pk, travel_request, profile):
         doc.mimetype = uploaded.content_type or 'application/octet-stream'
         doc.size = uploaded.size
         doc.save()
-        messages.success(request, 'Document uploaded.')
+        if travel_request.missing_document_kinds():
+            messages.success(request, 'Document uploaded.')
+        else:
+            messages.success(request, 'Document uploaded. Everything is in, so you can submit for payment.')
     else:
         file_errors = form.errors.get('file')
         messages.error(request, file_errors[0] if file_errors else 'Please select a valid file.')
@@ -1523,7 +1536,7 @@ def document_download(request, doc_id):
     travel_request = doc.request
     profile = get_profile(request.user)
     is_owner = travel_request.user_id == request.user.id
-    is_staff = profile.is_committee
+    is_staff = profile.is_committee or travel_request.event.is_organised_by(request.user)
     if not (is_owner or is_staff):
         raise PermissionDenied
 

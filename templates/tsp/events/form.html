@@ -116,11 +116,47 @@
         {{ form.visa_letters_offered }}
         <span class="label-text">Visa letters offered</span>
       </label>
-      <div class="form-control">
-        <label class="label" for="{{ form.organizers.id_for_label }}"><span class="label-text">Organisers</span></label>
-        {{ form.organizers }}
-        <label class="label"><span class="label-text-alt">They review this event's requests within its budget, until {{ event.ORGANISER_DAYS_AFTER|default:90 }} days after it ends. Hold Ctrl or Cmd to pick more than one.</span></label>
-      </div>
+      <fieldset class="form-control" id="organiser-picker">
+        <legend class="label-text mb-2">Organisers</legend>
+        <p class="text-sm opacity-60 mb-2">They review this event's requests within its budget, until 90 days after it ends.</p>
+        <p class="text-sm mb-2" data-chosen></p>
+        <input type="search" class="input input-bordered input-sm w-full mb-2" placeholder="Search people by name or username" aria-label="Search people" data-search>
+        <div class="max-h-48 overflow-y-auto border border-base-300 p-2" data-list>
+          {% for choice in form.organizers %}
+          <label class="label cursor-pointer justify-start gap-3 py-1" data-person>
+            {{ choice.tag }}<span class="label-text">{{ choice.choice_label }}</span>
+          </label>
+          {% endfor %}
+        </div>
+        <p class="text-sm opacity-60 mt-1 hidden" data-none>Nobody matches.</p>
+      </fieldset>
+      <script>
+        (function () {
+          const picker = document.getElementById('organiser-picker');
+          const people = [...picker.querySelectorAll('[data-person]')];
+          const chosen = picker.querySelector('[data-chosen]');
+          const none = picker.querySelector('[data-none]');
+          const showChosen = () => {
+            const names = people.filter(p => p.querySelector('input').checked).map(p => p.textContent.trim());
+            chosen.textContent = names.length ? 'Chosen: ' + names.join(', ') : 'Nobody chosen yet.';
+          };
+          // Chosen people first, so they are visible without searching.
+          people.filter(p => p.querySelector('input').checked).reverse()
+            .forEach(p => p.parentElement.prepend(p));
+          picker.querySelector('[data-search]').addEventListener('input', function () {
+            const term = this.value.trim().toLowerCase();
+            let shown = 0;
+            people.forEach(p => {
+              const match = p.textContent.toLowerCase().includes(term);
+              p.classList.toggle('hidden', !match);
+              shown += match;
+            });
+            none.classList.toggle('hidden', shown > 0);
+          });
+          picker.addEventListener('change', showChosen);
+          showChosen();
+        })();
+      </script>
       <label class="label cursor-pointer justify-start gap-3">
         {{ form.accepting_requests }}
         <span class="label-text">Accepting travel support requests</span>

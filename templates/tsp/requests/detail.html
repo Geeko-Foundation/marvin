@@ -277,10 +277,44 @@
       </div>
     </div>
 
+    {% if travel_request.state == 'accepted' and travel_request.user_id == user.id %}
+    <div class="card bg-base-100 shadow-sm border border-primary" id="reimbursement">
+      <div class="card-body">
+        <h2 class="card-title text-lg">Reimbursement</h2>
+        <ul class="steps steps-vertical md:steps-horizontal w-full my-2">
+          <li class="step step-primary">Actual costs</li>
+          <li class="step {% if has_actuals %}step-primary{% endif %}">Documents</li>
+          <li class="step {% if has_actuals and not missing_docs %}step-primary{% endif %}">Submit for payment</li>
+        </ul>
+        {% if not has_actuals %}
+        <p class="text-sm opacity-80">Back from {{ travel_request.event.name }}? Start by telling us what each approved expense actually cost.</p>
+        <div class="card-actions mt-2">
+          <a href="{% url 'request_actuals' travel_request.pk %}" class="btn btn-primary btn-sm">Ask for reimbursement</a>
+        </div>
+        {% elif missing_docs %}
+        <p class="text-sm opacity-80">Now upload {{ missing_docs|join:", " }} below. The signed form lists your actual costs: print it, sign it and upload it.</p>
+        <div class="card-actions mt-2">
+          <a href="{% url 'request_form' travel_request.pk %}" class="btn btn-primary btn-sm" target="_blank">Print signed form</a>
+          <a href="{% url 'request_actuals' travel_request.pk %}" class="btn btn-ghost btn-sm">Change actual costs</a>
+        </div>
+        {% else %}
+        <p class="text-sm opacity-80">Everything is in. Send it to finance to be paid.</p>
+        <div class="card-actions mt-2">
+          <form method="post" action="{% url 'request_submit_for_payment' travel_request.pk %}">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-success btn-sm">Submit for payment</button>
+          </form>
+          <a href="{% url 'request_actuals' travel_request.pk %}" class="btn btn-ghost btn-sm">Change actual costs</a>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+
     <div class="card bg-base-100 shadow-sm">
       <div class="card-body">
         <h2 class="card-title text-lg">Documents</h2>
-        {% if missing_docs and travel_request.state == 'accepted' %}
+        {% if missing_docs and travel_request.state == 'accepted' and has_actuals %}
         <div class="alert alert-warning mb-4">
           <span>Missing: {{ missing_docs|join:", " }}</span>
         </div>
@@ -314,7 +348,9 @@
         <p class="text-sm opacity-60 mb-4">No documents uploaded yet.</p>
         {% endif %}
 
-        {% if travel_request.state == 'accepted' and travel_request.user_id == user.id %}
+        {% if travel_request.state == 'accepted' and travel_request.user_id == user.id and not has_actuals %}
+        <p class="text-sm opacity-60">You can upload documents once your actual costs are in.</p>
+        {% elif travel_request.state == 'accepted' and travel_request.user_id == user.id %}
         <form method="post" action="{% url 'request_document_upload' travel_request.pk %}" enctype="multipart/form-data" class="flex flex-wrap gap-3 items-end">
           {% csrf_token %}
           <div class="form-control">
@@ -362,13 +398,7 @@
           {% if travel_request.state == 'approved' and travel_request.user_id == user.id %}
           <a href="{% url 'request_accept_page' travel_request.pk %}" class="btn btn-sm btn-warning">Accept Request</a>
           {% endif %}
-          {% if travel_request.state == 'accepted' and travel_request.user_id == user.id %}
-          <a href="{% url 'request_actuals' travel_request.pk %}" class="btn btn-sm btn-outline">Report Actual Costs</a>
-          <form method="post" action="{% url 'request_submit_for_payment' travel_request.pk %}">
-            {% csrf_token %}
-            <button type="submit" class="btn btn-sm btn-success" {% if missing_docs %}disabled title="Upload all required documents first"{% endif %}>Submit for Payment</button>
-          </form>
-          {% endif %}
+
           <a href="{% url 'request_form' travel_request.pk %}" class="btn btn-sm btn-ghost" target="_blank">Print Form</a>
           {% if travel_request.state == 'draft' or travel_request.state == 'submitted' or travel_request.state == 'approved' or travel_request.state == 'accepted' or travel_request.state == 'submitted_for_payment' %}
           {# A request under review has its own Reject, so the committee is not offered both. #}

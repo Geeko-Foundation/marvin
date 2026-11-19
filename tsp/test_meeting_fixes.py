@@ -165,3 +165,37 @@ class OrganiserTests(TestCase):
             'accepting_requests': 'on', 'organizers': [self.owner.pk],
         })
         self.assertEqual(list(event.organizers.all()), [self.owner])
+
+
+class ReimbursementFlowTests(TestCase):
+
+    def setUp(self):
+        self.owner = make_user('traveller', [GROUP_REQUESTER])
+        self.client.force_login(self.owner)
+
+    def test_accepting_goes_home_with_a_friendly_message(self):
+        travel_request = make_request(self.owner, RequestState.APPROVED)
+        from tsp.forms import AcceptForm
+        response = self.client.post(reverse('request_accept', args=[travel_request.pk]),
+                                    {name: 'on' for name in AcceptForm.base_fields}, follow=True)
+        travel_request.refresh_from_db()
+        self.assertEqual(travel_request.state, RequestState.ACCEPTED)
+        self.assertRedirects(response, reverse('dashboard'))
+        self.assertContains(response, 'Enjoy the event')
+
+    def test_documents_come_after_the_actual_costs(self):
+        travel_request = make_request(self.owner, RequestState.ACCEPTED)
+        page = self.client.get(reverse('request_detail', args=[travel_request.pk]))
+        self.assertContains(page, 'Ask for reimbursement')
+        self.assertContains(page, 'once your actual costs are in')
+        expense = travel_request.expenses.get()
+        expense.actual_amount, expense.actual_currency = Decimal('480'), 'EUR'
+        expense.save()
+        page = self.client.get(reverse('request_detail', args=[travel_request.pk]))
+        self.assertContains(page, 'Print signed form')
+
+    def test_the_signed_form_shows_actual_costs(self):
+        travel_request = make_request(self.owner, RequestState.ACCEPTED, actual='480')
+        page = self.client.get(reverse('request_form', args=[travel_request.pk]))
+        self.assertContains(page, 'Actual Expenses')
+        self.assertContains(page, '480.00 EUR')
