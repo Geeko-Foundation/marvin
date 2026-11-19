@@ -73,3 +73,30 @@ class FinanceDashboardTests(TestCase):
         self.client.force_login(make_user('counter', [GROUP_FINANCE]))
         response = self.client.get(reverse('dashboard'))
         self.assertContains(response, reverse('request_detail', args=[travel_request.pk]))
+
+
+class EventProposalTests(TestCase):
+
+    def propose(self, user, **extra):
+        self.client.force_login(user)
+        return self.client.post(reverse('event_create'), {
+            'name': 'Asia Summit', 'location': 'Tokyo', 'start_date': '2027-08-01',
+            'end_date': '2027-08-03', **extra,
+        })
+
+    def test_a_requester_proposes_an_event_that_stays_closed(self):
+        from tsp.models import Event
+        self.propose(make_user('traveller', [GROUP_REQUESTER]), budget='99999', accepting_requests='on')
+        event = Event.objects.get(name='Asia Summit')
+        self.assertFalse(event.accepting_requests)
+        self.assertIsNone(event.budget)
+
+    def test_finance_can_propose_too(self):
+        response = self.propose(make_user('counter', [GROUP_FINANCE]))
+        self.assertRedirects(response, reverse('event_list'), fetch_redirect_response=False)
+
+    def test_the_committee_still_creates_an_open_event(self):
+        from tsp.models import Event
+        self.propose(make_user('reviewer', [GROUP_TSP]), accepting_requests='on', approval_percent='100',
+                     budget_currency='EUR')
+        self.assertTrue(Event.objects.get(name='Asia Summit').accepting_requests)

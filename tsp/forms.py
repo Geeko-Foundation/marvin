@@ -209,6 +209,22 @@ class EventForm(forms.ModelForm):
         return cleaned
 
 
+class EventProposalForm(forms.ModelForm):
+    """An event proposed by someone outside the committee, which sets the rest."""
+
+    class Meta:
+        model = Event
+        fields = ['name', 'location', 'start_date', 'end_date', 'url', 'description']
+        widgets = {name: EventForm.Meta.widgets[name] for name in fields}
+
+    def clean(self):
+        cleaned = super().clean()
+        start, end = cleaned.get('start_date'), cleaned.get('end_date')
+        if start and end and end < start:
+            self.add_error('end_date', 'The end date cannot be before the start date.')
+        return cleaned
+
+
 class TravelRequestForm(forms.ModelForm):
     """Core travel request fields (event, talk info, description)."""
 

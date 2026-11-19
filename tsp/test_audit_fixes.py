@@ -160,13 +160,13 @@ class EventRulesTests(TestCase):
         self.owner = make_user('eventowner', [GROUP_REQUESTER])
         self.chair = make_user('eventchair', [GROUP_TSP])
 
-    def test_only_the_committee_can_create_events(self):
+    def test_only_the_committee_can_open_an_event(self):
         payload = {'name': 'Rogue', 'location': 'X', 'start_date': '2099-01-01',
                    'end_date': '2099-01-02', 'accepting_requests': 'on'}
         self.client.force_login(self.owner)
-        self.assertEqual(self.client.post(reverse('event_create'), payload).status_code, 403)
-        self.assertFalse(Event.objects.filter(name='Rogue').exists())
-        self.assertNotContains(self.client.get(reverse('event_list')), 'New Event')
+        self.client.post(reverse('event_create'), payload)
+        self.assertFalse(Event.objects.get(name='Rogue').accepting_requests)
+        self.assertContains(self.client.get(reverse('event_list')), 'Propose Event')
 
     def test_an_event_cannot_end_before_it_starts(self):
         self.client.force_login(self.chair)

@@ -55,6 +55,7 @@ from tsp.forms import (
     CommentForm,
     DocumentUploadForm,
     EventForm,
+    EventProposalForm,
     ExpenseActualFormSet,
     ExpenseFormSet,
     LoginForm,
@@ -587,22 +588,41 @@ def event_list(request):
 
 
 @login_required
-@group_required(GROUP_TSP)
 def event_create(request):
-    """Create a new TSP event."""
+    """
+    Create an event. The committee sets everything; anyone else proposes one,
+    which stays closed to requests until the committee sets its budget and opens it.
+    """
     profile = get_profile(request.user)
+    form_class = EventForm if profile.is_tsp else EventProposalForm
     if request.method == 'POST':
-        form = EventForm(request.POST)
+        form = form_class(request.POST)
         if form.is_valid():
-            event = form.save()
-            audit('event.created', user=request.user, target=event.name,
+            event = form.save(commit=False)
+            if not profile.is_tsp:
+                event.accepting_requests = False
+            event.save()
+            audit('event.created' if profile.is_tsp else 'event.proposed', user=request.user,
+                  target=event.name,
                   detail=f'{event.start_date} to {event.end_date}'
                          + (f', budget {event.budget} {event.budget_currency}'
                             if event.budget else ''))
-            messages.success(request, 'Event created successfully.')
+            if profile.is_tsp:
+                messages.success(request, 'Event created successfully.')
+            else:
+                from profile.services.push_notifications import send_push_to_group
+                send_push_to_group(
+                    GROUP_TSP, head='Event proposed',
+                    body=f'{request.user.get_full_name() or request.user.username} proposed {event.name}.',
+                    url=reverse('event_edit', args=[event.pk]),
+                )
+                messages.success(
+                    request,
+                    'Thanks. The committee will set a budget and open it for requests.',
+                )
             return redirect('event_list')
     else:
-        form = EventForm()
+        form = form_class()
 
     return render(request, 'tsp/events/form.html', {'form': form, 'profile': profile})
 
