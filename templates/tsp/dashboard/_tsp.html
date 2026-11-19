@@ -61,11 +61,11 @@
     <div class="flex flex-wrap items-center gap-2 mt-3">
       <input type="text" name="notes" class="input input-bordered input-sm grow"
              placeholder="Note for the requester (required to reject)" aria-label="Note for the requester">
-      <button type="submit" name="action" value="approve" class="btn btn-sm">Approve as requested</button>
-      <button type="submit" name="action" value="reject" class="btn btn-sm btn-outline btn-error">Reject selected</button>
+      <button type="submit" name="action" value="approve" class="btn btn-sm" id="approve-selected" disabled>Approve selected</button>
+      <button type="submit" name="action" value="reject" class="btn btn-sm btn-outline btn-error" id="reject-selected" disabled>Reject selected</button>
     </div>
     <p class="text-xs opacity-60 mt-1">
-      Approving here approves the full amount requested. Open a request to approve a different amount.
+      Approving here approves the event's usual share of what each person asked for. Open a request to approve a different amount.
     </p>
     </form>
     {% include 'partials/pagination.html' with page_obj=pending param='pending_page' %}
@@ -92,7 +92,19 @@
 {% endif %}
 
 <script>
-  document.getElementById('select-all-pending')?.addEventListener('change', function () {
-    document.querySelectorAll('.select-pending').forEach(box => { box.checked = this.checked; });
-  });
+  (function () {
+    const boxes = document.querySelectorAll('.select-pending');
+    const approve = document.getElementById('approve-selected');
+    const reject = document.getElementById('reject-selected');
+    const update = () => {
+      const any = [...boxes].some(box => box.checked);
+      approve.disabled = reject.disabled = !any;
+      approve.classList.toggle('btn-success', any);
+    };
+    document.getElementById('select-all-pending')?.addEventListener('change', function () {
+      boxes.forEach(box => { box.checked = this.checked; });
+      update();
+    });
+    boxes.forEach(box => box.addEventListener('change', update));
+  })();
 </script>

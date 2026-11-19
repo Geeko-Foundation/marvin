@@ -103,7 +103,7 @@
         <tbody>
           {% for req in recently_paid %}
           <tr>
-            <td>{{ req.reference }}</td>
+            <td><a href="{% url 'request_detail' req.pk %}" class="link">{{ req.reference }}</a></td>
             <td>{{ req.user.get_full_name|default:req.user.username }}</td>
             <td>{{ req.event.name }}</td>
             <td>{% with paid=req.settled_payment %}{% if paid %}{{ paid.amount|floatformat:"2g" }} {{ paid.currency }}{% else %}-{% endif %}</td>

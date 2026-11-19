@@ -27,6 +27,7 @@ from django_tables2 import RequestConfig
 
 from marvin.validators import spreadsheet_safe
 from payments.models import PaymentRecord
+from payments.services import PaymentService
 from profile.audit_log import AuditLogEntry
 from profile.audit_log import record as audit
 from profile.decorators import get_profile
@@ -1103,12 +1104,16 @@ def request_batch_review(request):
                 transaction.set_rollback(True)
 
     if reviewed:
-        messages.success(request, f'{reviewed} request{"s" if reviewed != 1 else ""} {action}d.')
+        which = (
+            'All selected requests' if reviewed == len(ids)
+            else f'{reviewed} request{"s" if reviewed != 1 else ""}'
+        )
+        messages.success(request, f'{which} {action}d.')
     if own:
         messages.warning(
             request,
-            f'{own} of the selected requests {"are" if own != 1 else "is"} your own, '
-            'so another committee member has to review it.',
+            f'Left {own} of your own request{"s" if own != 1 else ""} alone. '
+            'Another committee member has to review those.',
         )
     if over_budget:
         messages.warning(
@@ -1152,14 +1157,21 @@ def request_reject(request, pk):
 @login_required
 @require_POST
 def request_cancel(request, pk):
-    """Cancel a request as the owner or TSP committee member."""
+    """Cancel a request as its owner, the TSP committee, or finance once it waits for payment."""
     travel_request = get_object_or_404(TravelRequest, pk=pk)
     profile = get_profile(request.user)
     is_owner = travel_request.user_id == request.user.id
-    is_tsp = profile.is_tsp
+    waits_for_payment = travel_request.state == RequestState.SUBMITTED_FOR_PAYMENT
 
-    if not (is_owner or is_tsp):
+    if not (is_owner or profile.is_tsp or (profile.is_finance and waits_for_payment)):
         raise PermissionDenied
+    if waits_for_payment and PaymentService()._payments_under_way(travel_request).exists():
+        messages.error(
+            request,
+            'A payment for this request is already under way. Cancel it in Wise first, '
+            'then refresh its status here.',
+        )
+        return redirect('request_detail', pk=pk)
 
     try:
         transition_request(travel_request, RequestState.CANCELLED, request.user)

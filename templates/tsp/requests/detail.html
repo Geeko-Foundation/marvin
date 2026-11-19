@@ -368,8 +368,9 @@
           </form>
           {% endif %}
           <a href="{% url 'request_form' travel_request.pk %}" class="btn btn-sm btn-ghost" target="_blank">Print Form</a>
-          {% if travel_request.state == 'draft' or travel_request.state == 'submitted' or travel_request.state == 'approved' or travel_request.state == 'accepted' %}
-          {% if travel_request.user_id == user.id or profile.is_tsp %}
+          {% if travel_request.state == 'draft' or travel_request.state == 'submitted' or travel_request.state == 'approved' or travel_request.state == 'accepted' or travel_request.state == 'submitted_for_payment' %}
+          {# A request under review has its own Reject, so the committee is not offered both. #}
+          {% if travel_request.user_id == user.id or profile.is_tsp and travel_request.state != 'submitted' or profile.is_finance and travel_request.state == 'submitted_for_payment' %}
           <form method="post" action="{% url 'request_cancel' travel_request.pk %}" data-confirm="Cancel {{ travel_request.reference }}?" data-confirm-action="Cancel Request" data-confirm-detail="It can't be reopened afterwards.{% if travel_request.advance_payment %} The advance already paid will have to be paid back.{% endif %}">
             {% csrf_token %}
             <button type="submit" class="btn btn-sm btn-error btn-outline">Cancel Request</button>
