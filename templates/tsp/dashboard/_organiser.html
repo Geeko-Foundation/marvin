@@ -1,0 +1,46 @@
+<h2 class="text-2xl font-bold mb-6">Events you organise</h2>
+
+{% for item in organised %}
+<div class="card bg-base-100 shadow-sm mb-6">
+  <div class="card-body">
+    <h3 class="card-title">{{ item.event.name }}</h3>
+    <p class="text-sm opacity-70">{{ item.event.location }} · {{ item.event.start_date|date }} to {{ item.event.end_date|date }}</p>
+    <div class="stats stats-vertical md:stats-horizontal bg-base-200 my-2">
+      <div class="stat">
+        <div class="stat-title">Budget</div>
+        <div class="stat-value text-lg">{% if item.event.budget is not None %}{{ item.event.budget|floatformat:"2g" }} {{ item.event.budget_currency }}{% else %}No limit{% endif %}</div>
+      </div>
+      <div class="stat">
+        <div class="stat-title">Approved</div>
+        <div class="stat-value text-lg">{{ item.approved|floatformat:"2g" }} {{ item.event.budget_currency }}</div>
+      </div>
+      {% if item.remaining is not None %}
+      <div class="stat">
+        <div class="stat-title">Left</div>
+        <div class="stat-value text-lg {% if item.remaining < 0 %}text-error{% endif %}">{{ item.remaining|floatformat:"2g" }} {{ item.event.budget_currency }}</div>
+      </div>
+      {% endif %}
+    </div>
+    {% if item.pending %}
+    <div class="overflow-x-auto">
+      <table class="table table-zebra">
+        <thead><tr><th>ID</th><th>Requester</th><th>Submitted</th><th>Estimated</th><th></th></tr></thead>
+        <tbody>
+          {% for req in item.pending %}
+          <tr>
+            <td>{{ req.reference }}</td>
+            <td>{{ req.user.get_full_name|default:req.user.username }}</td>
+            <td>{{ req.created_at|date }}</td>
+            <td>{% for currency, amount in req.totals_estimated %}{{ amount|floatformat:"2g" }} {{ currency }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
+            <td><a href="{% url 'request_detail' req.pk %}" class="btn btn-primary btn-sm">Review</a></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="opacity-60">No requests waiting for review.</p>
+    {% endif %}
+  </div>
+</div>
+{% endfor %}

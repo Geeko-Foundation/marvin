@@ -531,6 +531,17 @@ def dashboard(request):
         context.update(_requester_sections(request))
     if profile.is_tsp:
         context.update(_committee_sections(request))
+    else:
+        context['organised'] = [
+            {
+                'event': event,
+                'pending': event.requests.filter(state=RequestState.SUBMITTED)
+                                .select_related('user').order_by('created_at'),
+                'approved': event.approved_against_budget(),
+                'remaining': event.budget_remaining(),
+            }
+            for event in Event.organised_by(request.user).order_by('start_date')
+        ]
     if profile.is_finance:
         context.update(_finance_sections(request))
 
@@ -602,6 +613,7 @@ def event_create(request):
             if not profile.is_tsp:
                 event.accepting_requests = False
             event.save()
+            form.save_m2m()
             audit('event.created' if profile.is_tsp else 'event.proposed', user=request.user,
                   target=event.name,
                   detail=f'{event.start_date} to {event.end_date}'
@@ -768,9 +780,16 @@ def request_create(request):
     })
 
 
+def _reviews(user, profile, event):
+    """True when ``user`` may approve and reject requests for ``event``."""
+    return profile.is_tsp or event.is_organised_by(user)
+
+
 def _sees_internal_notes(user, profile, travel_request):
-    """Committee and finance see internal notes, except on their own request."""
-    return profile.is_committee and travel_request.user_id != user.id
+    """Committee, finance and the event's organisers see internal notes, except on their own request."""
+    if travel_request.user_id == user.id:
+        return False
+    return profile.is_committee or travel_request.event.is_organised_by(user)
 
 
 _OVERAGE_NOTE = re.compile(r'\s*\[over budget by [^\]]*\]')
@@ -842,10 +861,12 @@ def request_detail(request, pk, travel_request, profile):
     comment_form = CommentForm(can_write_internal=sees_internal)
     doc_form = DocumentUploadForm()
     review_lines = None
-    if profile.is_tsp and travel_request.state == RequestState.SUBMITTED:
+    can_review = _reviews(request.user, profile, travel_request.event)
+    if can_review and travel_request.state == RequestState.SUBMITTED:
         review_lines = _review_lines(travel_request)
     return render(request, 'tsp/requests/detail.html', {
         'review_lines': review_lines,
+        'can_review': can_review,
         'payout_currencies': settings.PAYOUT_CURRENCIES,
         'travel_request': travel_request,
         'profile': profile,
@@ -973,11 +994,13 @@ def _set_advance(travel_request, data):
 
 
 @login_required
-@group_required(GROUP_TSP)
 @require_POST
 def request_approve(request, pk):
     """Approve a submitted request and set per-expense approved amounts."""
     travel_request = get_object_or_404(TravelRequest, pk=pk)
+    profile = get_profile(request.user)
+    if not _reviews(request.user, profile, travel_request.event):
+        raise PermissionDenied
     if travel_request.user_id == request.user.id:
         messages.error(request, 'You cannot review your own request. Another committee member has to.')
         return redirect('request_detail', pk=pk)
@@ -997,7 +1020,7 @@ def request_approve(request, pk):
         if not error:
             error = _set_advance(travel_request, request.POST)
         if not error:
-            notes, error = _check_budget(travel_request, request.POST, notes)
+            notes, error = _check_budget(travel_request, request.POST, notes, profile.is_tsp)
         if not error:
             try:
                 transition_request(travel_request, RequestState.APPROVED, request.user, notes)
@@ -1043,18 +1066,24 @@ def _apply_approved_amounts(travel_request, data):
     return None
 
 
-def _check_budget(travel_request, data, notes):
+def _check_budget(travel_request, data, notes, may_overspend=True):
     """
     Refuse an approval that takes the event past its budget, unless overridden.
 
     The budget is the committee's own limit, so going past it is allowed but
-    has to be deliberate, and the overage is written into the history.
-    Returns the notes to record and an error or None.
+    has to be deliberate, and the overage is written into the history. An
+    organiser works within the budget they were given, so only the committee
+    can go past it. Returns the notes to record and an error or None.
     """
     event = travel_request.event
     remaining = event.budget_remaining()
     if remaining is None or remaining >= 0:
         return notes, None
+    if not may_overspend:
+        return notes, (
+            f'Approving this would put {event.name} {abs(remaining)} {event.budget_currency} '
+            'over its budget. Lower the amounts, or ask the committee to approve it.'
+        )
     if data.get('over_budget') != '1':
         return notes, (
             f'Approving this would put {event.name} {abs(remaining)} '
@@ -1066,7 +1095,6 @@ def _check_budget(travel_request, data, notes):
 
 
 @login_required
-@group_required(GROUP_TSP)
 @require_POST
 def request_batch_review(request):
     """Approve or reject several submitted requests in one go."""
@@ -1089,9 +1117,15 @@ def request_batch_review(request):
         messages.error(request, 'Rejecting needs a note saying why.')
         return redirect('dashboard')
 
+    profile = get_profile(request.user)
     selected = TravelRequest.objects.filter(
         pk__in=ids, state=RequestState.SUBMITTED,
     ).select_related('event').prefetch_related('expenses')
+    if not profile.is_tsp:
+        organised = Event.organised_by(request.user)
+        if not organised.exists():
+            raise PermissionDenied
+        selected = selected.filter(event__in=organised)
 
     reviewed, own, over_budget = 0, 0, []
     for travel_request in selected:
@@ -1154,11 +1188,12 @@ def request_batch_review(request):
 
 
 @login_required
-@group_required(GROUP_TSP)
 @require_POST
 def request_reject(request, pk):
     """Reject a submitted request with required notes."""
     travel_request = get_object_or_404(TravelRequest, pk=pk)
+    if not _reviews(request.user, get_profile(request.user), travel_request.event):
+        raise PermissionDenied
     if travel_request.user_id == request.user.id:
         messages.error(request, 'You cannot review your own request. Another committee member has to.')
         return redirect('request_detail', pk=pk)

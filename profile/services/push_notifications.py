@@ -126,6 +126,10 @@ def notify_request_state_change(
             url=url,
             exclude_user=actor,
         )
+        for organiser in travel_request.event.organizers.exclude(pk=getattr(actor, 'pk', None)):
+            if travel_request.event.is_organised_by(organiser):
+                send_push_to_user(organiser, head='New travel request',
+                                  body=f'{label} was submitted for review.', url=url)
     elif to_state == RequestState.APPROVED:
         send_push_to_user(
             requester,

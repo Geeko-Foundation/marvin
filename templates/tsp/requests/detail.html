@@ -163,11 +163,11 @@
         <p class="text-sm opacity-70 mt-2">Approved at {{ travel_request.approval_percent }}% of what was asked for.</p>
         {% endif %}
 
-        {% if profile.is_tsp and travel_request.state == 'submitted' and travel_request.user_id == user.id %}
+        {% if can_review and travel_request.state == 'submitted' and travel_request.user_id == user.id %}
         <div class="divider">Committee review</div>
         <p class="text-sm opacity-70">This is your own request, so another committee member has to review it.</p>
-        {% elif profile.is_tsp and travel_request.state == 'submitted' %}
-        <div class="divider">Committee review</div>
+        {% elif can_review and travel_request.state == 'submitted' %}
+        <div class="divider">{% if profile.is_tsp %}Committee review{% else %}Organiser review{% endif %}</div>
         <form method="post" action="{% url 'request_approve' travel_request.pk %}">
           {% csrf_token %}
           <label class="flex flex-wrap items-center gap-3 mb-3 p-3 bg-base-200 rounded-box text-sm">
@@ -255,10 +255,12 @@
             <strong class="{% if left < 0 %}text-error{% endif %}">{{ left|floatformat:"2g" }} {{ travel_request.event.budget_currency }}</strong>
             left of its budget.
           </p>
+          {% if profile.is_tsp %}
           <label class="label cursor-pointer justify-start gap-2 mb-2">
             <input type="checkbox" name="over_budget" value="1" class="checkbox checkbox-sm">
             <span class="label-text">Approve even if this takes the event over budget</span>
           </label>
+          {% endif %}
           {% endif %}
           {% endwith %}
           <div class="flex gap-2">

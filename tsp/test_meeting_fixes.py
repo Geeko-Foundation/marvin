@@ -102,3 +102,66 @@ class EventProposalTests(TestCase):
         self.propose(make_user('reviewer', [GROUP_TSP]), accepting_requests='on', approval_percent='100',
                      budget_currency='EUR')
         self.assertTrue(Event.objects.get(name='Asia Summit').accepting_requests)
+
+
+class OrganiserTests(TestCase):
+
+    def setUp(self):
+        self.owner = make_user('traveller', [GROUP_REQUESTER])
+        self.organiser = make_user('organiser', [GROUP_REQUESTER])
+        self.request = make_request(self.owner, RequestState.SUBMITTED)
+        self.event = self.request.event
+        self.event.organizers.add(self.organiser)
+        self.client.force_login(self.organiser)
+
+    def approve(self, travel_request, amount='500'):
+        expense = travel_request.expenses.get()
+        self.client.post(reverse('request_approve', args=[travel_request.pk]), {
+            'expense_id': expense.pk, f'approved_amount_{expense.pk}': amount,
+            f'approved_currency_{expense.pk}': 'EUR', 'approval_percent': '100',
+        })
+        travel_request.refresh_from_db()
+        return travel_request.state
+
+    def test_an_organiser_reviews_their_events_requests(self):
+        response = self.client.get(reverse('request_detail', args=[self.request.pk]))
+        self.assertContains(response, 'Organiser review')
+        self.assertEqual(self.approve(self.request), RequestState.APPROVED)
+
+    def test_an_organiser_cannot_touch_another_event(self):
+        other = make_request(self.owner, RequestState.SUBMITTED)
+        other.event.organizers.clear()
+        self.assertEqual(self.client.get(reverse('request_detail', args=[other.pk])).status_code, 403)
+        self.assertEqual(
+            self.client.post(reverse('request_approve', args=[other.pk])).status_code, 403,
+        )
+
+    def test_an_organiser_stays_within_the_budget(self):
+        self.event.budget, self.event.budget_currency = Decimal('100'), 'EUR'
+        self.event.save()
+        self.assertEqual(self.approve(self.request), RequestState.SUBMITTED)
+
+    def test_the_role_ends_90_days_after_the_event(self):
+        from datetime import date, timedelta
+        self.event.start_date = self.event.end_date = date.today() - timedelta(days=91)
+        self.event.save()
+        self.assertEqual(self.client.get(reverse('request_detail', args=[self.request.pk])).status_code, 403)
+
+    def test_an_organiser_cannot_edit_the_event_or_pay(self):
+        self.assertEqual(self.client.get(reverse('event_edit', args=[self.event.pk])).status_code, 403)
+        self.assertEqual(self.client.get(reverse('payments:dashboard')).status_code, 403)
+
+    def test_the_dashboard_lists_requests_to_review(self):
+        response = self.client.get(reverse('dashboard'))
+        self.assertContains(response, 'Events you organise')
+        self.assertContains(response, self.request.reference)
+
+    def test_the_committee_picks_organisers_on_the_event(self):
+        self.client.force_login(make_user('chair', [GROUP_TSP]))
+        event = self.event
+        self.client.post(reverse('event_edit', args=[event.pk]), {
+            'name': event.name, 'location': event.location, 'start_date': event.start_date,
+            'end_date': event.end_date, 'approval_percent': '100', 'budget_currency': 'EUR',
+            'accepting_requests': 'on', 'organizers': [self.owner.pk],
+        })
+        self.assertEqual(list(event.organizers.all()), [self.owner])

@@ -116,6 +116,11 @@
         {{ form.visa_letters_offered }}
         <span class="label-text">Visa letters offered</span>
       </label>
+      <div class="form-control">
+        <label class="label" for="{{ form.organizers.id_for_label }}"><span class="label-text">Organisers</span></label>
+        {{ form.organizers }}
+        <label class="label"><span class="label-text-alt">They review this event's requests within its budget, until {{ event.ORGANISER_DAYS_AFTER|default:90 }} days after it ends. Hold Ctrl or Cmd to pick more than one.</span></label>
+      </div>
       <label class="label cursor-pointer justify-start gap-3">
         {{ form.accepting_requests }}
         <span class="label-text">Accepting travel support requests</span>

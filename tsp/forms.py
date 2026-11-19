@@ -125,7 +125,7 @@ class EventForm(forms.ModelForm):
         fields = ['name', 'location', 'start_date', 'end_date', 'accepting_requests',
                   'budget', 'budget_currency', 'approval_percent', 'url', 'description',
                   'requests_open_until', 'reimbursements_open_until',
-                  'visa_letters_offered']
+                  'visa_letters_offered', 'organizers']
         widgets = {
             'name': forms.TextInput(attrs={'class': 'input input-bordered w-full'}),
             'location': forms.TextInput(attrs={'class': 'input input-bordered w-full'}),
@@ -154,6 +154,7 @@ class EventForm(forms.ModelForm):
                 'class': 'input input-bordered w-full', 'type': 'date',
             }),
             'visa_letters_offered': forms.CheckboxInput(attrs={'class': 'checkbox'}),
+            'organizers': forms.SelectMultiple(attrs={'class': 'select select-bordered w-full h-32'}),
         }
 
     offered_categories = forms.MultipleChoiceField(
@@ -173,6 +174,10 @@ class EventForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields['budget_currency'].required = False
         self.fields['budget'].validators.append(MinValueValidator(Decimal('0')))
+        self.fields['organizers'].queryset = User.objects.filter(is_active=True).order_by('first_name', 'username')
+        self.fields['organizers'].label_from_instance = lambda u: (
+            f'{u.get_full_name()} ({u.username})' if u.get_full_name() else u.username
+        )
         optional = dict(OPTIONAL_EXPENSE_CATEGORIES)
         extra = self.instance.extra_expense_categories or []
         self.fields['offered_categories'].initial = [c for c in extra if c in optional]
