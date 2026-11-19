@@ -287,18 +287,18 @@
           <li class="step {% if has_actuals and not missing_docs %}step-primary{% endif %}">Submit for payment</li>
         </ul>
         {% if not has_actuals %}
-        <p class="text-sm opacity-80">Back from {{ travel_request.event.name }}? Start by telling us what each approved expense actually cost.</p>
+        <p class="text-sm opacity-80">Back from the event? Enter what you actually spent.</p>
         <div class="card-actions mt-2">
           <a href="{% url 'request_actuals' travel_request.pk %}" class="btn btn-primary btn-sm">Ask for reimbursement</a>
         </div>
         {% elif missing_docs %}
-        <p class="text-sm opacity-80">Now upload {{ missing_docs|join:", " }} below. The signed form lists your actual costs: print it, sign it and upload it.</p>
+        <p class="text-sm opacity-80">Upload: {{ missing_docs|join:", " }}.</p>
         <div class="card-actions mt-2">
           <a href="{% url 'request_form' travel_request.pk %}" class="btn btn-primary btn-sm" target="_blank">Print signed form</a>
           <a href="{% url 'request_actuals' travel_request.pk %}" class="btn btn-ghost btn-sm">Change actual costs</a>
         </div>
         {% else %}
-        <p class="text-sm opacity-80">Everything is in. Send it to finance to be paid.</p>
+
         <div class="card-actions mt-2">
           <form method="post" action="{% url 'request_submit_for_payment' travel_request.pk %}">
             {% csrf_token %}

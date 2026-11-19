@@ -1276,9 +1276,7 @@ def request_accept(request, pk):
             return redirect('request_detail', pk=pk)
         messages.success(
             request,
-            f'You are all set for {travel_request.event.name}. Enjoy the event! '
-            f'Afterwards, choose "Ask for reimbursement" on {travel_request.reference} '
-            'to send us your actual costs and receipts.',
+            f'You are all set. Enjoy the event, {travel_request.event.name}!',
         )
         return redirect('dashboard')
     messages.error(request, 'All confirmations are required.')
@@ -1300,11 +1298,7 @@ def request_actuals(request, pk):
         formset = ExpenseActualFormSet(request.POST, instance=travel_request, queryset=queryset)
         if formset.is_valid():
             formset.save()
-            messages.success(
-                request,
-                'Actual costs saved. Next, upload your receipts and invoice, and the signed form '
-                '(print it from this page, sign it and upload it).',
-            )
+            messages.success(request, 'Actual costs saved.')
             return redirect(reverse('request_detail', args=[pk]) + '#reimbursement')
     else:
         formset = ExpenseActualFormSet(instance=travel_request, queryset=queryset)
@@ -1478,7 +1472,7 @@ def request_document_upload(request, pk, travel_request, profile):
         if travel_request.missing_document_kinds():
             messages.success(request, 'Document uploaded.')
         else:
-            messages.success(request, 'Document uploaded. Everything is in, so you can submit for payment.')
+            messages.success(request, 'Document uploaded. You can now submit for payment.')
     else:
         file_errors = form.errors.get('file')
         messages.error(request, file_errors[0] if file_errors else 'Please select a valid file.')

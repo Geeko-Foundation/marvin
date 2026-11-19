@@ -4,9 +4,7 @@
 
 {% block content %}
 <h1 class="text-2xl font-bold mb-6">{% if event %}Edit {{ event.name }}{% elif profile.is_tsp %}Create Event{% else %}Propose an Event{% endif %}</h1>
-{% if not profile.is_tsp %}
-<p class="mb-6 opacity-70 max-w-xl">The committee sets the budget and opens the event for requests.</p>
-{% endif %}
+
 
 <form method="post" class="max-w-xl">
   {% csrf_token %}
@@ -35,7 +33,7 @@
         <div class="form-control">
           <label class="label" for="{{ form.suggested_budget.id_for_label }}"><span class="label-text">Suggested budget</span></label>
           {{ form.suggested_budget }}
-          <label class="label"><span class="label-text-alt">What you think it needs. The committee decides.</span></label>
+
           {% for error in form.suggested_budget.errors %}<span class="label-text-alt text-error">{{ error }}</span>{% endfor %}
         </div>
         <div class="form-control">
@@ -63,17 +61,12 @@
       <div class="form-control md:w-1/2">
         <label class="label" for="{{ form.approval_percent.id_for_label }}"><span class="label-text">Share of each request covered (%)</span></label>
         {{ form.approval_percent }}
-        <label class="label">
-          <span class="label-text-alt">Reviews start from this share of what was asked for. Reviewers can still change any line.</span>
-        </label>
+
         {% for error in form.approval_percent.errors %}
         <span class="label-text-alt text-error">{{ error }}</span>
         {% endfor %}
       </div>
-      <p class="text-sm opacity-60">
-        Approvals for this event count against the budget. Going over it needs
-        the committee to confirm, and that is recorded on the request.
-      </p>
+
       <div class="grid gap-4 md:grid-cols-2">
         <div class="form-control">
           <label class="label" for="{{ form.requests_open_until.id_for_label }}"><span class="label-text">Requests close on</span></label>
@@ -102,13 +95,14 @@
       {% if profile.is_tsp %}
       <fieldset class="form-control gap-2">
         <legend class="label-text mb-2">Extra costs this event covers</legend>
-        <p class="text-sm opacity-60">Flights, trains, lodging and other costs are always offered. Tick anything more this event pays for, and requesters will see it as a category.</p>
-        {% for choice in form.offered_categories %}
-        <label class="label cursor-pointer justify-start gap-3 py-1">
-          {{ choice.tag }}<span class="label-text">{{ choice.choice_label }}</span>
-        </label>
-        {% endfor %}
-        <label class="label pb-1" for="{{ form.custom_categories.id_for_label }}"><span class="label-text">Other categories, separated by commas</span></label>
+        <div class="grid gap-1 sm:grid-cols-2">
+          {% for choice in form.offered_categories %}
+          <label class="flex items-center gap-3 py-1 cursor-pointer">
+            {{ choice.tag }}<span class="label-text">{{ choice.choice_label }}</span>
+          </label>
+          {% endfor %}
+        </div>
+        <label class="label pb-1 mt-2" for="{{ form.custom_categories.id_for_label }}"><span class="label-text">Other categories, separated by commas</span></label>
         {{ form.custom_categories }}
         {% for error in form.custom_categories.errors %}<span class="label-text-alt text-error">{{ error }}</span>{% endfor %}
       </fieldset>
@@ -118,12 +112,11 @@
       </label>
       <fieldset class="form-control" id="organiser-picker">
         <legend class="label-text mb-2">Organisers</legend>
-        <p class="text-sm opacity-60 mb-2">They review this event's requests within its budget, until 90 days after it ends.</p>
-        <p class="text-sm mb-2" data-chosen></p>
+        <p class="text-sm mb-2 truncate" data-chosen></p>
         <input type="search" class="input input-bordered input-sm w-full mb-2" placeholder="Search people by name or username" aria-label="Search people" data-search>
-        <div class="max-h-48 overflow-y-auto border border-base-300 p-2" data-list>
+        <div class="max-h-48 overflow-y-auto border border-base-300 p-2 flex flex-col" data-list>
           {% for choice in form.organizers %}
-          <label class="label cursor-pointer justify-start gap-3 py-1" data-person>
+          <label class="flex items-center gap-3 py-1 cursor-pointer" data-person>
             {{ choice.tag }}<span class="label-text">{{ choice.choice_label }}</span>
           </label>
           {% endfor %}
@@ -138,7 +131,7 @@
           const none = picker.querySelector('[data-none]');
           const showChosen = () => {
             const names = people.filter(p => p.querySelector('input').checked).map(p => p.textContent.trim());
-            chosen.textContent = names.length ? 'Chosen: ' + names.join(', ') : 'Nobody chosen yet.';
+            chosen.textContent = names.length ? 'Chosen: ' + names.join(', ') : '';
           };
           // Chosen people first, so they are visible without searching.
           people.filter(p => p.querySelector('input').checked).reverse()
