@@ -1,9 +1,16 @@
-@import "tailwindcss";
+/* source(none): scan only the paths below, so the output does not depend on
+   what else happens to sit in the folder, such as an earlier build. */
+@import "tailwindcss" source(none);
 @import "./src/themes.css";
 @import "./src/custom.css";
 @source "../templates/**/*.html";
-@source "../**/templates/**/*.html";
-@source "./*sample.html";
+@source "../static/js/**/*.js";
+/* Python that hands class names to templates: badge colours, table styles. */
+@source "../tsp/**/*.py";
+@source "../profile/**/*.py";
+@source "../payments/**/*.py";
+/* Assembled in templates as alert-{{ tag }}, so the full names never appear. */
+@source inline("alert-error alert-success alert-warning alert-info");
 @plugin "daisyui" {
   themes: i-layer-light, i-layer-dark;
 }

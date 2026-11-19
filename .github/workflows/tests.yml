@@ -96,16 +96,14 @@ jobs:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
-        if: hashFiles('package.json') != ''
         with:
           node-version: "22"
 
       - name: Rebuild the stylesheet
-        if: hashFiles('package.json') != ''
         run: |
-          npm ci
-          npm run build:css
+          npm --prefix css_build ci
+          npm --prefix css_build run build
+          cp css_build/target/styles.css static/css/styles.css
 
       - name: The committed stylesheet matches
-        if: hashFiles('package.json') != ''
-        run: git diff --exit-code static/css/app.css || (echo "Run npm run build:css and commit static/css/app.css." && exit 1)
+        run: git diff --exit-code static/css/styles.css || (echo "Rebuild the stylesheet as css_build/README.md describes and commit static/css/styles.css." && exit 1)

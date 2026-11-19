@@ -27,8 +27,9 @@ ALLOWED_HOSTS = env_list('ALLOWED_HOSTS', 'localhost,127.0.0.1,testserver')
 CSRF_TRUSTED_ORIGINS = env_list('CSRF_TRUSTED_ORIGINS', '')
 
 # Strict Cookie & Transport Security
-SESSION_COOKIE_SECURE = True
-CSRF_COOKIE_SECURE = True
+# Sent only over HTTPS once DEBUG is off, so local development over plain
+# http still keeps a session.
+SESSION_COOKIE_SECURE = CSRF_COOKIE_SECURE = not DEBUG
 SESSION_COOKIE_HTTPONLY = True
 CSRF_COOKIE_HTTPONLY = False  # Set to True unless client-side JavaScript reads the CSRF token
 
@@ -256,9 +257,9 @@ BRAND_TAGLINE = env('BRAND_TAGLINE', 'Travel Support Program')
 # Marvin's own joke. A fork sets this empty to drop the line.
 BRAND_STRAPLINE = env('BRAND_STRAPLINE', 'Your Travel Assistant')
 
-# Any daisyUI theme name: https://daisyui.com/docs/themes/
-BRAND_THEME_LIGHT = env('BRAND_THEME_LIGHT', 'corporate')
-BRAND_THEME_DARK = env('BRAND_THEME_DARK', 'business')
+# Theme names built into static/css/styles.css (see css_build/app.css).
+BRAND_THEME_LIGHT = env('BRAND_THEME_LIGHT', 'i-layer-light')
+BRAND_THEME_DARK = env('BRAND_THEME_DARK', 'i-layer-dark')
 
 
 # --- Email ---

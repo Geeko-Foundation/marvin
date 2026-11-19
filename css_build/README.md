@@ -12,8 +12,6 @@ cp css_build/target/styles.css static/css/styles.css
 
 `package.json` defines `build` (minified output) and `watch` (rebuild on source changes); `package-lock.json` pins the npm dependencies. After changing templates or CSS sources, run the build and copy the output again. Django serves `static/css/styles.css`, as linked in `templates/partials/head_assets.html`—it does not serve the generated `target/styles.css` directly.
 
-The build starts at `app.css`: it imports Tailwind, `src/themes.css` (the DaisyUI `i-layer-light` and `i-layer-dark` themes), and `src/custom.css`, then scans Django templates for utility classes and enables DaisyUI. Edit those CSS sources and the templates rather than `target/styles.css`, which is generated. `src/custom.css` is available for project-specific CSS.
+The build starts at `app.css`: it imports Tailwind, `src/themes.css` (the DaisyUI `i-layer-light` and `i-layer-dark` themes), and `src/custom.css`, then scans the templates, `static/js` and the app Python (which hands badge classes to templates) for utility classes and enables DaisyUI. Only those paths are scanned, so the build is the same on every machine. Edit those CSS sources and the templates rather than `target/styles.css`, which is generated. `src/custom.css` holds project-specific CSS, such as the print rules.
 
 To watch while editing, run `npm --prefix css_build run watch` from the project root. Watch writes only to `css_build/target/styles.css`; copy it to `static/css/styles.css` after stopping the watcher, or from another terminal, to make the changes available to Django.
-
-`tailwind.config.js` is not loaded by the current Tailwind v4 CSS-first entry point: `app.css` does not reference it. Change `app.css` and its CSS imports for the current build rather than assuming edits to that JavaScript config affect the output.

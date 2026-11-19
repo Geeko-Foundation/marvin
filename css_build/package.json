@@ -1,7 +1,7 @@
 {
   "name": "css_build",
   "version": "1.0.0",
-  "description": "Builds static/css/app.css. Only needed when templates change.",
+  "description": "Builds static/css/styles.css. Only needed when templates change.",
   "scripts": {
     "build": "tailwindcss -i app.css -o target/styles.css --minify",
     "watch": "tailwindcss -i app.css -o target/styles.css --watch"

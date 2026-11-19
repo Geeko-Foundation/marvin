@@ -1,9 +1,8 @@
 (function () {
   const STORAGE_KEY = 'marvin-theme';
-  const LIGHT = 'corporate';
-  const DARK = 'business';
-
   function bindToggle(toggle) {
+    const LIGHT = toggle.dataset.light;
+    const DARK = toggle.dataset.dark;
     const apply = (theme) => {
       document.documentElement.setAttribute('data-theme', theme);
       localStorage.setItem(STORAGE_KEY, theme);
