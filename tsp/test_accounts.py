@@ -35,16 +35,15 @@ class EmailConfirmationTests(TestCase):
         self.assertNotIn('_auth_user_id', self.client.session)
         self.assertFalse(self.client.login(username='newcomer', password=PASSWORD))
 
-    def test_the_link_switches_the_account_on_and_signs_in_once(self):
+    def test_the_link_switches_the_account_on_once(self):
         self.sign_up()
         link = link_in(mail.outbox[0])
-        response = self.client.get(link)
-        self.assertRedirects(response, reverse('signup_profile'), fetch_redirect_response=False)
+        self.assertRedirects(self.client.get(link), reverse('login'), fetch_redirect_response=False)
         self.assertTrue(User.objects.get(username='newcomer').is_active)
-        self.assertIn('_auth_user_id', self.client.session)
+        self.assertTrue(self.client.login(username='newcomer', password=PASSWORD))
 
         self.client.logout()
-        self.assertRedirects(self.client.get(link), reverse('login'), fetch_redirect_response=False)
+        self.client.get(link)
         self.assertNotIn('_auth_user_id', self.client.session)
 
     def test_a_link_can_be_sent_again_and_unknown_addresses_look_the_same(self):
@@ -177,8 +176,21 @@ class EmailChangeTests(TestCase):
         self.user.save()
         self.client.force_login(self.user)
 
-    def change_to(self, email):
-        return self.client.post(reverse('profile'), {'first_name': 'Mo', 'last_name': 'Ver', 'email': email})
+    def change_to(self, email, password='x'):
+        return self.client.post(reverse('profile'), {
+            'first_name': 'Mo', 'last_name': 'Ver', 'email': email, 'current_password': password,
+        })
+
+    def test_a_new_address_needs_the_current_password(self):
+        response = self.change_to('new@example.org', password='wrong')
+        self.assertContains(response, 'Enter your current password to change your email.')
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_the_old_address_is_told_once_the_change_is_made(self):
+        self.change_to('new@example.org')
+        self.client.get(link_in(mail.outbox[-1]))
+        self.assertEqual(mail.outbox[-1].to, ['old@example.org'])
+
 
     def test_the_new_address_waits_for_its_link(self):
         self.change_to('new@example.org')

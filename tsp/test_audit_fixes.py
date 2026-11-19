@@ -447,9 +447,10 @@ class LoginLimitTests(TestCase):
     """Guessing passwords for one account stops after ten wrong tries."""
 
     def setUp(self):
-        from django.core.cache import cache
-        cache.clear()
+        from django.core.cache import caches
+        caches['limits'].clear()
         self.user = make_user('lockme', [GROUP_REQUESTER])
+
         self.user.set_password('right-pass-phrase-9')
         self.user.save()
 
