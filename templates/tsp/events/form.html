@@ -30,13 +30,26 @@
           {{ form.end_date }}
         </div>
       </div>
-      {% if profile.is_tsp %}
+      {% if not profile.is_tsp %}
+      <div class="grid gap-4 md:grid-cols-2">
+        <div class="form-control">
+          <label class="label" for="{{ form.suggested_budget.id_for_label }}"><span class="label-text">Suggested budget</span></label>
+          {{ form.suggested_budget }}
+          <label class="label"><span class="label-text-alt">What you think it needs. The committee decides.</span></label>
+          {% for error in form.suggested_budget.errors %}<span class="label-text-alt text-error">{{ error }}</span>{% endfor %}
+        </div>
+        <div class="form-control">
+          <label class="label" for="{{ form.budget_currency.id_for_label }}"><span class="label-text">Currency</span></label>
+          {{ form.budget_currency }}
+        </div>
+      </div>
+      {% else %}
       <div class="grid gap-4 md:grid-cols-2">
         <div class="form-control">
           <label class="label" for="{{ form.budget.id_for_label }}"><span class="label-text">Budget</span></label>
           {{ form.budget }}
           <label class="label">
-            <span class="label-text-alt">Leave blank for no limit</span>
+            <span class="label-text-alt">{% if event.suggested_budget %}Suggested when proposed: {{ event.suggested_budget|floatformat:"2g" }} {{ event.budget_currency }}{% else %}Leave blank for no limit{% endif %}</span>
           </label>
           {% for error in form.budget.errors %}
           <span class="label-text-alt text-error">{{ error }}</span>

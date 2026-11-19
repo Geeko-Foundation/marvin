@@ -214,8 +214,21 @@ class EventProposalForm(forms.ModelForm):
 
     class Meta:
         model = Event
-        fields = ['name', 'location', 'start_date', 'end_date', 'url', 'description']
-        widgets = {name: EventForm.Meta.widgets[name] for name in fields}
+        fields = ['name', 'location', 'start_date', 'end_date', 'suggested_budget',
+                  'budget_currency', 'url', 'description']
+        widgets = {name: EventForm.Meta.widgets[name] for name in fields if name != 'suggested_budget'}
+        widgets['suggested_budget'] = forms.NumberInput(attrs={
+            'class': 'input input-bordered w-full', 'step': '0.01', 'min': '0',
+            'placeholder': 'Optional',
+        })
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['budget_currency'].required = False
+        self.fields['suggested_budget'].validators.append(MinValueValidator(Decimal('0')))
+
+    def clean_budget_currency(self):
+        return self.cleaned_data.get('budget_currency') or 'EUR'
 
     def clean(self):
         cleaned = super().clean()

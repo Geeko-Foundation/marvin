@@ -86,10 +86,12 @@ class EventProposalTests(TestCase):
 
     def test_a_requester_proposes_an_event_that_stays_closed(self):
         from tsp.models import Event
-        self.propose(make_user('traveller', [GROUP_REQUESTER]), budget='99999', accepting_requests='on')
+        self.propose(make_user('traveller', [GROUP_REQUESTER]), budget='99999', accepting_requests='on',
+                     suggested_budget='5000', budget_currency='USD')
         event = Event.objects.get(name='Asia Summit')
         self.assertFalse(event.accepting_requests)
         self.assertIsNone(event.budget)
+        self.assertEqual((event.suggested_budget, event.budget_currency), (Decimal('5000'), 'USD'))
 
     def test_finance_can_propose_too(self):
         response = self.propose(make_user('counter', [GROUP_FINANCE]))

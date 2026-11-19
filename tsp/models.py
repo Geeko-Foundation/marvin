@@ -64,6 +64,8 @@ class Event(AuditModel):
     extra_expense_categories = models.JSONField(default=list, blank=True)
     budget = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
     budget_currency = models.CharField(max_length=3, default='EUR')
+    # What whoever proposed the event thinks it needs; the committee sets the budget.
+    suggested_budget = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
     # Share of each requested amount, in percent, that reviews start from.
     approval_percent = models.PositiveSmallIntegerField(
         default=100, validators=[MinValueValidator(1), MaxValueValidator(100)],

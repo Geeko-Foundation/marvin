@@ -606,7 +606,9 @@ def event_create(request):
                   target=event.name,
                   detail=f'{event.start_date} to {event.end_date}'
                          + (f', budget {event.budget} {event.budget_currency}'
-                            if event.budget else ''))
+                            if event.budget else '')
+                         + (f', suggested {event.suggested_budget} {event.budget_currency}'
+                            if event.suggested_budget else ''))
             if profile.is_tsp:
                 messages.success(request, 'Event created successfully.')
             else:
