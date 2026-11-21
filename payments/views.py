@@ -226,8 +226,9 @@ def payment_status(request, pk):
     })
 
 
-@login_required
+@_require_payment_permission
 def gateway_currencies(request, gateway_id):
+
     """
     JSON endpoint listing ISO currency codes supported by a gateway.
 
@@ -240,11 +241,19 @@ def gateway_currencies(request, gateway_id):
 
 
 def _log_webhook(request, signed):
-    """Keep every delivery Wise makes, signed or not, in the Wise log."""
-    try:
-        body = json.loads(request.body)
-    except ValueError:
-        body = {'text': request.body.decode('utf-8', 'replace')[:5000]}
+    """
+    Note every delivery in the Wise log, and keep the body of the signed ones.
+
+    Anyone can post to this address, so an unsigned body is not stored: the
+    log would otherwise hold whatever a stranger chose to send, at any size.
+    """
+    if not signed:
+        body = {'unsigned': f'{len(request.body)} bytes, not kept'}
+    else:
+        try:
+            body = json.loads(request.body)
+        except ValueError:
+            body = {'text': request.body.decode('utf-8', 'replace')[:5000]}
     WiseLogEntry.objects.create(
         kind=WiseLogEntry.WEBHOOK, method='POST', path=request.path[:300],
         request_body=masked(body), transfer_id=transfer_id_in('', body), signature_valid=signed,

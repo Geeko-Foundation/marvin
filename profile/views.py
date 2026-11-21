@@ -5,6 +5,8 @@ import qrcode.image.svg
 from django.contrib import messages
 from django.contrib.auth.forms import PasswordResetForm
 from django.contrib.auth.models import User
+from django.core.mail import send_mail
+
 from django.shortcuts import redirect, render
 from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
@@ -84,6 +86,13 @@ def email_change_confirm(request, token):
         return redirect('profile')
     user.email = link[2]
     user.save(update_fields=['email'])
+    # The old address hears about it, so the owner learns if it was not them.
+    send_mail(
+        'Your Marvin email address was changed',
+        f'The email address on your Marvin account {user.username} was changed to {link[2]}.\n\n'
+        'If you did not do this, contact the TSP team straight away.',
+        None, [link[1]], fail_silently=True,
+    )
     audit('account.email_changed', user=user, target=user.username, detail=f'{link[1]} to {link[2]}')
     messages.success(request, f'Your email is now {user.email}.')
     return redirect('profile')

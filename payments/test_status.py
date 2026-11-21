@@ -6,7 +6,7 @@ from payments.base import PaymentResult
 from payments.gateways.wise import WiseApiGateway
 from payments.gateways.wise_api import WiseApiError
 from payments.services import PaymentService
-from profile.groups import GROUP_REQUESTER
+from profile.groups import GROUP_FINANCE, GROUP_REQUESTER
 from tsp.models import Expense, RequestState, StateHistory, TravelRequest
 from tsp.tests import make_event, make_user
 
@@ -20,13 +20,15 @@ class PaymentStatusTests(TestCase):
         Expense.objects.create(request=self.request, category='flight',
             estimated_amount=100, approved_amount=100, approved_currency='EUR',
             actual_amount=75, actual_currency='EUR')
+        self.finance = make_user('paymentfinance', [GROUP_FINANCE])
         self.service = PaymentService()
         self.gateway = mock.Mock()
 
     def process(self, status):
         self.gateway.initiate_payment.return_value = PaymentResult(status=status, external_id='123')
         with mock.patch('payments.services.get_gateway', return_value=self.gateway):
-            return self.service.process_payment(self.request.pk, 'wise-api', self.owner)
+            return self.service.process_payment(self.request.pk, 'wise-api', self.finance)
+
 
     def test_pending_transfer_does_not_mark_request_paid(self):
         self.process('processing')

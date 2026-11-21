@@ -50,6 +50,13 @@ class ProfileForm(forms.ModelForm):
     first_name = forms.CharField(max_length=150, required=True)
     last_name = forms.CharField(max_length=150, required=False)
     email = forms.EmailField(required=True)
+    # Asked for only when the email changes, so someone at an unlocked screen
+    # cannot move the account to their own address and reset the password.
+    current_password = forms.CharField(
+        required=False, strip=False, label='Current password',
+        widget=forms.PasswordInput(attrs={'autocomplete': 'current-password'}),
+        help_text='Needed only to change your email.',
+    )
 
     class Meta:
         model = UserProfile
@@ -82,7 +89,7 @@ class ProfileForm(forms.ModelForm):
             self.fields['first_name'].initial = user.first_name
             self.fields['last_name'].initial = user.last_name
             self.fields['email'].initial = user.email
-        for name in ('first_name', 'last_name', 'email'):
+        for name in ('first_name', 'last_name', 'email', 'current_password'):
             self.fields[name].widget.attrs.update({'class': INPUT_CLASS})
 
     def clean_email(self):
@@ -104,7 +111,10 @@ class ProfileForm(forms.ModelForm):
     def clean(self):
         """Wise refuses US and Australian payees without a state it recognises."""
         cleaned = super().clean()
+        if self.new_email and not self.user.check_password(cleaned.get('current_password') or ''):
+            self.add_error('current_password', 'Enter your current password to change your email.')
         country = normalise_country(cleaned.get('country'))
+
         if country in STATE_CODES and not state_code(country, cleaned.get('state')):
             example = 'Oregon' if country == 'US' else 'Victoria'
             self.add_error('state', f'Enter a state for this country, for example "{example}".')

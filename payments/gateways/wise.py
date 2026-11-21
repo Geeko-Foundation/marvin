@@ -362,8 +362,9 @@ class WiseCsvGateway(PaymentGateway):
                 'PERSON',
                 target,
                 amount,
-                'EUR',
+                settings.WISE_SOURCE_CURRENCY,
                 target,
+
                 'BANK_TRANSFER',
             ]))
         return BatchExportResult(
