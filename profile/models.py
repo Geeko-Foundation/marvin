@@ -17,18 +17,18 @@ class BankingMethod(models.TextChoices):
     JAPAN = 'japan', 'Japan'
 
 
-# What someone can switch off, by what happened. Anything not listed, such as
-# a payment coming back, is always sent.
+# What someone can switch off, by what happened, and who can receive it.
+# Anything not listed, such as a payment coming back, is always sent.
 NOTIFICATION_KINDS = [
-    ('submitted', 'A request is submitted for review'),
-    ('approved', 'A request is approved'),
-    ('rejected', 'A request is rejected'),
-    ('accepted', 'A request is accepted'),
-    ('submitted_for_payment', 'A request is ready for payment'),
-    ('paid', 'A request is paid'),
-    ('cancelled', 'A request is cancelled'),
-    ('comment', 'A new comment'),
-    ('internal_note', 'A new internal note'),
+    ('submitted', 'A request is submitted for review', {'tsp', 'organiser'}),
+    ('approved', 'My request is approved', {'requester'}),
+    ('rejected', 'My request is rejected', {'requester'}),
+    ('accepted', 'A request is accepted', {'tsp'}),
+    ('submitted_for_payment', 'A request is ready for payment', {'finance'}),
+    ('paid', 'My request is paid', {'requester'}),
+    ('cancelled', 'A request is cancelled', {'requester', 'tsp'}),
+    ('comment', 'A new comment', {'requester', 'tsp'}),
+    ('internal_note', 'A new internal note', {'tsp', 'finance', 'organiser'}),
 ]
 
 

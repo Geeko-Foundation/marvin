@@ -495,3 +495,19 @@ class NotificationSettingsTests(TestCase):
             notify_request_comment(travel_request, chair, internal=True)
         told = {c.args[0] for c in push.call_args_list}
         self.assertEqual(told, {organiser, finance})
+
+
+class NotificationChoicesTests(TestCase):
+
+    def kinds_for(self, user):
+        self.client.force_login(user)
+        return [kind for kind, _, _ in self.client.get(reverse('profile')).context['notification_kinds']]
+
+    def test_a_requester_is_not_offered_internal_notes(self):
+        kinds = self.kinds_for(make_user('traveller', [GROUP_REQUESTER]))
+        self.assertNotIn('internal_note', kinds)
+        self.assertIn('approved', kinds)
+
+    def test_finance_is_offered_what_finance_receives(self):
+        kinds = self.kinds_for(make_user('counter', [GROUP_FINANCE]))
+        self.assertEqual(set(kinds), {'submitted_for_payment', 'internal_note'})
