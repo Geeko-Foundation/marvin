@@ -7,7 +7,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('tsp', '0020_event_suggested_budget'),
+        ('tsp', '0021_event_suggested_budget'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 

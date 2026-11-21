@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('tsp', '0019_event_expense_categories'),
+        ('tsp', '0020_protect_people_with_records'),
     ]
 
     operations = [
