@@ -199,3 +199,70 @@ class ReimbursementFlowTests(TestCase):
         page = self.client.get(reverse('request_form', args=[travel_request.pk]))
         self.assertContains(page, 'Actual Expenses')
         self.assertContains(page, '480.00 EUR')
+
+
+class OrganiserMoreTests(TestCase):
+
+    def setUp(self):
+        self.owner = make_user('traveller', [GROUP_REQUESTER])
+        self.organiser = make_user('organiser', [GROUP_REQUESTER])
+        self.request = make_request(self.owner, RequestState.SUBMITTED)
+        self.request.event.organizers.add(self.organiser)
+        self.client.force_login(self.organiser)
+
+    def test_an_organiser_rejects_with_a_reason(self):
+        self.client.post(reverse('request_reject', args=[self.request.pk]), {'notes': 'Out of scope'})
+        self.request.refresh_from_db()
+        self.assertEqual(self.request.state, RequestState.REJECTED)
+
+    def test_an_organiser_writes_and_reads_internal_notes(self):
+        from tsp.models import Comment
+        self.client.post(reverse('request_comment', args=[self.request.pk]),
+                         {'body': 'Strong talk, worth it', 'internal': 'on'})
+        self.assertTrue(Comment.objects.get(body='Strong talk, worth it').internal)
+        self.client.force_login(self.owner)
+        page = self.client.get(reverse('request_detail', args=[self.request.pk]))
+        self.assertNotContains(page, 'Strong talk, worth it')
+
+    def test_an_organiser_downloads_their_events_documents(self):
+        from django.core.files.base import ContentFile
+        from tsp.models import Document
+        doc = Document(request=self.request, kind='receipt', original_name='r.pdf',
+                       mimetype='application/pdf', size=4, uploaded_by=self.owner)
+        doc.file.save('r.pdf', ContentFile(b'%PDF'), save=True)
+        response = self.client.get(reverse('document_download', args=[doc.pk]))
+        self.assertEqual(response.status_code, 200)
+
+    def test_an_organiser_does_not_see_drafts(self):
+        draft = make_request(self.owner, RequestState.DRAFT)
+        draft.event.organizers.add(self.organiser)
+        self.assertEqual(self.client.get(reverse('request_detail', args=[draft.pk])).status_code, 403)
+
+    def test_an_organiser_cannot_cancel(self):
+        response = self.client.post(reverse('request_cancel', args=[self.request.pk]))
+        self.assertEqual(response.status_code, 403)
+
+    def test_bulk_review_only_touches_their_event(self):
+        other = make_request(self.owner, RequestState.SUBMITTED)
+        other.event.organizers.clear()
+        self.client.post(reverse('request_batch_review'),
+                         {'request_ids': [self.request.pk, other.pk], 'action': 'approve'})
+        self.request.refresh_from_db()
+        other.refresh_from_db()
+        self.assertEqual(self.request.state, RequestState.APPROVED)
+        self.assertEqual(other.state, RequestState.SUBMITTED)
+
+    def test_someone_who_organises_nothing_cannot_bulk_review(self):
+        self.client.force_login(self.owner)
+        response = self.client.post(reverse('request_batch_review'),
+                                    {'request_ids': [self.request.pk], 'action': 'approve'})
+        self.assertEqual(response.status_code, 403)
+
+    def test_organisers_hear_about_new_requests_for_their_event(self):
+        from unittest import mock
+        draft = make_request(self.owner, RequestState.DRAFT)
+        draft.event.organizers.add(self.organiser)
+        with mock.patch('profile.services.push_notifications.send_push_to_user') as push:
+            from tsp.services.state_machine import transition_request
+            transition_request(draft, RequestState.SUBMITTED, self.owner)
+        self.assertIn(self.organiser, [c.args[0] for c in push.call_args_list])
