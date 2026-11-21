@@ -450,6 +450,9 @@ class ProposedQueueTests(TestCase):
         self.assertEqual(event.proposed_by, proposer)
         self.client.force_login(make_user('chair', [GROUP_TSP]))
         self.assertIn(event, self.client.get(reverse('dashboard')).context['proposed_events'])
-        event.accepting_requests = True
-        event.save()
+        # Saving it once reviewed takes it off the queue, whether or not it is opened yet.
+        self.client.post(reverse('event_edit', args=[event.pk]), {
+            'name': event.name, 'location': event.location, 'start_date': event.start_date,
+            'end_date': event.end_date, 'approval_percent': '100',
+        })
         self.assertNotIn(event, self.client.get(reverse('dashboard')).context['proposed_events'])

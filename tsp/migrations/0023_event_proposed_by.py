@@ -8,7 +8,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('tsp', '0021_event_organizers'),
+        ('tsp', '0022_event_organizers'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 

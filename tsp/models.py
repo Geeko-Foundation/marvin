@@ -66,7 +66,8 @@ class Event(AuditModel):
     budget_currency = models.CharField(max_length=3, default='EUR')
     # What whoever proposed the event thinks it needs; the committee sets the budget.
     suggested_budget = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
-    # Set when someone outside the committee proposed it; the committee's queue reads it.
+    # Who proposed it, while it waits for the committee to review it; cleared on review.
+    # The audit log keeps who proposed it after that.
     proposed_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
         related_name='proposed_events',

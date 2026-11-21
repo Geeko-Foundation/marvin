@@ -486,9 +486,7 @@ def _requester_sections(request):
     my_requests = TravelRequest.objects.filter(user=request.user).select_related('event')
     return {
         'my_requests': _paginate(request, my_requests, 20),
-        'action_needed': my_requests.filter(state__in=[
-            RequestState.APPROVED, RequestState.ACCEPTED,
-        ]),
+        'action_needed': my_requests.filter(state=RequestState.APPROVED),
     }
 
 
@@ -500,7 +498,7 @@ def _committee_sections(request):
 
     event_summaries = _event_money()
     proposed = Event.objects.filter(
-        proposed_by__isnull=False, accepting_requests=False, end_date__gte=timezone.now().date(),
+        proposed_by__isnull=False, end_date__gte=timezone.now().date(),
     ).select_related('proposed_by').order_by('start_date')
 
     approved_total = Expense.objects.filter(
@@ -807,7 +805,12 @@ def event_edit(request, pk):
     if request.method == 'POST':
         form = form_class(request.POST, instance=event)
         if form.is_valid():
-            event = form.save()
+            event = form.save(commit=False)
+            if form_class is not EventBudgetForm:
+                # The committee has reviewed it, so it leaves the proposals queue.
+                event.proposed_by = None
+            event.save()
+            form.save_m2m()
             audit('event.updated', user=request.user, target=event.name,
                   detail=', '.join(form.changed_data) or 'no fields changed')
             messages.success(request, 'Budget saved.' if form_class is EventBudgetForm else 'Event updated.')
