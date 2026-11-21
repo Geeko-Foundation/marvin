@@ -75,6 +75,22 @@
   </div>
 </div>
 
+{% if proposed_events %}
+<div class="card bg-base-100 shadow-sm mb-6 border border-info">
+  <div class="card-body">
+    <h2 class="card-title">Proposed events</h2>
+    <ul class="divide-y divide-base-300">
+      {% for event in proposed_events %}
+      <li class="flex flex-wrap items-center justify-between gap-2 py-2">
+        <span>{{ event.name }} <span class="text-sm opacity-60">· {{ event.location }} · {{ event.start_date|date:"j M Y" }} · by {{ event.proposed_by.get_full_name|default:event.proposed_by.username }}{% if event.suggested_budget %} · suggested {{ event.suggested_budget|floatformat:"0g" }} {{ event.budget_currency }}{% endif %}</span></span>
+        <a href="{% url 'event_edit' event.pk %}" class="btn btn-sm btn-primary">Review</a>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+</div>
+{% endif %}
+
 {% include "tsp/dashboard/_event_money.html" %}
 
 <script>

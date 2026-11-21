@@ -461,6 +461,9 @@ def _committee_sections(request):
     ).select_related('user', 'event').order_by('created_at')
 
     event_summaries = _event_money()
+    proposed = Event.objects.filter(
+        proposed_by__isnull=False, accepting_requests=False, end_date__gte=timezone.now().date(),
+    ).select_related('proposed_by').order_by('start_date')
 
     approved_total = Expense.objects.filter(
         request__state__in=[
@@ -482,6 +485,7 @@ def _committee_sections(request):
         ),
         'approved_total': approved_total,
         'event_summaries': event_summaries,
+        'proposed_events': proposed,
     }
 
 
@@ -535,7 +539,8 @@ def _wise_balance():
     """
     if not settings.WISE_BALANCE_FETCH:
         return None
-    cached = cache.get('wise-balance')
+    from django.core.cache import caches
+    cached = caches['default'].get('wise-balance')
     if cached is not None:
         return cached
     from payments.gateways.wise_api import WiseApiError, get_wise_client
@@ -548,7 +553,7 @@ def _wise_balance():
         ((b['amount']['currency'], Decimal(str(b['amount']['value']))) for b in balances if b['amount']['value']),
         key=lambda row: (row[0] != source, row[0]),
     )
-    cache.set('wise-balance', result, 60)
+    caches['default'].set('wise-balance', result, 60)
     return result
 
 
@@ -715,6 +720,7 @@ def event_create(request):
             event = form.save(commit=False)
             if not profile.is_tsp:
                 event.accepting_requests = False
+                event.proposed_by = request.user
             event.save()
             form.save_m2m()
             audit('event.created' if profile.is_tsp else 'event.proposed', user=request.user,

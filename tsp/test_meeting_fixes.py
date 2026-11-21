@@ -435,3 +435,21 @@ class OrganiserAdvanceTests(TestCase):
         travel_request.refresh_from_db()
         self.assertEqual(travel_request.state, RequestState.APPROVED)
         self.assertIsNone(travel_request.advance_amount)
+
+
+class ProposedQueueTests(TestCase):
+
+    def test_a_proposal_waits_in_the_committee_queue_until_opened(self):
+        from tsp.models import Event
+        proposer = make_user('traveller', [GROUP_REQUESTER])
+        self.client.force_login(proposer)
+        self.client.post(reverse('event_create'), {
+            'name': 'Asia Summit', 'location': 'Tokyo', 'start_date': '2099-08-01', 'end_date': '2099-08-03',
+        })
+        event = Event.objects.get(name='Asia Summit')
+        self.assertEqual(event.proposed_by, proposer)
+        self.client.force_login(make_user('chair', [GROUP_TSP]))
+        self.assertIn(event, self.client.get(reverse('dashboard')).context['proposed_events'])
+        event.accepting_requests = True
+        event.save()
+        self.assertNotIn(event, self.client.get(reverse('dashboard')).context['proposed_events'])
