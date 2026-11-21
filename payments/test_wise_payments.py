@@ -331,7 +331,7 @@ class SandboxSettlingTests(TestCase):
         for status, steps in (
             # Nobody has funded it yet, so simulating it would fake a payment.
             ('incoming_payment_waiting', ()),
-            ('processing', ('funds_converted', 'outgoing_payment_sent')),
+            ('processing', ('processing', 'funds_converted', 'outgoing_payment_sent')),
             ('funds_converted', ('outgoing_payment_sent',)),
             ('outgoing_payment_sent', ()),
             ('cancelled', ()),

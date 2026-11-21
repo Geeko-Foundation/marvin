@@ -50,8 +50,10 @@ SANDBOX_SIMULATION_STEPS = (
 # How many of those steps a sandbox transfer in each state has already passed.
 # A transfer still waiting for its money is left alone: simulating it would
 # show a payment as sent when nobody funded it.
+# A funded transfer already says "processing", but the sandbox still wants the
+# processing step run before funds_converted; skipping it returns system_error.
 SANDBOX_STEPS_DONE_BY_STATUS = {
-    'processing': 1,
+    'processing': 0,
     'funds_converted': 2,
 }
 
