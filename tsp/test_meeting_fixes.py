@@ -366,3 +366,52 @@ class WiseBalanceTests(TestCase):
         self.client.force_login(make_user('counter', [GROUP_FINANCE]))
         with mock.patch('payments.gateways.wise_api.get_wise_client', return_value=wise):
             self.assertContains(self.client.get(reverse('dashboard')), 'Wise did not answer')
+
+
+class BudgetByFinanceTests(TestCase):
+
+    def setUp(self):
+        self.event = make_request(make_user('traveller', [GROUP_REQUESTER]), RequestState.SUBMITTED).event
+
+    def edit(self, user, data):
+        self.client.force_login(user)
+        return self.client.post(reverse('event_edit', args=[self.event.pk]), data)
+
+    def test_the_committee_cannot_set_the_budget(self):
+        e = self.event
+        self.edit(make_user('chair', [GROUP_TSP]), {
+            'name': 'Renamed', 'location': e.location, 'start_date': e.start_date, 'end_date': e.end_date,
+            'approval_percent': '100', 'accepting_requests': 'on', 'budget': '99999', 'budget_currency': 'USD',
+        })
+        self.event.refresh_from_db()
+        self.assertEqual(self.event.name, 'Renamed')
+        self.assertIsNone(self.event.budget)
+
+    def test_finance_sets_the_budget_and_nothing_else(self):
+        self.edit(make_user('counter', [GROUP_FINANCE]),
+                  {'budget': '8000', 'budget_currency': 'EUR', 'name': 'Renamed'})
+        self.event.refresh_from_db()
+        self.assertEqual(self.event.budget, Decimal('8000'))
+        self.assertNotEqual(self.event.name, 'Renamed')
+
+    def test_a_requester_cannot_edit_an_event(self):
+        response = self.edit(make_user('someone', [GROUP_REQUESTER]), {'budget': '1'})
+        self.assertEqual(response.status_code, 403)
+
+
+class ShortfallTests(TestCase):
+
+    def test_an_upcoming_budget_bigger_than_the_balance_is_flagged(self):
+        from tsp.views import _event_money, _shortfalls
+        event = make_request(make_user('traveller', [GROUP_REQUESTER]), RequestState.SUBMITTED).event
+        event.budget, event.budget_currency = Decimal('10000'), 'EUR'
+        event.save()
+        self.assertEqual(_shortfalls(_event_money(), [('EUR', Decimal('8000'))]),
+                         [('EUR', Decimal('10000'), Decimal('8000'), Decimal('2000'))])
+        self.assertEqual(_shortfalls(_event_money(), [('EUR', Decimal('12000'))]), [])
+        self.assertEqual(_shortfalls(_event_money(), None), [])
+
+    def test_an_event_without_a_budget_counts_what_is_asked_for(self):
+        from tsp.views import _event_money, _shortfalls
+        make_request(make_user('traveller', [GROUP_REQUESTER]), RequestState.SUBMITTED, amount='900')
+        self.assertEqual(_shortfalls(_event_money(), [('EUR', Decimal('100'))])[0][3], Decimal('800'))

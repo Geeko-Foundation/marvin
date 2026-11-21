@@ -4,6 +4,7 @@ import csv
 import re
 import time
 from decimal import Decimal, InvalidOperation
+from functools import partial
 
 import requests
 
@@ -56,6 +57,7 @@ from tsp.forms import (
     ApprovalForm,
     CommentForm,
     DocumentUploadForm,
+    EventBudgetForm,
     EventForm,
     EventProposalForm,
     ExpenseActualFormSet,
@@ -548,6 +550,35 @@ def _wise_balance():
     return result
 
 
+def _shortfalls(event_money, balance):
+    """
+    Where the Wise balance cannot cover what upcoming events still need, as
+    (currency, needed, held, short). An event with a budget needs what is left of it
+    to pay; one without needs what is approved or waiting for review.
+    """
+    if balance is None:
+        return []
+    today = timezone.now().date()
+    needed = {}
+    for row in event_money:
+        event = row['event']
+        if event.end_date < today:
+            continue
+        draft, requested, approved, paid = row['stages']
+        if event.budget is not None:
+            spent = dict(paid['money']).get(event.budget_currency, 0)
+            needed[event.budget_currency] = needed.get(event.budget_currency, 0) + max(event.budget - spent, 0)
+        else:
+            for currency, amount in requested['money'] + approved['money']:
+                needed[currency] = needed.get(currency, 0) + amount
+    held = dict(balance)
+    return [
+        (currency, amount, held.get(currency, Decimal('0')), amount - held.get(currency, Decimal('0')))
+        for currency, amount in sorted(needed.items())
+        if amount > held.get(currency, Decimal('0'))
+    ]
+
+
 def _finance_sections(request):
     """Dashboard data for the finance team."""
     recently_paid = TravelRequest.objects.filter(
@@ -575,8 +606,12 @@ def _finance_sections(request):
         'owed_back': [r for r in with_advance if r.amount_owed_back()],
         'recently_paid': _paginate(request, recently_paid, 10, 'paid_page'),
         'paid_total': paid_total,
-        'event_summaries': _event_money(),
-        'wise_balance': _wise_balance(),
+        'event_summaries': (event_money := _event_money()),
+        'wise_balance': (balance := _wise_balance()),
+        'shortfalls': _shortfalls(event_money, balance),
+        'needs_budget': Event.objects.filter(
+            budget__isnull=True, end_date__gte=timezone.now().date(),
+        ).order_by('start_date'),
         'wise_sandbox': settings.WISE_API_SANDBOX,
     }
 
@@ -667,7 +702,10 @@ def event_create(request):
     which stays closed to requests until the committee sets its budget and opens it.
     """
     profile = get_profile(request.user)
-    form_class = EventForm if profile.is_tsp else EventProposalForm
+    if profile.is_tsp:
+        form_class = partial(EventForm, sets_budget=profile.is_finance)
+    else:
+        form_class = EventProposalForm
     if request.method == 'POST':
         form = form_class(request.POST)
         if form.is_valid():
@@ -704,23 +742,33 @@ def event_create(request):
 
 
 @login_required
-@group_required(GROUP_TSP)
 def event_edit(request, pk):
-    """Edit an existing TSP event."""
+    """
+    Edit an event. The committee edits everything but the budget, which is
+    finance's to set; someone in both groups edits both.
+    """
     event = get_object_or_404(Event, pk=pk)
     profile = get_profile(request.user)
+    if profile.is_tsp:
+        form_class = partial(EventForm, sets_budget=profile.is_finance)
+        template = 'tsp/events/form.html'
+    elif profile.is_finance:
+        form_class = EventBudgetForm
+        template = 'tsp/events/budget.html'
+    else:
+        raise PermissionDenied
     if request.method == 'POST':
-        form = EventForm(request.POST, instance=event)
+        form = form_class(request.POST, instance=event)
         if form.is_valid():
             event = form.save()
             audit('event.updated', user=request.user, target=event.name,
                   detail=', '.join(form.changed_data) or 'no fields changed')
-            messages.success(request, 'Event updated.')
-            return redirect('event_list')
+            messages.success(request, 'Budget saved.' if form_class is EventBudgetForm else 'Event updated.')
+            return redirect('dashboard' if form_class is EventBudgetForm else 'event_list')
     else:
-        form = EventForm(instance=event)
+        form = form_class(instance=event)
 
-    return render(request, 'tsp/events/form.html', {'form': form, 'profile': profile, 'event': event})
+    return render(request, template, {'form': form, 'profile': profile, 'event': event})
 
 
 @login_required

@@ -41,7 +41,7 @@
           {{ form.budget_currency }}
         </div>
       </div>
-      {% else %}
+      {% elif form.budget %}
       <div class="grid gap-4 md:grid-cols-2">
         <div class="form-control">
           <label class="label" for="{{ form.budget.id_for_label }}"><span class="label-text">Budget</span></label>
@@ -58,6 +58,10 @@
           {{ form.budget_currency }}
         </div>
       </div>
+      {% elif profile.is_tsp %}
+      <p class="text-sm opacity-70">Budget: {% if event.budget is not None %}{{ event.budget|floatformat:"2g" }} {{ event.budget_currency }}{% else %}not set yet{% endif %}. Finance sets it{% if event.suggested_budget %}, suggested {{ event.suggested_budget|floatformat:"2g" }} {{ event.budget_currency }}{% endif %}.</p>
+      {% endif %}
+      {% if profile.is_tsp %}
       <div class="form-control md:w-1/2">
         <label class="label" for="{{ form.approval_percent.id_for_label }}"><span class="label-text">Share of each request covered (%)</span></label>
         {{ form.approval_percent }}

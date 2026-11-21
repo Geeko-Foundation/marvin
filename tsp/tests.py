@@ -1061,7 +1061,7 @@ class EventAuditTests(TestCase):
         from profile.audit_log import AuditLogEntry
 
         self.entries = AuditLogEntry
-        self.committee = make_user('eventauditor', [GROUP_TSP])
+        self.committee = make_user('eventauditor', [GROUP_TSP, GROUP_FINANCE])
         self.client.force_login(self.committee)
 
     def _actions(self):

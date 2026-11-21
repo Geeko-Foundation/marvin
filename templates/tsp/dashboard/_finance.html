@@ -14,7 +14,7 @@
   </a>
   <a class="stat hover:bg-base-200" href="https://{% if wise_sandbox %}wise-sandbox.com{% else %}wise.com{% endif %}/" target="_blank" rel="noopener">
     <div class="stat-title">Wise balance</div>
-    <div class="stat-value text-2xl">{% if wise_balance is None %}<span class="text-base opacity-60">Wise did not answer</span>{% else %}{% for currency, amount in wise_balance %}<span class="whitespace-nowrap">{{ amount|floatformat:"0g" }} {{ currency }}</span>{% if not forloop.last %}<span class="opacity-40"> · </span>{% endif %}{% empty %}0{% endfor %}{% endif %}</div>
+    <div class="stat-value text-lg whitespace-normal">{% if wise_balance is None %}<span class="text-base opacity-60">Wise did not answer</span>{% else %}{% for currency, amount in wise_balance %}<span class="inline-block whitespace-nowrap mr-3">{{ amount|floatformat:"0g" }} {{ currency }}</span>{% empty %}0{% endfor %}{% endif %}</div>
     <div class="stat-desc">{% if wise_sandbox %}Sandbox, not real money{% else %}Available to pay out{% endif %}</div>
   </a>
 </div>
@@ -27,6 +27,29 @@
     <button type="submit" class="btn btn-outline">Generate Wise CSV</button>
   </form>
 </div>
+
+{% for currency, needed, held, short in shortfalls %}
+<div class="alert alert-error mb-4">
+  <span><strong>Short by {{ short|floatformat:"0g" }} {{ currency }}.</strong>
+    Upcoming events need {{ needed|floatformat:"0g" }} {{ currency }} and Wise holds {{ held|floatformat:"0g" }} {{ currency }}. Time to raise donations or move money in.</span>
+</div>
+{% endfor %}
+
+{% if needs_budget %}
+<div class="card bg-base-100 shadow-sm mb-6 border border-warning">
+  <div class="card-body">
+    <h2 class="card-title">Events waiting for a budget</h2>
+    <ul class="divide-y divide-base-300">
+      {% for event in needs_budget %}
+      <li class="flex flex-wrap items-center justify-between gap-2 py-2">
+        <span>{{ event.name }} <span class="text-sm opacity-60">· {{ event.start_date|date:"j M Y" }}{% if event.suggested_budget %} · suggested {{ event.suggested_budget|floatformat:"0g" }} {{ event.budget_currency }}{% endif %}{% if not event.accepting_requests %} · not open yet{% endif %}</span></span>
+        <a href="{% url 'event_edit' event.pk %}" class="btn btn-sm btn-primary">Set budget</a>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+</div>
+{% endif %}
 
 {% if not profile.is_tsp %}{% include "tsp/dashboard/_event_money.html" %}{% endif %}
 
