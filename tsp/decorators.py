@@ -9,7 +9,7 @@ from django.shortcuts import get_object_or_404
 
 from profile.decorators import get_profile
 from profile.groups import user_in_any_group
-from tsp.models import TravelRequest
+from tsp.models import RequestState, TravelRequest
 
 login_required = partial(django_login_required, login_url=settings.APP_LOGIN_URL)
 
@@ -43,7 +43,10 @@ def staff_or_owner(view_func):
         travel_request = get_object_or_404(TravelRequest, pk=pk)
         profile = get_profile(request.user)
         is_owner = travel_request.user_id == request.user.id
-        if not (is_owner or profile.is_committee):
+        # An organiser sees their event's requests once they are submitted, not drafts.
+        organises = (travel_request.state != RequestState.DRAFT
+                     and travel_request.event.is_organised_by(request.user))
+        if not (is_owner or profile.is_committee or organises):
             raise PermissionDenied
         return view_func(request, pk, travel_request=travel_request, profile=profile, *args, **kwargs)
     return wrapper

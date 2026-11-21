@@ -64,6 +64,8 @@ class Event(AuditModel):
     extra_expense_categories = models.JSONField(default=list, blank=True)
     budget = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
     budget_currency = models.CharField(max_length=3, default='EUR')
+    # What whoever proposed the event thinks it needs; the committee sets the budget.
+    suggested_budget = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
     # Share of each requested amount, in percent, that reviews start from.
     approval_percent = models.PositiveSmallIntegerField(
         default=100, validators=[MinValueValidator(1), MaxValueValidator(100)],
@@ -75,6 +77,14 @@ class Event(AuditModel):
     requests_open_until = models.DateField(blank=True, null=True)
     reimbursements_open_until = models.DateField(blank=True, null=True)
     visa_letters_offered = models.BooleanField(default=False)
+    # People the committee lets review this event's requests, within its budget.
+    organizers = models.ManyToManyField(
+        settings.AUTH_USER_MODEL, blank=True, related_name='organised_events',
+    )
+
+    # How long after the event an organiser keeps their rights, so late
+    # requests can still be dealt with but the role does not linger.
+    ORGANISER_DAYS_AFTER = 90
 
     class Meta:
         ordering = ['-start_date']
@@ -190,6 +200,15 @@ class Event(AuditModel):
     def share_of(self, amount):
         """The part of a requested amount this event normally covers."""
         return (amount * self.approval_percent / 100).quantize(Decimal('0.01'))
+
+    @classmethod
+    def organised_by(cls, user):
+        """Events ``user`` organises and still has the rights for."""
+        cutoff = timezone.now().date() - timedelta(days=cls.ORGANISER_DAYS_AFTER)
+        return cls.objects.filter(organizers=user, end_date__gte=cutoff)
+
+    def is_organised_by(self, user):
+        return Event.organised_by(user).filter(pk=self.pk).exists()
 
     def budget_remaining(self):
         """What is left of the budget, or None when none is set."""

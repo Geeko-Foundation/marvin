@@ -34,6 +34,9 @@
 {% if profile.is_tsp %}
 {% if profile.is_requester %}<div class="divider my-8"></div>{% endif %}
 {% include "tsp/dashboard/_tsp.html" %}
+{% elif organised %}
+{% if profile.is_requester %}<div class="divider my-8"></div>{% endif %}
+{% include "tsp/dashboard/_organiser.html" %}
 {% endif %}
 
 {% if profile.is_finance %}

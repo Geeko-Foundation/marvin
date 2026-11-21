@@ -20,7 +20,9 @@ TRANSITIONS = {
         RequestState.SUBMITTED_FOR_PAYMENT, RequestState.SUBMITTED, RequestState.CANCELLED,
     },
     # Back to accepted when the requester takes it back to fix their costs.
-    RequestState.SUBMITTED_FOR_PAYMENT: {RequestState.PAID, RequestState.ACCEPTED},
+    RequestState.SUBMITTED_FOR_PAYMENT: {
+        RequestState.PAID, RequestState.ACCEPTED, RequestState.CANCELLED,
+    },
 }
 
 

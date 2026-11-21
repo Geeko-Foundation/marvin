@@ -9,9 +9,7 @@
     <h1 class="text-2xl font-bold">Events</h1>
     <p class="text-sm opacity-60">Conferences and events accepting travel support requests</p>
   </div>
-  {% if profile.is_tsp %}
-  <a href="{% url 'event_create' %}" class="btn btn-primary btn-sm">New Event</a>
-  {% endif %}
+  <a href="{% url 'event_create' %}" class="btn btn-primary btn-sm">{% if profile.is_tsp %}New Event{% else %}Propose Event{% endif %}</a>
 </div>
 
 <form method="get" class="flex flex-wrap items-end gap-3 mb-6">
