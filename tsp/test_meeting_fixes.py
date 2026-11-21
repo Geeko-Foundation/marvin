@@ -310,3 +310,28 @@ class MultiUploadTests(TestCase):
             'kind_1': 'invoice', 'file_1': SimpleUploadedFile('x.exe', b'MZ'),
         })
         self.assertEqual(self.request.documents.count(), 0)
+
+
+class EventMoneyTests(TestCase):
+
+    def test_each_stage_shows_its_requests_and_money(self):
+        from tsp.views import _event_money
+        owner = make_user('traveller', [GROUP_REQUESTER])
+        first = make_request(owner, RequestState.DRAFT, amount='100')
+        event = first.event
+        for state, amount in ((RequestState.SUBMITTED, '200'), (RequestState.APPROVED, '300'),
+                              (RequestState.ACCEPTED, '50'), (RequestState.REJECTED, '999')):
+            other = make_request(owner, state, amount=amount)
+            other.event = event
+            other.save()
+        row = next(r for r in _event_money() if r['event'] == event)
+        draft, requested, approved, paid = row['stages']
+        self.assertEqual((draft['count'], draft['money']), (1, [('EUR', Decimal('100'))]))
+        self.assertEqual((requested['count'], requested['money']), (1, [('EUR', Decimal('200'))]))
+        self.assertEqual((approved['count'], approved['money']), (2, [('EUR', Decimal('350'))]))
+        self.assertEqual(paid['count'], 0)
+
+    def test_finance_sees_the_table(self):
+        make_request(make_user('traveller', [GROUP_REQUESTER]), RequestState.SUBMITTED)
+        self.client.force_login(make_user('counter', [GROUP_FINANCE]))
+        self.assertContains(self.client.get(reverse('dashboard')), 'Money by event')

@@ -1,0 +1,25 @@
+{% if event_summaries %}
+<div class="card bg-base-100 shadow-sm mb-6">
+  <div class="card-body">
+    <h2 class="card-title">Money by event</h2>
+    <div class="overflow-x-auto">
+      <table class="table table-sm">
+        <thead>
+          <tr><th>Event</th><th>Budget</th><th>Draft</th><th>Waiting for review</th><th>Approved</th><th>Paid</th></tr>
+        </thead>
+        <tbody>
+          {% for row in event_summaries %}
+          <tr>
+            <td class="font-medium">{{ row.event.name }}<div class="text-xs opacity-60">{{ row.event.start_date|date:"j M Y" }}</div></td>
+            <td class="whitespace-nowrap">{% if row.event.budget is not None %}{{ row.event.budget|floatformat:"0g" }} {{ row.event.budget_currency }}<div class="text-xs {% if row.remaining < 0 %}text-error{% else %}opacity-60{% endif %}">{{ row.remaining|floatformat:"0g" }} left</div>{% else %}<span class="opacity-60">No limit</span>{% endif %}</td>
+            {% for stage in row.stages %}
+            <td class="whitespace-nowrap">{% if stage.count %}{% for currency, amount in stage.money %}{{ amount|floatformat:"0g" }} {{ currency }}{% if not forloop.last %}<br>{% endif %}{% empty %}-{% endfor %}<div class="text-xs opacity-60">{{ stage.count }} request{{ stage.count|pluralize }}</div>{% else %}<span class="opacity-40">-</span>{% endif %}</td>
+            {% endfor %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}

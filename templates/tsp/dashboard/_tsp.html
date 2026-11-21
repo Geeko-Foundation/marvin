@@ -75,21 +75,7 @@
   </div>
 </div>
 
-{% if event_summaries %}
-<div class="card bg-base-100 shadow-sm">
-  <div class="card-body">
-    <h2 class="card-title">Event Summary (Last 90 Days)</h2>
-    <div class="grid gap-4 md:grid-cols-2">
-      {% for summary in event_summaries %}
-      <div class="border border-base-300 rounded-box p-4">
-        <h3 class="font-semibold">{{ summary.event.name }}</h3>
-        <p class="text-sm opacity-60">{{ summary.total }} request{{ summary.total|pluralize }}</p>
-      </div>
-      {% endfor %}
-    </div>
-  </div>
-</div>
-{% endif %}
+{% include "tsp/dashboard/_event_money.html" %}
 
 <script>
   (function () {

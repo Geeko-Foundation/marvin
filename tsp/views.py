@@ -456,15 +456,7 @@ def _committee_sections(request):
         state=RequestState.SUBMITTED,
     ).select_related('user', 'event').order_by('created_at')
 
-    ninety_days_ago = timezone.now().date() - timezone.timedelta(days=90)
-    event_summaries = []
-    for event in Event.objects.filter(start_date__gte=ninety_days_ago):
-        reqs = event.requests.all()
-        event_summaries.append({
-            'event': event,
-            'total': reqs.count(),
-            'by_state': reqs.values('state').annotate(c=Count('id')),
-        })
+    event_summaries = _event_money()
 
     approved_total = Expense.objects.filter(
         request__state__in=[
@@ -487,6 +479,48 @@ def _committee_sections(request):
         'approved_total': approved_total,
         'event_summaries': event_summaries,
     }
+
+
+_MONEY_STAGES = {
+    # stage: (states, which amount counts)
+    'draft': ({RequestState.DRAFT}, 'estimated'),
+    'requested': ({RequestState.SUBMITTED}, 'estimated'),
+    'approved': ({RequestState.APPROVED, RequestState.ACCEPTED, RequestState.SUBMITTED_FOR_PAYMENT}, 'approved'),
+}
+
+
+def _event_money():
+    """
+    For each event from the last 90 days on: how many requests and how much
+    money sit in draft, waiting for review, approved and paid, per currency.
+    """
+    since = timezone.now().date() - timezone.timedelta(days=90)
+    rows = []
+    for event in Event.objects.filter(end_date__gte=since).order_by('start_date').prefetch_related(
+        'requests__expenses', 'requests__payments',
+    ):
+        stages = {name: {'count': 0, 'money': {}} for name in (*_MONEY_STAGES, 'paid')}
+        for travel_request in event.requests.all():
+            if travel_request.state == RequestState.PAID:
+                stage = stages['paid']
+                paid = travel_request.settled_payment
+                amounts = [(paid.currency, paid.amount)] if paid else []
+            else:
+                name = next((n for n, (states, _) in _MONEY_STAGES.items() if travel_request.state in states), None)
+                if name is None:
+                    continue
+                stage = stages[name]
+                amounts = travel_request.totals_by_currency(_MONEY_STAGES[name][1])
+            stage['count'] += 1
+            for currency, amount in amounts:
+                stage['money'][currency] = stage['money'].get(currency, 0) + amount
+        for stage in stages.values():
+            stage['money'] = sorted(stage['money'].items())
+        rows.append({
+            'event': event, 'remaining': event.budget_remaining(),
+            'stages': [stages[name] for name in ('draft', 'requested', 'approved', 'paid')],
+        })
+    return rows
 
 
 def _finance_sections(request):
@@ -516,6 +550,7 @@ def _finance_sections(request):
         'owed_back': [r for r in with_advance if r.amount_owed_back()],
         'recently_paid': _paginate(request, recently_paid, 10, 'paid_page'),
         'paid_total': paid_total,
+        'event_summaries': _event_money(),
     }
 
 

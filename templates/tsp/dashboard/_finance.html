@@ -23,6 +23,8 @@
   </form>
 </div>
 
+{% if not profile.is_tsp %}{% include "tsp/dashboard/_event_money.html" %}{% endif %}
+
 {% if owed_back %}
 <div class="card bg-base-100 shadow-sm mb-6 border border-error">
   <div class="card-body">
