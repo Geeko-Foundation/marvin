@@ -576,7 +576,7 @@ class ActualCostTests(TestCase):
             'expenses-0-actual_amount': '425.50',
             'expenses-0-actual_currency': 'EUR',
         })
-        self.assertRedirects(response, reverse('request_detail', args=[self.request.pk]))
+        self.assertRedirects(response, reverse('request_detail', args=[self.request.pk]) + '#reimbursement')
         expense.refresh_from_db()
         self.assertEqual(expense.actual_amount, Decimal('425.50'))
         self.assertEqual(self.request.totals_payable(), [('EUR', Decimal('425.50'))])
@@ -1061,7 +1061,7 @@ class EventAuditTests(TestCase):
         from profile.audit_log import AuditLogEntry
 
         self.entries = AuditLogEntry
-        self.committee = make_user('eventauditor', [GROUP_TSP])
+        self.committee = make_user('eventauditor', [GROUP_TSP, GROUP_FINANCE])
         self.client.force_login(self.committee)
 
     def _actions(self):

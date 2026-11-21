@@ -3,7 +3,7 @@
 from decimal import Decimal
 
 from django.contrib.contenttypes.models import ContentType
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from payments.models import PaymentRecord
@@ -165,3 +165,349 @@ class OrganiserTests(TestCase):
             'accepting_requests': 'on', 'organizers': [self.owner.pk],
         })
         self.assertEqual(list(event.organizers.all()), [self.owner])
+
+
+class ReimbursementFlowTests(TestCase):
+
+    def setUp(self):
+        self.owner = make_user('traveller', [GROUP_REQUESTER])
+        self.client.force_login(self.owner)
+
+    def test_accepting_goes_home_with_a_friendly_message(self):
+        travel_request = make_request(self.owner, RequestState.APPROVED)
+        from tsp.forms import AcceptForm
+        response = self.client.post(reverse('request_accept', args=[travel_request.pk]),
+                                    {name: 'on' for name in AcceptForm.base_fields}, follow=True)
+        travel_request.refresh_from_db()
+        self.assertEqual(travel_request.state, RequestState.ACCEPTED)
+        self.assertRedirects(response, reverse('dashboard'))
+        self.assertContains(response, 'Enjoy the event')
+
+    def test_documents_come_after_the_actual_costs(self):
+        travel_request = make_request(self.owner, RequestState.ACCEPTED)
+        page = self.client.get(reverse('request_detail', args=[travel_request.pk]))
+        self.assertContains(page, 'Ask for reimbursement')
+        self.assertContains(page, 'once your actual costs are in')
+        expense = travel_request.expenses.get()
+        expense.actual_amount, expense.actual_currency = Decimal('480'), 'EUR'
+        expense.save()
+        page = self.client.get(reverse('request_detail', args=[travel_request.pk]))
+        self.assertContains(page, 'Print signed form')
+
+    def test_the_signed_form_shows_actual_costs(self):
+        travel_request = make_request(self.owner, RequestState.ACCEPTED, actual='480')
+        page = self.client.get(reverse('request_form', args=[travel_request.pk]))
+        self.assertContains(page, 'Actual Expenses')
+        self.assertContains(page, '480.00 EUR')
+
+
+class OrganiserMoreTests(TestCase):
+
+    def setUp(self):
+        self.owner = make_user('traveller', [GROUP_REQUESTER])
+        self.organiser = make_user('organiser', [GROUP_REQUESTER])
+        self.request = make_request(self.owner, RequestState.SUBMITTED)
+        self.request.event.organizers.add(self.organiser)
+        self.client.force_login(self.organiser)
+
+    def test_an_organiser_rejects_with_a_reason(self):
+        self.client.post(reverse('request_reject', args=[self.request.pk]), {'notes': 'Out of scope'})
+        self.request.refresh_from_db()
+        self.assertEqual(self.request.state, RequestState.REJECTED)
+
+    def test_an_organiser_writes_and_reads_internal_notes(self):
+        from tsp.models import Comment
+        self.client.post(reverse('request_comment', args=[self.request.pk]),
+                         {'body': 'Strong talk, worth it', 'internal': 'on'})
+        self.assertTrue(Comment.objects.get(body='Strong talk, worth it').internal)
+        self.client.force_login(self.owner)
+        page = self.client.get(reverse('request_detail', args=[self.request.pk]))
+        self.assertNotContains(page, 'Strong talk, worth it')
+
+    def test_an_organiser_downloads_their_events_documents(self):
+        from django.core.files.base import ContentFile
+        from tsp.models import Document
+        doc = Document(request=self.request, kind='receipt', original_name='r.pdf',
+                       mimetype='application/pdf', size=4, uploaded_by=self.owner)
+        doc.file.save('r.pdf', ContentFile(b'%PDF'), save=True)
+        response = self.client.get(reverse('document_download', args=[doc.pk]))
+        self.assertEqual(response.status_code, 200)
+
+    def test_an_organiser_does_not_see_drafts(self):
+        draft = make_request(self.owner, RequestState.DRAFT)
+        draft.event.organizers.add(self.organiser)
+        self.assertEqual(self.client.get(reverse('request_detail', args=[draft.pk])).status_code, 403)
+
+    def test_an_organiser_cannot_cancel(self):
+        response = self.client.post(reverse('request_cancel', args=[self.request.pk]))
+        self.assertEqual(response.status_code, 403)
+
+    def test_bulk_review_only_touches_their_event(self):
+        other = make_request(self.owner, RequestState.SUBMITTED)
+        other.event.organizers.clear()
+        self.client.post(reverse('request_batch_review'),
+                         {'request_ids': [self.request.pk, other.pk], 'action': 'approve'})
+        self.request.refresh_from_db()
+        other.refresh_from_db()
+        self.assertEqual(self.request.state, RequestState.APPROVED)
+        self.assertEqual(other.state, RequestState.SUBMITTED)
+
+    def test_someone_who_organises_nothing_cannot_bulk_review(self):
+        self.client.force_login(self.owner)
+        response = self.client.post(reverse('request_batch_review'),
+                                    {'request_ids': [self.request.pk], 'action': 'approve'})
+        self.assertEqual(response.status_code, 403)
+
+    def test_organisers_hear_about_new_requests_for_their_event(self):
+        from unittest import mock
+        draft = make_request(self.owner, RequestState.DRAFT)
+        draft.event.organizers.add(self.organiser)
+        with mock.patch('profile.services.push_notifications.send_push_to_user') as push:
+            from tsp.services.state_machine import transition_request
+            transition_request(draft, RequestState.SUBMITTED, self.owner)
+        self.assertIn(self.organiser, [c.args[0] for c in push.call_args_list])
+
+
+class RequestLinkTests(TestCase):
+
+    def test_request_mentions_become_tsp_links(self):
+        from tsp.templatetags.tsp_tags import link_requests
+        html = link_requests('request 12 <b>')
+        self.assertIn(f'href="{reverse("request_detail", args=[12])}"', html)
+        self.assertIn('>TSP12</a>', html)
+        self.assertIn('&lt;b&gt;', html)
+        self.assertIn('>TSP7</a>', link_requests('wise-api TSP7'))
+
+
+class MultiUploadTests(TestCase):
+
+    def setUp(self):
+        self.owner = make_user('traveller', [GROUP_REQUESTER])
+        self.request = make_request(self.owner, RequestState.ACCEPTED, actual='480')
+        self.client.force_login(self.owner)
+
+    def pdf(self, name):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        return SimpleUploadedFile(name, b'%PDF-1.4 test', content_type='application/pdf')
+
+    def test_three_documents_go_up_together(self):
+        self.client.post(reverse('request_document_upload', args=[self.request.pk]), {
+            'kind': 'receipt', 'file': self.pdf('r.pdf'),
+            'kind_1': 'invoice', 'file_1': self.pdf('i.pdf'),
+            'kind_2': 'signed_form', 'file_2': self.pdf('s.pdf'),
+        })
+        self.assertEqual(self.request.missing_document_kinds(), [])
+
+    def test_one_document_still_works(self):
+        self.client.post(reverse('request_document_upload', args=[self.request.pk]),
+                         {'kind': 'receipt', 'file': self.pdf('r.pdf')})
+        self.assertEqual(self.request.documents.count(), 1)
+
+    def test_one_bad_file_uploads_nothing(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        self.client.post(reverse('request_document_upload', args=[self.request.pk]), {
+            'kind': 'receipt', 'file': self.pdf('r.pdf'),
+            'kind_1': 'invoice', 'file_1': SimpleUploadedFile('x.exe', b'MZ'),
+        })
+        self.assertEqual(self.request.documents.count(), 0)
+
+
+class EventMoneyTests(TestCase):
+
+    def test_each_stage_shows_its_requests_and_money(self):
+        from tsp.views import _event_money
+        owner = make_user('traveller', [GROUP_REQUESTER])
+        first = make_request(owner, RequestState.DRAFT, amount='100')
+        event = first.event
+        for state, amount in ((RequestState.SUBMITTED, '200'), (RequestState.APPROVED, '300'),
+                              (RequestState.ACCEPTED, '50'), (RequestState.REJECTED, '999')):
+            other = make_request(owner, state, amount=amount)
+            other.event = event
+            other.save()
+        row = next(r for r in _event_money() if r['event'] == event)
+        draft, requested, approved, paid = row['stages']
+        self.assertEqual((draft['count'], draft['money']), (1, [('EUR', Decimal('100'))]))
+        self.assertEqual((requested['count'], requested['money']), (1, [('EUR', Decimal('200'))]))
+        self.assertEqual((approved['count'], approved['money']), (2, [('EUR', Decimal('350'))]))
+        self.assertEqual(paid['count'], 0)
+
+    def test_finance_sees_the_table(self):
+        make_request(make_user('traveller', [GROUP_REQUESTER]), RequestState.SUBMITTED)
+        self.client.force_login(make_user('counter', [GROUP_FINANCE]))
+        self.assertContains(self.client.get(reverse('dashboard')), 'Money by event')
+
+
+@override_settings(WISE_BALANCE_FETCH=True)
+class WiseBalanceTests(TestCase):
+
+    def setUp(self):
+        from django.core.cache import cache
+        cache.delete('wise-balance')
+
+    def test_finance_sees_the_wise_balance(self):
+        from unittest import mock
+        wise = mock.Mock()
+        wise.list_balances.return_value = [
+            {'amount': {'value': 0, 'currency': 'AUD'}},
+            {'amount': {'value': 1500.5, 'currency': 'USD'}},
+            {'amount': {'value': 926814.02, 'currency': 'EUR'}},
+        ]
+        self.client.force_login(make_user('counter', [GROUP_FINANCE]))
+        with mock.patch('payments.gateways.wise_api.get_wise_client', return_value=wise):
+            response = self.client.get(reverse('dashboard'))
+        self.assertEqual(response.context['wise_balance'],
+                         [('EUR', Decimal('926814.02')), ('USD', Decimal('1500.5'))])
+        self.assertContains(response, 'Wise balance')
+
+    def test_a_wise_outage_does_not_break_the_dashboard(self):
+        from unittest import mock
+        from payments.gateways.wise_api import WiseApiError
+        wise = mock.Mock()
+        wise.list_balances.side_effect = WiseApiError('down', 503)
+        self.client.force_login(make_user('counter', [GROUP_FINANCE]))
+        with mock.patch('payments.gateways.wise_api.get_wise_client', return_value=wise):
+            self.assertContains(self.client.get(reverse('dashboard')), 'Wise did not answer')
+
+
+class BudgetByFinanceTests(TestCase):
+
+    def setUp(self):
+        self.event = make_request(make_user('traveller', [GROUP_REQUESTER]), RequestState.SUBMITTED).event
+
+    def edit(self, user, data):
+        self.client.force_login(user)
+        return self.client.post(reverse('event_edit', args=[self.event.pk]), data)
+
+    def test_the_committee_cannot_set_the_budget(self):
+        e = self.event
+        self.edit(make_user('chair', [GROUP_TSP]), {
+            'name': 'Renamed', 'location': e.location, 'start_date': e.start_date, 'end_date': e.end_date,
+            'approval_percent': '100', 'accepting_requests': 'on', 'budget': '99999', 'budget_currency': 'USD',
+        })
+        self.event.refresh_from_db()
+        self.assertEqual(self.event.name, 'Renamed')
+        self.assertIsNone(self.event.budget)
+
+    def test_finance_sets_the_budget_and_nothing_else(self):
+        self.edit(make_user('counter', [GROUP_FINANCE]),
+                  {'budget': '8000', 'budget_currency': 'EUR', 'name': 'Renamed'})
+        self.event.refresh_from_db()
+        self.assertEqual(self.event.budget, Decimal('8000'))
+        self.assertNotEqual(self.event.name, 'Renamed')
+
+    def test_a_requester_cannot_edit_an_event(self):
+        response = self.edit(make_user('someone', [GROUP_REQUESTER]), {'budget': '1'})
+        self.assertEqual(response.status_code, 403)
+
+
+class ShortfallTests(TestCase):
+
+    def test_an_upcoming_budget_bigger_than_the_balance_is_flagged(self):
+        from tsp.views import _event_money, _shortfalls
+        event = make_request(make_user('traveller', [GROUP_REQUESTER]), RequestState.SUBMITTED).event
+        event.budget, event.budget_currency = Decimal('10000'), 'EUR'
+        event.save()
+        self.assertEqual(_shortfalls(_event_money(), [('EUR', Decimal('8000'))]),
+                         [('EUR', Decimal('10000'), Decimal('8000'), Decimal('2000'))])
+        self.assertEqual(_shortfalls(_event_money(), [('EUR', Decimal('12000'))]), [])
+        self.assertEqual(_shortfalls(_event_money(), None), [])
+
+    def test_an_event_without_a_budget_counts_what_is_asked_for(self):
+        from tsp.views import _event_money, _shortfalls
+        make_request(make_user('traveller', [GROUP_REQUESTER]), RequestState.SUBMITTED, amount='900')
+        self.assertEqual(_shortfalls(_event_money(), [('EUR', Decimal('100'))])[0][3], Decimal('800'))
+
+
+class OrganiserAdvanceTests(TestCase):
+
+    def test_an_organiser_cannot_grant_an_advance(self):
+        owner = make_user('traveller', [GROUP_REQUESTER])
+        organiser = make_user('organiser', [GROUP_REQUESTER])
+        travel_request = make_request(owner, RequestState.SUBMITTED)
+        travel_request.event.organizers.add(organiser)
+        self.client.force_login(organiser)
+        expense = travel_request.expenses.get()
+        self.client.post(reverse('request_approve', args=[travel_request.pk]), {
+            'expense_id': expense.pk, f'approved_amount_{expense.pk}': '500',
+            f'approved_currency_{expense.pk}': 'EUR', 'approval_percent': '100',
+            'advance_amount': '400', 'advance_currency': 'EUR',
+        })
+        travel_request.refresh_from_db()
+        self.assertEqual(travel_request.state, RequestState.APPROVED)
+        self.assertIsNone(travel_request.advance_amount)
+
+
+class ProposedQueueTests(TestCase):
+
+    def test_a_proposal_waits_in_the_committee_queue_until_opened(self):
+        from tsp.models import Event
+        proposer = make_user('traveller', [GROUP_REQUESTER])
+        self.client.force_login(proposer)
+        self.client.post(reverse('event_create'), {
+            'name': 'Asia Summit', 'location': 'Tokyo', 'start_date': '2099-08-01', 'end_date': '2099-08-03',
+        })
+        event = Event.objects.get(name='Asia Summit')
+        self.assertEqual(event.proposed_by, proposer)
+        self.client.force_login(make_user('chair', [GROUP_TSP]))
+        self.assertIn(event, self.client.get(reverse('dashboard')).context['proposed_events'])
+        # Saving it once reviewed takes it off the queue, whether or not it is opened yet.
+        self.client.post(reverse('event_edit', args=[event.pk]), {
+            'name': event.name, 'location': event.location, 'start_date': event.start_date,
+            'end_date': event.end_date, 'approval_percent': '100',
+        })
+        self.assertNotIn(event, self.client.get(reverse('dashboard')).context['proposed_events'])
+
+
+class NotificationSettingsTests(TestCase):
+
+    def setUp(self):
+        self.owner = make_user('traveller', [GROUP_REQUESTER])
+        self.client.force_login(self.owner)
+
+    def test_switching_a_kind_off_stops_its_email(self):
+        from django.core import mail
+        from tsp.services.state_machine import transition_request
+        self.client.post(reverse('notification_settings'), {'notify': ['rejected', 'paid']})
+        self.owner.profile.refresh_from_db()
+        self.assertIn('approved', self.owner.profile.muted_notifications)
+        travel_request = make_request(self.owner, RequestState.SUBMITTED)
+        mail.outbox.clear()
+        transition_request(travel_request, RequestState.APPROVED, make_user('chair', [GROUP_TSP]))
+        self.assertFalse([m for m in mail.outbox if self.owner.email in m.to])
+
+    def test_kinds_left_on_still_arrive(self):
+        from django.core import mail
+        from tsp.services.state_machine import transition_request
+        travel_request = make_request(self.owner, RequestState.SUBMITTED)
+        mail.outbox.clear()
+        transition_request(travel_request, RequestState.APPROVED, make_user('chair', [GROUP_TSP]))
+        self.assertTrue([m for m in mail.outbox if self.owner.email in m.to])
+
+    def test_finance_and_organisers_hear_about_internal_notes(self):
+        from unittest import mock
+        from profile.services.push_notifications import notify_request_comment
+        travel_request = make_request(self.owner, RequestState.SUBMITTED)
+        organiser = make_user('organiser', [GROUP_REQUESTER])
+        travel_request.event.organizers.add(organiser)
+        finance = make_user('counter', [GROUP_FINANCE])
+        chair = make_user('chair', [GROUP_TSP])
+        with mock.patch('profile.services.push_notifications.send_push_to_user') as push:
+            notify_request_comment(travel_request, chair, internal=True)
+        told = {c.args[0] for c in push.call_args_list}
+        self.assertEqual(told, {organiser, finance})
+
+
+class NotificationChoicesTests(TestCase):
+
+    def kinds_for(self, user):
+        self.client.force_login(user)
+        return [kind for kind, _, _ in self.client.get(reverse('profile')).context['notification_kinds']]
+
+    def test_a_requester_is_not_offered_internal_notes(self):
+        kinds = self.kinds_for(make_user('traveller', [GROUP_REQUESTER]))
+        self.assertNotIn('internal_note', kinds)
+        self.assertIn('approved', kinds)
+
+    def test_finance_is_offered_what_finance_receives(self):
+        kinds = self.kinds_for(make_user('counter', [GROUP_FINANCE]))
+        self.assertEqual(set(kinds), {'submitted_for_payment', 'internal_note'})

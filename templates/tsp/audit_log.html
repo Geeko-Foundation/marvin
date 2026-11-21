@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load tsp_tags %}
 
 {% block title %}Audit Log{% endblock %}
 
@@ -25,8 +26,8 @@
           <td class="whitespace-nowrap">{{ entry.created_at|date:"j M Y, H:i" }}</td>
           <td>{{ entry.user.username|default:"system" }}</td>
           <td><code class="text-xs">{{ entry.action }}</code></td>
-          <td>{{ entry.target }}</td>
-          <td class="text-sm opacity-80">{{ entry.detail }}</td>
+          <td>{{ entry.target|link_requests }}</td>
+          <td class="text-sm opacity-80">{{ entry.detail|link_requests }}</td>
         </tr>
         {% empty %}
         <tr><td colspan="5" class="text-center opacity-60 py-8">{% if query %}Nothing matches "{{ query }}".{% else %}Nothing has been recorded yet.{% endif %}</td></tr>

@@ -1,27 +1,25 @@
       <!--top nav bar -->
-      <div class="navbar bg-base-100 shadow-sm px-4 lg:px-6">
+      <div class="navbar bg-base-100 shadow-sm px-4 lg:px-6 no-print">
         <div class="flex-none lg:hidden">
           <label for="sidebar-drawer" class="btn btn-square btn-ghost">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="inline-block w-5 h-5 stroke-current"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
           </label>
         </div>
-        <div class="flex-1 flex items-end gap-2">
-          <span class="text-2xl font-bold text-primary lg:hidden">{{ app_name }}</span>
+        <div class="flex-1 flex items-center gap-2">
+          <a href="{% url 'dashboard' %}" class="text-2xl font-bold text-primary lg:hidden">{{ app_name }}</a>
           <form method="get" action="{% url 'search' %}" class="hidden md:flex max-w-xs ml-auto">
-              <label class="input input-bordered flex w-full items-end mr-4">
+              <label class="input input-sm flex w-full items-center mr-2">
                   <input type="search" name="q" value="{{ request.GET.q }}" placeholder="Search..."
                          class="grow" aria-label="Search" data-search-key>
-                  <kbd class="kbd" aria-hidden="true">/</kbd>
+                  <kbd class="kbd kbd-xs opacity-60" aria-hidden="true">/</kbd>
               </label>
           </form>
         </div>
         <div class="flex-none gap-2">
           {% include "partials/theme_toggle.html" %}
           <div class="dropdown dropdown-end">
-            <div tabindex="0" role="button" class="btn btn-ghost btn-circle avatar placeholder">
-              <div class="bg-primary text-primary-content rounded-full w-10">
-                <span class="text-sm">{{ user.first_name|slice:":1"|default:user.username|slice:":1"|upper }}</span>
-              </div>
+            <div tabindex="0" role="button" class="btn btn-circle btn-primary text-sm" aria-label="Account menu">
+              {{ user.first_name|slice:":1"|default:user.username|slice:":1"|upper }}
             </div>
             <ul tabindex="0" class="menu menu-sm dropdown-content mt-3 z-[1] p-2 shadow bg-base-100 rounded-box w-52">
               <li class="menu-title flex flex-col gap-0.5"><span>{{ user.get_full_name|default:user.username }}</span><span class="font-normal normal-case opacity-70">{{ profile.role_label|default:"User" }}</span></li>

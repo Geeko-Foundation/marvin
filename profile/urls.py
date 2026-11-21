@@ -5,6 +5,7 @@ from profile import views
 urlpatterns = [
     path('', views.profile_view, name='profile'),
     path('email/confirm/<str:token>/', views.email_change_confirm, name='email_change_confirm'),
+    path('notifications/', views.notification_settings, name='notification_settings'),
     path('password/', views.password_change_email, name='password_change_email'),
     path('two-step/setup/', views.two_factor_setup, name='two_factor_setup'),
     path('two-step/verify/', views.two_factor_verify, name='two_factor_verify'),

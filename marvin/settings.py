@@ -214,6 +214,8 @@ EXCHANGE_RATE_API_KEY = env('EXCHANGE_RATE_API_KEY')
 EXCHANGE_RATE_API_URL = env('EXCHANGE_RATE_API_URL', 'https://v6.exchangerate-api.com/v6')
 EXCHANGE_RATES_URL = env('EXCHANGE_RATES_URL', 'https://api.frankfurter.dev/v1')
 EXCHANGE_RATES_FETCH = env_bool('EXCHANGE_RATES_FETCH', default=False)
+# Show the Wise balance on the finance dashboard. Off here so tests never call Wise.
+WISE_BALANCE_FETCH = env_bool('WISE_BALANCE_FETCH', default=False)
 
 
 # --- Logging ---
@@ -268,6 +270,8 @@ BRAND_ORG_NAME = env('BRAND_ORG_NAME', 'Geeko Foundation')
 BRAND_TAGLINE = env('BRAND_TAGLINE', 'Travel Support Program')
 # Marvin's own joke. A fork sets this empty to drop the line.
 BRAND_STRAPLINE = env('BRAND_STRAPLINE', 'Your Travel Assistant')
+# The travel support policy people agree to. Linked from the menu once set.
+BRAND_POLICY_URL = env('BRAND_POLICY_URL', 'https://geekos.org/travel-policy/')
 
 # Theme names built into static/css/styles.css (see css_build/app.css).
 BRAND_THEME_LIGHT = env('BRAND_THEME_LIGHT', 'i-layer-light')

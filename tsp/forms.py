@@ -165,7 +165,7 @@ class EventForm(forms.ModelForm):
                 'class': 'input input-bordered w-full', 'type': 'date',
             }),
             'visa_letters_offered': forms.CheckboxInput(attrs={'class': 'checkbox'}),
-            'organizers': forms.SelectMultiple(attrs={'class': 'select select-bordered w-full h-32'}),
+            'organizers': forms.CheckboxSelectMultiple(attrs={'class': 'checkbox checkbox-sm'}),
         }
 
     offered_categories = forms.MultipleChoiceField(
@@ -180,7 +180,7 @@ class EventForm(forms.ModelForm):
         }),
     )
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, sets_budget=True, **kwargs):
         """The currency only matters once a budget is set, so let it default."""
         super().__init__(*args, **kwargs)
         self.fields['budget_currency'].required = False
@@ -193,6 +193,10 @@ class EventForm(forms.ModelForm):
         extra = self.instance.extra_expense_categories or []
         self.fields['offered_categories'].initial = [c for c in extra if c in optional]
         self.fields['custom_categories'].initial = ', '.join(c for c in extra if c not in optional)
+        if not sets_budget:
+            # The budget is finance's to set; the committee runs the rest.
+            del self.fields['budget']
+            del self.fields['budget_currency']
 
     def clean_custom_categories(self):
         """Comma-separated names, each a short single line not already offered."""
@@ -223,6 +227,23 @@ class EventForm(forms.ModelForm):
             list(cleaned.get('offered_categories') or []) + list(cleaned.get('custom_categories') or [])
         )
         return cleaned
+
+
+class EventBudgetForm(forms.ModelForm):
+    """What finance sets on an event: its budget."""
+
+    class Meta:
+        model = Event
+        fields = ['budget', 'budget_currency']
+        widgets = {name: EventForm.Meta.widgets[name] for name in fields}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['budget_currency'].required = False
+        self.fields['budget'].validators.append(MinValueValidator(Decimal('0')))
+
+    def clean_budget_currency(self):
+        return self.cleaned_data.get('budget_currency') or 'EUR'
 
 
 class EventProposalForm(forms.ModelForm):

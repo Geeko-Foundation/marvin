@@ -21,24 +21,30 @@
     {% endif %}
   </div>
 
-  <h3 class="font-semibold mb-3">Approved Expenses</h3>
+  {% if not travel_request.has_all_actual_amounts %}
+  <div class="alert alert-warning mb-6 no-print">
+    <span>Report your actual costs first, so this form shows what you spent.
+      {% if travel_request.state == 'accepted' and travel_request.user_id == user.id %}<a href="{% url 'request_actuals' travel_request.pk %}" class="link">Report actual costs</a>{% endif %}</span>
+  </div>
+  {% endif %}
+  <h3 class="font-semibold mb-3">Actual Expenses</h3>
   <table class="table table-bordered w-full mb-6">
     <thead>
-      <tr><th>Category</th><th>Description</th><th>Amount</th></tr>
+      <tr><th>Category</th><th>Description</th><th>Actual cost</th></tr>
     </thead>
     <tbody>
-      {% for expense in travel_request.expenses.all %}
+      {% for expense in travel_request.expenses.all %}{% if expense.approved_amount is not None %}
       <tr>
         <td>{{ expense.get_category_display }}</td>
         <td>{{ expense.description }}</td>
-        <td>{% if expense.approved_amount %}{{ expense.approved_amount|floatformat:"2g" }} {{ expense.approved_currency }}{% else %}-{% endif %}</td>
+        <td>{% if expense.actual_amount is not None %}{{ expense.actual_amount|floatformat:"2g" }} {{ expense.actual_currency }}{% else %}-{% endif %}</td>
       </tr>
-      {% endfor %}
+      {% endif %}{% endfor %}
     </tbody>
     <tfoot>
       <tr class="font-bold">
-        <td colspan="2">Total Approved</td>
-        <td>{% for currency, amount in travel_request.totals_approved %}{{ amount|floatformat:"2g" }} {{ currency }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
+        <td colspan="2">Total</td>
+        <td>{% for currency, amount in travel_request.totals_actual %}{{ amount|floatformat:"2g" }} {{ currency }}{% if not forloop.last %}, {% endif %}{% empty %}-{% endfor %}</td>
       </tr>
     </tfoot>
   </table>
@@ -58,7 +64,7 @@
       <p class="text-sm">Printed Name</p>
     </div>
     <div>
-      <div class="border-b border-base-content pb-1 mb-2">{% for currency, amount in travel_request.totals_approved %}{{ amount|floatformat:"2g" }} {{ currency }}{% if not forloop.last %}, {% endif %}{% endfor %}</div>
+      <div class="border-b border-base-content pb-1 mb-2">{% for currency, amount in travel_request.totals_actual %}{{ amount|floatformat:"2g" }} {{ currency }}{% if not forloop.last %}, {% endif %}{% empty %}&nbsp;{% endfor %}</div>
       <p class="text-sm">Total Amount</p>
     </div>
     <div>
@@ -69,7 +75,7 @@
 </div>
 
 <div class="text-center mt-6 no-print">
-  <button onclick="window.print()" class="btn btn-primary">Print Agreement</button>
+  <button onclick="window.print()" class="btn btn-primary">Print or save as PDF</button>
   <a href="{% url 'request_detail' travel_request.pk %}" class="btn btn-ghost ml-2">Back</a>
 </div>
 {% endblock %}

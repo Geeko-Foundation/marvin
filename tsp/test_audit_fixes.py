@@ -432,10 +432,10 @@ class AuditLogPageTests(TestCase):
     def test_staff_see_entries_and_can_search_them(self):
         self.client.force_login(self.finance)
         html = self.client.get(reverse('audit_log')).content.decode()
-        self.assertIn('wise-api TSP9', html)
+        self.assertIn('wise-api <a href="/requests/9/" class="link link-primary">TSP9</a>', html)
         self.assertIn('Asia Summit', html)
         html = self.client.get(reverse('audit_log'), {'q': 'TSP9'}).content.decode()
-        self.assertIn('wise-api TSP9', html)
+        self.assertIn('>TSP9</a>', html)
         self.assertNotIn('Asia Summit', html)
 
     def test_requesters_are_refused(self):

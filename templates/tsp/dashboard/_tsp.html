@@ -1,6 +1,7 @@
 {% load tsp_tags %}
 <h2 class="text-2xl font-bold mb-6">Committee</h2>
 
+<div id="committee-live" data-live>
 <div class="stats stats-vertical lg:stats-horizontal shadow w-full mb-6 bg-base-100">
   <a class="stat hover:bg-base-200" href="{% url 'reports' %}?status=submitted">
     <div class="stat-title">Pending Review</div>
@@ -47,7 +48,7 @@
           {% for req in pending %}
           <tr>
             <td><input type="checkbox" class="checkbox checkbox-sm select-pending" name="request_ids" value="{{ req.pk }}" aria-label="Select {{ req.reference }}"></td>
-            <td>{{ req.reference }}</td>
+            <td><a href="{% url 'request_detail' req.pk %}" class="link link-primary font-medium">{{ req.reference }}</a></td>
             <td>{{ req.user.get_full_name|default:req.user.username }}</td>
             <td>{{ req.event.name }}</td>
             <td>{{ req.created_at|date }}</td>
@@ -75,36 +76,37 @@
   </div>
 </div>
 
-{% if event_summaries %}
-<div class="card bg-base-100 shadow-sm">
+</div>
+
+{% if proposed_events %}
+<div class="card bg-base-100 shadow-sm mb-6 border border-info">
   <div class="card-body">
-    <h2 class="card-title">Event Summary (Last 90 Days)</h2>
-    <div class="grid gap-4 md:grid-cols-2">
-      {% for summary in event_summaries %}
-      <div class="border border-base-300 rounded-box p-4">
-        <h3 class="font-semibold">{{ summary.event.name }}</h3>
-        <p class="text-sm opacity-60">{{ summary.total }} request{{ summary.total|pluralize }}</p>
-      </div>
+    <h2 class="card-title">Proposed events</h2>
+    <ul class="divide-y divide-base-300">
+      {% for event in proposed_events %}
+      <li class="flex flex-wrap items-center justify-between gap-2 py-2">
+        <span>{{ event.name }} <span class="text-sm opacity-60">· {{ event.location }} · {{ event.start_date|date:"j M Y" }} · by {{ event.proposed_by.get_full_name|default:event.proposed_by.username }}{% if event.suggested_budget %} · suggested {{ event.suggested_budget|floatformat:"0g" }} {{ event.budget_currency }}{% endif %}</span></span>
+        <a href="{% url 'event_edit' event.pk %}" class="btn btn-sm btn-primary">Review</a>
+      </li>
       {% endfor %}
-    </div>
+    </ul>
   </div>
 </div>
 {% endif %}
 
+{% include "tsp/dashboard/_event_money.html" %}
+
 <script>
-  (function () {
-    const boxes = document.querySelectorAll('.select-pending');
-    const approve = document.getElementById('approve-selected');
-    const reject = document.getElementById('reject-selected');
-    const update = () => {
-      const any = [...boxes].some(box => box.checked);
-      approve.disabled = reject.disabled = !any;
-      approve.classList.toggle('btn-success', any);
-    };
-    document.getElementById('select-all-pending')?.addEventListener('change', function () {
-      boxes.forEach(box => { box.checked = this.checked; });
-      update();
-    });
-    boxes.forEach(box => box.addEventListener('change', update));
-  })();
+  // Listens on the page, not the boxes, so it keeps working after the queue refreshes itself.
+  document.addEventListener('change', function (event) {
+    if (event.target.id === 'select-all-pending') {
+      document.querySelectorAll('.select-pending').forEach(function (box) { box.checked = event.target.checked; });
+    } else if (!event.target.classList.contains('select-pending')) {
+      return;
+    }
+    var any = [...document.querySelectorAll('.select-pending')].some(function (box) { return box.checked; });
+    var approve = document.getElementById('approve-selected');
+    approve.disabled = document.getElementById('reject-selected').disabled = !any;
+    approve.classList.toggle('btn-success', any);
+  });
 </script>

@@ -4,6 +4,9 @@ import csv
 import re
 import time
 from decimal import Decimal, InvalidOperation
+from functools import partial
+
+import requests
 
 from django.conf import settings
 from django.contrib import messages
@@ -54,6 +57,7 @@ from tsp.forms import (
     ApprovalForm,
     CommentForm,
     DocumentUploadForm,
+    EventBudgetForm,
     EventForm,
     EventProposalForm,
     ExpenseActualFormSet,
@@ -482,9 +486,7 @@ def _requester_sections(request):
     my_requests = TravelRequest.objects.filter(user=request.user).select_related('event')
     return {
         'my_requests': _paginate(request, my_requests, 20),
-        'action_needed': my_requests.filter(state__in=[
-            RequestState.APPROVED, RequestState.ACCEPTED,
-        ]),
+        'action_needed': my_requests.filter(state=RequestState.APPROVED),
     }
 
 
@@ -494,15 +496,10 @@ def _committee_sections(request):
         state=RequestState.SUBMITTED,
     ).select_related('user', 'event').order_by('created_at')
 
-    ninety_days_ago = timezone.now().date() - timezone.timedelta(days=90)
-    event_summaries = []
-    for event in Event.objects.filter(start_date__gte=ninety_days_ago):
-        reqs = event.requests.all()
-        event_summaries.append({
-            'event': event,
-            'total': reqs.count(),
-            'by_state': reqs.values('state').annotate(c=Count('id')),
-        })
+    event_summaries = _event_money()
+    proposed = Event.objects.filter(
+        proposed_by__isnull=False, end_date__gte=timezone.now().date(),
+    ).select_related('proposed_by').order_by('start_date')
 
     approved_total = Expense.objects.filter(
         request__state__in=[
@@ -524,7 +521,105 @@ def _committee_sections(request):
         ),
         'approved_total': approved_total,
         'event_summaries': event_summaries,
+        'proposed_events': proposed,
     }
+
+
+_MONEY_STAGES = {
+    # stage: (states, which amount counts)
+    'draft': ({RequestState.DRAFT}, 'estimated'),
+    'requested': ({RequestState.SUBMITTED}, 'estimated'),
+    'approved': ({RequestState.APPROVED, RequestState.ACCEPTED, RequestState.SUBMITTED_FOR_PAYMENT}, 'approved'),
+}
+
+
+def _event_money():
+    """
+    For each event from the last 90 days on: how many requests and how much
+    money sit in draft, waiting for review, approved and paid, per currency.
+    """
+    since = timezone.now().date() - timezone.timedelta(days=90)
+    rows = []
+    for event in Event.objects.filter(end_date__gte=since).order_by('start_date').prefetch_related(
+        'requests__expenses', 'requests__payments',
+    ):
+        stages = {name: {'count': 0, 'money': {}} for name in (*_MONEY_STAGES, 'paid')}
+        for travel_request in event.requests.all():
+            if travel_request.state == RequestState.PAID:
+                stage = stages['paid']
+                paid = travel_request.settled_payment
+                amounts = [(paid.currency, paid.amount)] if paid else []
+            else:
+                name = next((n for n, (states, _) in _MONEY_STAGES.items() if travel_request.state in states), None)
+                if name is None:
+                    continue
+                stage = stages[name]
+                amounts = travel_request.totals_by_currency(_MONEY_STAGES[name][1])
+            stage['count'] += 1
+            for currency, amount in amounts:
+                stage['money'][currency] = stage['money'].get(currency, 0) + amount
+        for stage in stages.values():
+            stage['money'] = sorted(stage['money'].items())
+        rows.append({
+            'event': event, 'remaining': event.budget_remaining(),
+            'stages': [stages[name] for name in ('draft', 'requested', 'approved', 'paid')],
+        })
+    return rows
+
+
+def _wise_balance():
+    """
+    The Wise account's balances as (currency, amount), source currency first,
+    or None when Wise cannot be reached. Kept for a minute, so a busy
+    dashboard does not ask Wise on every load.
+    """
+    if not settings.WISE_BALANCE_FETCH:
+        return None
+    from django.core.cache import caches
+    cached = caches['default'].get('wise-balance')
+    if cached is not None:
+        return cached
+    from payments.gateways.wise_api import WiseApiError, get_wise_client
+    try:
+        balances = get_wise_client().list_balances()
+    except (WiseApiError, requests.RequestException):
+        return None
+    source = settings.WISE_SOURCE_CURRENCY
+    result = sorted(
+        ((b['amount']['currency'], Decimal(str(b['amount']['value']))) for b in balances if b['amount']['value']),
+        key=lambda row: (row[0] != source, row[0]),
+    )
+    caches['default'].set('wise-balance', result, 60)
+    return result
+
+
+def _shortfalls(event_money, balance):
+    """
+    Where the Wise balance cannot cover what upcoming events still need, as
+    (currency, needed, held, short). An event with a budget needs what is left of it
+    to pay; one without needs what is approved or waiting for review.
+    """
+    if balance is None:
+        return []
+    today = timezone.now().date()
+    needed = {}
+    for row in event_money:
+        event = row['event']
+        if event.end_date < today:
+            continue
+        draft, requested, approved, paid = row['stages']
+        if event.budget is not None:
+            spent = dict(paid['money']).get(event.budget_currency, 0)
+            needed[event.budget_currency] = needed.get(event.budget_currency, 0) + max(event.budget - spent, 0)
+        else:
+            for currency, amount in requested['money'] + approved['money']:
+                needed[currency] = needed.get(currency, 0) + amount
+    held = dict(balance)
+    return [
+        (currency, amount, held.get(currency, Decimal('0')), amount - held.get(currency, Decimal('0')))
+        for currency, amount in sorted(needed.items())
+        if amount > held.get(currency, Decimal('0'))
+    ]
 
 
 def _finance_sections(request):
@@ -554,6 +649,14 @@ def _finance_sections(request):
         'owed_back': [r for r in with_advance if r.amount_owed_back()],
         'recently_paid': _paginate(request, recently_paid, 10, 'paid_page'),
         'paid_total': paid_total,
+        'event_summaries': (event_money := _event_money()),
+        'wise_balance': (balance := _wise_balance()),
+        'shortfalls': _shortfalls(event_money, balance),
+        'needs_budget': Event.objects.filter(
+            budget__isnull=True, end_date__gte=timezone.now().date(),
+        ).order_by('start_date'),
+        'wise_sandbox': settings.WISE_API_SANDBOX,
+        'wise_balance_on': settings.WISE_BALANCE_FETCH,
     }
 
 
@@ -643,13 +746,17 @@ def event_create(request):
     which stays closed to requests until the committee sets its budget and opens it.
     """
     profile = get_profile(request.user)
-    form_class = EventForm if profile.is_tsp else EventProposalForm
+    if profile.is_tsp:
+        form_class = partial(EventForm, sets_budget=profile.is_finance)
+    else:
+        form_class = EventProposalForm
     if request.method == 'POST':
         form = form_class(request.POST)
         if form.is_valid():
             event = form.save(commit=False)
             if not profile.is_tsp:
                 event.accepting_requests = False
+                event.proposed_by = request.user
             event.save()
             form.save_m2m()
             audit('event.created' if profile.is_tsp else 'event.proposed', user=request.user,
@@ -680,23 +787,38 @@ def event_create(request):
 
 
 @login_required
-@group_required(GROUP_TSP)
 def event_edit(request, pk):
-    """Edit an existing TSP event."""
+    """
+    Edit an event. The committee edits everything but the budget, which is
+    finance's to set; someone in both groups edits both.
+    """
     event = get_object_or_404(Event, pk=pk)
     profile = get_profile(request.user)
+    if profile.is_tsp:
+        form_class = partial(EventForm, sets_budget=profile.is_finance)
+        template = 'tsp/events/form.html'
+    elif profile.is_finance:
+        form_class = EventBudgetForm
+        template = 'tsp/events/budget.html'
+    else:
+        raise PermissionDenied
     if request.method == 'POST':
-        form = EventForm(request.POST, instance=event)
+        form = form_class(request.POST, instance=event)
         if form.is_valid():
-            event = form.save()
+            event = form.save(commit=False)
+            if form_class is not EventBudgetForm:
+                # The committee has reviewed it, so it leaves the proposals queue.
+                event.proposed_by = None
+            event.save()
+            form.save_m2m()
             audit('event.updated', user=request.user, target=event.name,
                   detail=', '.join(form.changed_data) or 'no fields changed')
-            messages.success(request, 'Event updated.')
-            return redirect('event_list')
+            messages.success(request, 'Budget saved.' if form_class is EventBudgetForm else 'Event updated.')
+            return redirect('dashboard' if form_class is EventBudgetForm else 'event_list')
     else:
-        form = EventForm(instance=event)
+        form = form_class(instance=event)
 
-    return render(request, 'tsp/events/form.html', {'form': form, 'profile': profile, 'event': event})
+    return render(request, template, {'form': form, 'profile': profile, 'event': event})
 
 
 @login_required
@@ -917,6 +1039,7 @@ def request_detail(request, pk, travel_request, profile):
         'comment_form': comment_form,
         'doc_form': doc_form,
         'missing_docs': travel_request.missing_document_kinds(),
+        'has_actuals': travel_request.has_all_actual_amounts(),
     })
 
 
@@ -1057,7 +1180,8 @@ def request_approve(request, pk):
     # refused approval leaves no amounts behind to skew the event budget.
     with transaction.atomic():
         error = _apply_approved_amounts(travel_request, request.POST)
-        if not error:
+        # An advance is a decision to pay money early, so it stays with the committee.
+        if not error and profile.is_tsp:
             error = _set_advance(travel_request, request.POST)
         if not error:
             notes, error = _check_budget(travel_request, request.POST, notes, profile.is_tsp)
@@ -1161,10 +1285,12 @@ def request_batch_review(request):
     selected = TravelRequest.objects.filter(
         pk__in=ids, state=RequestState.SUBMITTED,
     ).select_related('event').prefetch_related('expenses')
+    not_yours = 0
     if not profile.is_tsp:
         organised = Event.organised_by(request.user)
         if not organised.exists():
             raise PermissionDenied
+        not_yours = selected.exclude(event__in=organised).count()
         selected = selected.filter(event__in=organised)
 
     reviewed, own, over_budget = 0, 0, []
@@ -1217,7 +1343,9 @@ def request_batch_review(request):
             f'Not approved, as they would go over the event budget: {", ".join(over_budget)}. '
             'Review them one at a time to approve over budget.',
         )
-    ignored = len(ids) - reviewed - own - len(over_budget)
+    if not_yours:
+        messages.warning(request, f'Left {not_yours} request{"s" if not_yours != 1 else ""} for events you do not organise.')
+    ignored = len(ids) - reviewed - own - len(over_budget) - not_yours
     if ignored:
         messages.warning(
             request,
@@ -1310,13 +1438,16 @@ def request_accept(request, pk):
     if form.is_valid():
         try:
             transition_request(travel_request, RequestState.ACCEPTED, request.user)
-            messages.success(request, 'Request accepted. Please upload required documents.')
         except StateTransitionError as e:
             messages.error(request, str(e))
-    else:
-        messages.error(request, 'All confirmations are required.')
-        return redirect('request_accept_page', pk=pk)
-    return redirect('request_detail', pk=pk)
+            return redirect('request_detail', pk=pk)
+        messages.success(
+            request,
+            f'You are all set. Enjoy the event, {travel_request.event.name}!',
+        )
+        return redirect('dashboard')
+    messages.error(request, 'All confirmations are required.')
+    return redirect('request_accept_page', pk=pk)
 
 
 @login_required
@@ -1335,7 +1466,7 @@ def request_actuals(request, pk):
         if formset.is_valid():
             formset.save()
             messages.success(request, 'Actual costs saved.')
-            return redirect('request_detail', pk=pk)
+            return redirect(reverse('request_detail', args=[pk]) + '#reimbursement')
     else:
         formset = ExpenseActualFormSet(instance=travel_request, queryset=queryset)
 
@@ -1499,9 +1630,27 @@ def request_document_upload(request, pk, travel_request, profile):
             'request goes to finance. Take it back from finance to add more.',
         )
         return redirect('request_detail', pk=pk)
-    form = DocumentUploadForm(request.POST, request.FILES)
-    if form.is_valid() and request.FILES.get('file'):
-        uploaded = request.FILES['file']
+    # The first row is "kind"/"file"; each added row is "kind_N"/"file_N".
+    rows = [('kind', 'file')] + [
+        (f'kind_{key[5:]}', key) for key in request.FILES if key.startswith('file_')
+    ]
+    forms_to_save = []
+    for kind_key, file_key in rows:
+        if not request.FILES.get(file_key):
+            continue
+        form = DocumentUploadForm(
+            {'kind': request.POST.get(kind_key)}, {'file': request.FILES[file_key]},
+        )
+        if not form.is_valid():
+            errors = form.errors.get('file') or form.errors.get('kind') or ['Check the file.']
+            messages.error(request, f'{request.FILES[file_key].name}: {errors[0]} Nothing was uploaded.')
+            return redirect(reverse('request_detail', args=[pk]) + '#documents')
+        forms_to_save.append((form, request.FILES[file_key]))
+    if not forms_to_save:
+        messages.error(request, 'Choose a file to upload.')
+        return redirect(reverse('request_detail', args=[pk]) + '#documents')
+
+    for form, uploaded in forms_to_save:
         doc = form.save(commit=False)
         doc.request = travel_request
         doc.uploaded_by = request.user
@@ -1509,11 +1658,10 @@ def request_document_upload(request, pk, travel_request, profile):
         doc.mimetype = uploaded.content_type or 'application/octet-stream'
         doc.size = uploaded.size
         doc.save()
-        messages.success(request, 'Document uploaded.')
-    else:
-        file_errors = form.errors.get('file')
-        messages.error(request, file_errors[0] if file_errors else 'Please select a valid file.')
-    return redirect('request_detail', pk=pk)
+    count = len(forms_to_save)
+    done = '' if travel_request.missing_document_kinds() else ' You can now submit for payment.'
+    messages.success(request, f'{count} document{"s" if count != 1 else ""} uploaded.{done}')
+    return redirect(reverse('request_detail', args=[pk]) + '#documents')
 
 
 # Once a request is with finance its documents back a payment, so they stay.
@@ -1567,7 +1715,7 @@ def document_download(request, doc_id):
     travel_request = doc.request
     profile = get_profile(request.user)
     is_owner = travel_request.user_id == request.user.id
-    is_staff = profile.is_committee
+    is_staff = profile.is_committee or travel_request.event.is_organised_by(request.user)
     if not (is_owner or is_staff):
         raise PermissionDenied
 

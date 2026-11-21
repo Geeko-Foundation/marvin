@@ -50,8 +50,10 @@ SANDBOX_SIMULATION_STEPS = (
 # How many of those steps a sandbox transfer in each state has already passed.
 # A transfer still waiting for its money is left alone: simulating it would
 # show a payment as sent when nobody funded it.
+# A funded transfer already says "processing", but the sandbox still wants the
+# processing step run before funds_converted; skipping it returns system_error.
 SANDBOX_STEPS_DONE_BY_STATUS = {
-    'processing': 1,
+    'processing': 0,
     'funds_converted': 2,
 }
 
@@ -550,11 +552,15 @@ class WiseApiClient:
 
     def settle_sandbox_transfer(
         self, transfer_id: int, *, delay_seconds: float = 2.0, up_to: str = SANDBOX_SIMULATION_STEPS[-1],
+        max_steps: int | None = None,
     ) -> dict:
-        """Run the simulation steps a sandbox transfer still needs to reach ``up_to``."""
+        """Run the simulation steps a sandbox transfer still needs to reach ``up_to``, at most ``max_steps``."""
         transfer = self.get_transfer(transfer_id)
         done = SANDBOX_STEPS_DONE_BY_STATUS.get(transfer.get('status'))
         steps = SANDBOX_SIMULATION_STEPS[done:SANDBOX_SIMULATION_STEPS.index(up_to) + 1] if done is not None else ()
+        if max_steps is not None:
+            # The processing step leaves the status as it was, so it does not count.
+            steps = steps[:max_steps + (steps[:1] == ('processing',))]
         if not steps:
             return transfer
         try:

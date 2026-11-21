@@ -331,7 +331,7 @@ class SandboxSettlingTests(TestCase):
         for status, steps in (
             # Nobody has funded it yet, so simulating it would fake a payment.
             ('incoming_payment_waiting', ()),
-            ('processing', ('funds_converted', 'outgoing_payment_sent')),
+            ('processing', ('processing', 'funds_converted', 'outgoing_payment_sent')),
             ('funds_converted', ('outgoing_payment_sent',)),
             ('outgoing_payment_sent', ()),
             ('cancelled', ()),
@@ -458,3 +458,54 @@ class ProfileChoiceTests(TestCase):
         wise.get_profiles = mock.Mock(return_value=[{'id': 5, 'type': 'PERSONAL'}])
         with self.assertRaises(WiseApiError):
             wise.resolve_profile_id()
+
+
+class PaymentProgressTests(TestCase):
+
+    def test_each_wise_status_lands_on_its_step(self):
+        from types import SimpleNamespace
+        from payments.views import _progress
+        def reached(status):
+            record = SimpleNamespace(metadata={'transfer_status': status})
+            return sum(done for _, done in _progress(record, None))
+        self.assertEqual(sum(done for _, done in _progress(None, None)), 1)
+        self.assertEqual(sum(done for _, done in _progress(None, object())), 2)
+        self.assertEqual(reached('incoming_payment_waiting'), 2)
+        self.assertEqual(reached('processing'), 3)
+        self.assertEqual(reached('outgoing_payment_sent'), 4)
+
+
+class SandboxOneStepTests(TestCase):
+
+    def test_each_check_moves_a_sandbox_transfer_one_status_on(self):
+        from payments.gateways.wise_api import WiseApiClient
+        for status, steps in (
+            ('processing', ('processing', 'funds_converted')),
+            ('funds_converted', ('outgoing_payment_sent',)),
+            ('outgoing_payment_sent', ()),
+        ):
+            with self.subTest(status=status):
+                wise = mock.Mock(spec=WiseApiClient)
+                wise.get_transfer.return_value = {'status': status}
+                WiseApiClient.settle_sandbox_transfer(wise, 5, delay_seconds=0, max_steps=1)
+                ran = wise.advance_sandbox_transfer.call_args.kwargs['steps'] if wise.advance_sandbox_transfer.called else ()
+                self.assertEqual(tuple(ran), steps)
+
+
+class BackgroundPaymentTests(TestCase):
+
+    def test_the_queue_can_pay_without_a_reload(self):
+        from django.urls import reverse
+        from profile.groups import GROUP_FINANCE, GROUP_REQUESTER
+        from tsp.models import RequestState
+        from tsp.test_advances import make_request
+        from tsp.tests import make_user
+        travel_request = make_request(make_user('traveller', [GROUP_REQUESTER]), RequestState.SUBMITTED_FOR_PAYMENT,
+                                      actual='500')
+        self.client.force_login(make_user('counter', [GROUP_FINANCE]))
+        response = self.client.post(reverse('payments:process'),
+                                    {'object_id': travel_request.pk, 'gateway_id': 'manual'},
+                                    HTTP_ACCEPT='application/json')
+        data = response.json()
+        self.assertIn(travel_request.reference, data['message'])
+        self.assertTrue(data['final'])
