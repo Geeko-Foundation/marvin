@@ -60,6 +60,11 @@
           {% endif %}
         </form>
       </div>
+      <ul class="steps w-full text-xs mt-3" aria-label="Payment progress">
+        {% for label, reached in item.progress %}
+        <li class="step {% if reached %}step-primary{% endif %}">{{ label }}</li>
+        {% endfor %}
+      </ul>
       {% if item.details_template %}
       <details class="collapse collapse-arrow bg-base-200 mt-2">
         <summary class="collapse-title text-sm font-medium">Expenses and documents</summary>
@@ -116,6 +121,10 @@
         .then(function (data) {
           if (!data) return;
           status.textContent = data.message;
+          var steps = status.closest('.card-body').querySelectorAll('[aria-label="Payment progress"] .step');
+          (data.progress || []).forEach(function (reached, i) {
+            if (steps[i]) steps[i].classList.toggle('step-primary', reached);
+          });
           if (data.final) {
             clearInterval(timer);
             status.classList.remove('opacity-70');

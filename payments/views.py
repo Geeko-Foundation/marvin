@@ -46,6 +46,20 @@ def _require_payment_permission(view_func):
     return login_required(wrapper)
 
 
+PROGRESS_STEPS = ('Ready to pay', 'Sent to Wise', 'Approved in Wise', 'Money sent')
+# Where each Wise transfer status sits among the steps above.
+_STEP_FOR_TRANSFER = {'processing': 2, 'funds_converted': 2, 'outgoing_payment_sent': 3}
+
+
+def _progress(sending, in_batch):
+    """The payment's steps as (label, reached), for the progress bar on the queue."""
+    if sending:
+        reached = _STEP_FOR_TRANSFER.get(sending.metadata.get('transfer_status'), 1)
+    else:
+        reached = 1 if in_batch else 0
+    return [(label, i <= reached) for i, label in enumerate(PROGRESS_STEPS)]
+
+
 @_require_payment_permission
 def dashboard(request):
     """
@@ -73,6 +87,7 @@ def dashboard(request):
         under_way = service._payments_under_way(obj)
         ctx['in_batch'] = under_way.filter(status='exported').first()
         ctx['sending'] = under_way.exclude(status='exported').first()
+        ctx['progress'] = _progress(ctx['sending'], ctx['in_batch'])
         queue_items.append(ctx)
 
     batch_gateways = [gw for gw in get_all_gateways() if gw.supports_batch_export]
@@ -223,6 +238,7 @@ def payment_status(request, pk):
         'paid': paid,
         'final': paid or failed,
         'message': message,
+        'progress': [reached for _, reached in _progress(record, None)],
     })
 
 

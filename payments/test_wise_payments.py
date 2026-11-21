@@ -458,3 +458,18 @@ class ProfileChoiceTests(TestCase):
         wise.get_profiles = mock.Mock(return_value=[{'id': 5, 'type': 'PERSONAL'}])
         with self.assertRaises(WiseApiError):
             wise.resolve_profile_id()
+
+
+class PaymentProgressTests(TestCase):
+
+    def test_each_wise_status_lands_on_its_step(self):
+        from types import SimpleNamespace
+        from payments.views import _progress
+        def reached(status):
+            record = SimpleNamespace(metadata={'transfer_status': status})
+            return sum(done for _, done in _progress(record, None))
+        self.assertEqual(sum(done for _, done in _progress(None, None)), 1)
+        self.assertEqual(sum(done for _, done in _progress(None, object())), 2)
+        self.assertEqual(reached('incoming_payment_waiting'), 2)
+        self.assertEqual(reached('processing'), 3)
+        self.assertEqual(reached('outgoing_payment_sent'), 4)
