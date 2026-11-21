@@ -1,9 +1,26 @@
 """Template filters for TSP UI styling."""
 
+import re
+
 from django import template
+from django.urls import reverse
 from django.utils.dateformat import format as format_date
+from django.utils.html import escape
+from django.utils.safestring import mark_safe
 
 register = template.Library()
+
+# The audit log names a request as "request 12", payments as "wise-api TSP12".
+_REQUEST_MENTION = re.compile(r'\brequest (\d+)\b|\bTSP(\d+)\b')
+
+
+@register.filter
+def link_requests(text):
+    """Turn each request mentioned in ``text`` into a TSP link to its page."""
+    def link(match):
+        pk = match.group(1) or match.group(2)
+        return f'<a href="{reverse("request_detail", args=[pk])}" class="link link-primary">TSP{pk}</a>'
+    return mark_safe(_REQUEST_MENTION.sub(link, escape(text or '')))
 
 BADGE_MAP = {
     'draft': 'badge-ghost',

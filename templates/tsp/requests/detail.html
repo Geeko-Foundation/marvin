@@ -311,7 +311,7 @@
     </div>
     {% endif %}
 
-    <div class="card bg-base-100 shadow-sm">
+    <div class="card bg-base-100 shadow-sm" id="documents">
       <div class="card-body">
         <h2 class="card-title text-lg">Documents</h2>
         {% if missing_docs and travel_request.state == 'accepted' and has_actuals %}
@@ -351,18 +351,52 @@
         {% if travel_request.state == 'accepted' and travel_request.user_id == user.id and not has_actuals %}
         <p class="text-sm opacity-60">You can upload documents once your actual costs are in.</p>
         {% elif travel_request.state == 'accepted' and travel_request.user_id == user.id %}
-        <form method="post" action="{% url 'request_document_upload' travel_request.pk %}" enctype="multipart/form-data" class="flex flex-wrap gap-3 items-end">
+        <form method="post" action="{% url 'request_document_upload' travel_request.pk %}" enctype="multipart/form-data" id="upload-documents">
           {% csrf_token %}
-          <div class="form-control">
-            <label class="label py-0" for="{{ doc_form.kind.id_for_label }}"><span class="label-text text-xs">Type</span></label>
-            {{ doc_form.kind }}
+          <div class="flex flex-col gap-3" data-rows>
+            <div class="flex flex-wrap gap-3 items-end" data-row>
+              <div class="form-control w-40">
+                <label class="label py-0"><span class="label-text text-xs">Type</span></label>
+                {{ doc_form.kind }}
+              </div>
+              <div class="form-control flex-1 min-w-[200px]">
+                <label class="label py-0"><span class="label-text text-xs">File</span></label>
+                {{ doc_form.file }}
+              </div>
+              <button type="button" class="btn btn-sm btn-ghost btn-square hidden" aria-label="Remove this row" data-remove>✕</button>
+            </div>
           </div>
-          <div class="form-control flex-1 min-w-[200px]">
-            <label class="label py-0" for="{{ doc_form.file.id_for_label }}"><span class="label-text text-xs">File</span></label>
-            {{ doc_form.file }}
+          <div class="flex gap-2 mt-3">
+            <button type="button" class="btn btn-sm btn-ghost" data-add>+ Add another</button>
+            <button type="submit" class="btn btn-sm btn-primary">Upload</button>
           </div>
-          <button type="submit" class="btn btn-sm btn-primary">Upload</button>
         </form>
+        <script>
+          (function () {
+            const form = document.getElementById('upload-documents');
+            const rows = form.querySelector('[data-rows]');
+            const first = rows.querySelector('[data-row]');
+            let next = 1;
+            form.querySelector('[data-add]').addEventListener('click', () => {
+              const row = first.cloneNode(true);
+              const n = next++;
+              row.querySelector('select').name = 'kind_' + n;
+              row.querySelector('select').removeAttribute('id');
+              const file = row.querySelector('input[type=file]');
+              file.name = 'file_' + n;
+              file.removeAttribute('id');
+              file.value = '';
+              // Suggest the next type, so receipt, invoice and signed form take three clicks.
+              const select = row.querySelector('select');
+              const previous = rows.lastElementChild.querySelector('select').selectedIndex;
+              select.selectedIndex = Math.min(previous + 1, select.options.length - 1);
+              const remove = row.querySelector('[data-remove]');
+              remove.classList.remove('hidden');
+              remove.addEventListener('click', () => row.remove());
+              rows.appendChild(row);
+            });
+          })();
+        </script>
         {% endif %}
       </div>
     </div>
@@ -399,7 +433,9 @@
           <a href="{% url 'request_accept_page' travel_request.pk %}" class="btn btn-sm btn-warning">Accept Request</a>
           {% endif %}
 
+          {% if not travel_request.state == 'accepted' or travel_request.user_id != user.id %}
           <a href="{% url 'request_form' travel_request.pk %}" class="btn btn-sm btn-ghost" target="_blank">Print Form</a>
+          {% endif %}
           {% if travel_request.state == 'draft' or travel_request.state == 'submitted' or travel_request.state == 'approved' or travel_request.state == 'accepted' or travel_request.state == 'submitted_for_payment' %}
           {# A request under review has its own Reject, so the committee is not offered both. #}
           {% if travel_request.user_id == user.id or profile.is_tsp and travel_request.state != 'submitted' or profile.is_finance and travel_request.state == 'submitted_for_payment' %}

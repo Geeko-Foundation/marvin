@@ -266,3 +266,47 @@ class OrganiserMoreTests(TestCase):
             from tsp.services.state_machine import transition_request
             transition_request(draft, RequestState.SUBMITTED, self.owner)
         self.assertIn(self.organiser, [c.args[0] for c in push.call_args_list])
+
+
+class RequestLinkTests(TestCase):
+
+    def test_request_mentions_become_tsp_links(self):
+        from tsp.templatetags.tsp_tags import link_requests
+        html = link_requests('request 12 <b>')
+        self.assertIn(f'href="{reverse("request_detail", args=[12])}"', html)
+        self.assertIn('>TSP12</a>', html)
+        self.assertIn('&lt;b&gt;', html)
+        self.assertIn('>TSP7</a>', link_requests('wise-api TSP7'))
+
+
+class MultiUploadTests(TestCase):
+
+    def setUp(self):
+        self.owner = make_user('traveller', [GROUP_REQUESTER])
+        self.request = make_request(self.owner, RequestState.ACCEPTED, actual='480')
+        self.client.force_login(self.owner)
+
+    def pdf(self, name):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        return SimpleUploadedFile(name, b'%PDF-1.4 test', content_type='application/pdf')
+
+    def test_three_documents_go_up_together(self):
+        self.client.post(reverse('request_document_upload', args=[self.request.pk]), {
+            'kind': 'receipt', 'file': self.pdf('r.pdf'),
+            'kind_1': 'invoice', 'file_1': self.pdf('i.pdf'),
+            'kind_2': 'signed_form', 'file_2': self.pdf('s.pdf'),
+        })
+        self.assertEqual(self.request.missing_document_kinds(), [])
+
+    def test_one_document_still_works(self):
+        self.client.post(reverse('request_document_upload', args=[self.request.pk]),
+                         {'kind': 'receipt', 'file': self.pdf('r.pdf')})
+        self.assertEqual(self.request.documents.count(), 1)
+
+    def test_one_bad_file_uploads_nothing(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        self.client.post(reverse('request_document_upload', args=[self.request.pk]), {
+            'kind': 'receipt', 'file': self.pdf('r.pdf'),
+            'kind_1': 'invoice', 'file_1': SimpleUploadedFile('x.exe', b'MZ'),
+        })
+        self.assertEqual(self.request.documents.count(), 0)

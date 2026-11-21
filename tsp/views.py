@@ -1459,9 +1459,27 @@ def request_document_upload(request, pk, travel_request, profile):
             'request goes to finance. Take it back from finance to add more.',
         )
         return redirect('request_detail', pk=pk)
-    form = DocumentUploadForm(request.POST, request.FILES)
-    if form.is_valid() and request.FILES.get('file'):
-        uploaded = request.FILES['file']
+    # The first row is "kind"/"file"; each added row is "kind_N"/"file_N".
+    rows = [('kind', 'file')] + [
+        (f'kind_{key[5:]}', key) for key in request.FILES if key.startswith('file_')
+    ]
+    forms_to_save = []
+    for kind_key, file_key in rows:
+        if not request.FILES.get(file_key):
+            continue
+        form = DocumentUploadForm(
+            {'kind': request.POST.get(kind_key)}, {'file': request.FILES[file_key]},
+        )
+        if not form.is_valid():
+            errors = form.errors.get('file') or form.errors.get('kind') or ['Check the file.']
+            messages.error(request, f'{request.FILES[file_key].name}: {errors[0]} Nothing was uploaded.')
+            return redirect(reverse('request_detail', args=[pk]) + '#documents')
+        forms_to_save.append((form, request.FILES[file_key]))
+    if not forms_to_save:
+        messages.error(request, 'Choose a file to upload.')
+        return redirect(reverse('request_detail', args=[pk]) + '#documents')
+
+    for form, uploaded in forms_to_save:
         doc = form.save(commit=False)
         doc.request = travel_request
         doc.uploaded_by = request.user
@@ -1469,14 +1487,10 @@ def request_document_upload(request, pk, travel_request, profile):
         doc.mimetype = uploaded.content_type or 'application/octet-stream'
         doc.size = uploaded.size
         doc.save()
-        if travel_request.missing_document_kinds():
-            messages.success(request, 'Document uploaded.')
-        else:
-            messages.success(request, 'Document uploaded. You can now submit for payment.')
-    else:
-        file_errors = form.errors.get('file')
-        messages.error(request, file_errors[0] if file_errors else 'Please select a valid file.')
-    return redirect('request_detail', pk=pk)
+    count = len(forms_to_save)
+    done = '' if travel_request.missing_document_kinds() else ' You can now submit for payment.'
+    messages.success(request, f'{count} document{"s" if count != 1 else ""} uploaded.{done}')
+    return redirect(reverse('request_detail', args=[pk]) + '#documents')
 
 
 # Once a request is with finance its documents back a payment, so they stay.
