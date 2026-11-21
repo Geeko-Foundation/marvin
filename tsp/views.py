@@ -5,6 +5,8 @@ import re
 import time
 from decimal import Decimal, InvalidOperation
 
+import requests
+
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import login, logout
@@ -523,6 +525,29 @@ def _event_money():
     return rows
 
 
+def _wise_balance():
+    """
+    The Wise account's balances as (currency, amount), source currency first,
+    or None when Wise cannot be reached. Kept for a minute, so a busy
+    dashboard does not ask Wise on every load.
+    """
+    cached = cache.get('wise-balance')
+    if cached is not None:
+        return cached
+    from payments.gateways.wise_api import WiseApiError, get_wise_client
+    try:
+        balances = get_wise_client().list_balances()
+    except (WiseApiError, requests.RequestException):
+        return None
+    source = settings.WISE_SOURCE_CURRENCY
+    result = sorted(
+        ((b['amount']['currency'], Decimal(str(b['amount']['value']))) for b in balances if b['amount']['value']),
+        key=lambda row: (row[0] != source, row[0]),
+    )
+    cache.set('wise-balance', result, 60)
+    return result
+
+
 def _finance_sections(request):
     """Dashboard data for the finance team."""
     recently_paid = TravelRequest.objects.filter(
@@ -551,6 +576,8 @@ def _finance_sections(request):
         'recently_paid': _paginate(request, recently_paid, 10, 'paid_page'),
         'paid_total': paid_total,
         'event_summaries': _event_money(),
+        'wise_balance': _wise_balance(),
+        'wise_sandbox': settings.WISE_API_SANDBOX,
     }
 
 

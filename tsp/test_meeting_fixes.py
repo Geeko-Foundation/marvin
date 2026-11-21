@@ -335,3 +335,34 @@ class EventMoneyTests(TestCase):
         make_request(make_user('traveller', [GROUP_REQUESTER]), RequestState.SUBMITTED)
         self.client.force_login(make_user('counter', [GROUP_FINANCE]))
         self.assertContains(self.client.get(reverse('dashboard')), 'Money by event')
+
+
+class WiseBalanceTests(TestCase):
+
+    def setUp(self):
+        from django.core.cache import cache
+        cache.delete('wise-balance')
+
+    def test_finance_sees_the_wise_balance(self):
+        from unittest import mock
+        wise = mock.Mock()
+        wise.list_balances.return_value = [
+            {'amount': {'value': 0, 'currency': 'AUD'}},
+            {'amount': {'value': 1500.5, 'currency': 'USD'}},
+            {'amount': {'value': 926814.02, 'currency': 'EUR'}},
+        ]
+        self.client.force_login(make_user('counter', [GROUP_FINANCE]))
+        with mock.patch('payments.gateways.wise_api.get_wise_client', return_value=wise):
+            response = self.client.get(reverse('dashboard'))
+        self.assertEqual(response.context['wise_balance'],
+                         [('EUR', Decimal('926814.02')), ('USD', Decimal('1500.5'))])
+        self.assertContains(response, 'Wise balance')
+
+    def test_a_wise_outage_does_not_break_the_dashboard(self):
+        from unittest import mock
+        from payments.gateways.wise_api import WiseApiError
+        wise = mock.Mock()
+        wise.list_balances.side_effect = WiseApiError('down', 503)
+        self.client.force_login(make_user('counter', [GROUP_FINANCE]))
+        with mock.patch('payments.gateways.wise_api.get_wise_client', return_value=wise):
+            self.assertContains(self.client.get(reverse('dashboard')), 'Wise did not answer')

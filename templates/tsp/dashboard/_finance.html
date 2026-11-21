@@ -12,6 +12,11 @@
     <div class="stat-value text-success text-2xl">{% for currency, amount in paid_total %}<span class="whitespace-nowrap">{{ amount|floatformat:"0g" }} {{ currency }}</span>{% if not forloop.last %}<span class="opacity-40"> · </span>{% endif %}{% empty %}0{% endfor %}</div>
     <div class="stat-desc">Completed transfers</div>
   </a>
+  <a class="stat hover:bg-base-200" href="https://{% if wise_sandbox %}wise-sandbox.com{% else %}wise.com{% endif %}/" target="_blank" rel="noopener">
+    <div class="stat-title">Wise balance</div>
+    <div class="stat-value text-2xl">{% if wise_balance is None %}<span class="text-base opacity-60">Wise did not answer</span>{% else %}{% for currency, amount in wise_balance %}<span class="whitespace-nowrap">{{ amount|floatformat:"0g" }} {{ currency }}</span>{% if not forloop.last %}<span class="opacity-40"> · </span>{% endif %}{% empty %}0{% endfor %}{% endif %}</div>
+    <div class="stat-desc">{% if wise_sandbox %}Sandbox, not real money{% else %}Available to pay out{% endif %}</div>
+  </a>
 </div>
 
 <div class="flex gap-2 mb-6">
