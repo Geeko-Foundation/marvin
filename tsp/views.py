@@ -13,7 +13,7 @@ from django.contrib import messages
 from django.contrib.auth import login, logout
 from django.contrib.auth.models import User
 from django.contrib.contenttypes.models import ContentType
-from django.core.cache import cache
+from django.core.cache import caches
 from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
 from django.db import transaction
@@ -102,6 +102,26 @@ LOGIN_FAILURE_LIMIT = 10
 LOGIN_ACCOUNT_FAILURE_LIMIT = 100
 LOGIN_LOCK_SECONDS = 15 * 60
 
+RESEND_LIMIT = 3
+RESEND_WINDOW_SECONDS = 24 * 60 * 60
+
+# Each try creates a payee in Wise, so a few a day covers typing mistakes.
+BANK_SETUP_LIMIT = 5
+BANK_SETUP_WINDOW_SECONDS = 24 * 60 * 60
+BANK_SETUP_REFUSED = 'Too many attempts to set up bank details today. Try again tomorrow, or contact the TSP team.'
+
+
+# Counters live in a cache of their own, so filling the shared one cannot
+# reset them. shortcut: each server process keeps its own counts, so N
+# workers allow N times every limit; use a shared cache if that matters.
+limits = caches['limits']
+
+
+def _under_limit(key, limit, window_seconds):
+    """Count one more use of ``key`` and say whether it is still within ``limit``."""
+    limits.add(key, 0, window_seconds)
+    return limits.incr(key) <= limit
+
 
 def _client_address(request):
     """
@@ -123,24 +143,26 @@ def login_view(request):
 
     form = LoginForm(request, data=request.POST or None)
     if request.method == 'POST':
-        # shortcut: counts live in each process's memory, so N workers allow N
-        # times the limit; move CACHES to a shared backend if that matters.
-        account_key = 'login-failures:' + request.POST.get('username', '').strip().lower()
+        username = request.POST.get('username', '').strip().lower()
+        account_key = 'login-failures:' + username
         failures_key = f'{account_key}:{_client_address(request)}'
-        if (cache.get(failures_key, 0) >= LOGIN_FAILURE_LIMIT
-                or cache.get(account_key, 0) >= LOGIN_ACCOUNT_FAILURE_LIMIT):
+        if (limits.get(failures_key, 0) >= LOGIN_FAILURE_LIMIT
+                or limits.get(account_key, 0) >= LOGIN_ACCOUNT_FAILURE_LIMIT):
             form.add_error(None, 'Too many failed sign-in attempts for this account. Try again in 15 minutes.')
         elif form.is_valid():
-            cache.delete(failures_key)
+            limits.delete(failures_key)
             login(request, form.get_user())
             next_url = request.POST.get('next') or request.GET.get('next')
             if _is_safe_redirect(request, next_url):
                 return redirect(next_url)
             return redirect(settings.LOGIN_REDIRECT_URL)
-        else:
+        elif User.objects.filter(username__iexact=username).exists():
+            # Names with no account are not counted, so made-up ones cannot
+            # fill the counters and push a real account's count out.
             for key in (failures_key, account_key):
-                cache.add(key, 0, LOGIN_LOCK_SECONDS)
-                cache.incr(key)
+                limits.add(key, 0, LOGIN_LOCK_SECONDS)
+                limits.incr(key)
+
 
     return render(request, 'tsp/login.html', {
         'form': form,
@@ -197,19 +219,26 @@ def signup_account(request):
 
 
 def signup_activate(request, uidb64, token):
-    """Switch on the account an emailed link names, then sign its owner in."""
+    """
+    Switch on the account an emailed link names.
+
+    Opening the link proves the address, not the password, so the owner still
+    signs in. Someone who signed up with another person's address would
+    otherwise hand them a signed-in session on an account they still control.
+    Only accounts nobody has ever signed in to are switched on, so one an
+    admin turned off stays off.
+    """
     try:
         user = User.objects.get(pk=urlsafe_base64_decode(uidb64).decode())
     except (User.DoesNotExist, ValueError, TypeError, OverflowError):
         user = None
-    if user is None or not activation_token.check_token(user, token):
+    if user is None or user.last_login or not activation_token.check_token(user, token):
         messages.error(request, 'That link has expired or was already used. Sign in, or ask for a new link.')
         return redirect('login')
     user.is_active = True
     user.save(update_fields=['is_active'])
-    login(request, user, backend='django.contrib.auth.backends.ModelBackend')
-    messages.success(request, 'Email confirmed. Tell us a bit more about yourself.')
-    return redirect('signup_profile')
+    messages.success(request, 'Email confirmed. Sign in to carry on setting up your account.')
+    return redirect('login')
 
 
 @require_POST
@@ -221,9 +250,12 @@ def signup_resend(request):
     cannot be used to find out who has signed up.
     """
     email = request.POST.get('email', '').strip()
-    user = User.objects.filter(email__iexact=email, is_active=False).first()
-    if user:
+    user = User.objects.filter(email__iexact=email, is_active=False, last_login__isnull=True).first()
+    # A few a day is plenty for a lost email, and stops the page being used
+    # to flood someone's inbox.
+    if user and _under_limit(f'activation-resend:{user.pk}', RESEND_LIMIT, RESEND_WINDOW_SECONDS):
         send_activation_email(request, user)
+
     return render(request, 'tsp/signup/check_email.html', {'email': email, 'wizard_step': 1})
 
 
@@ -289,6 +321,9 @@ def signup_banking(request):
 
     if request.method == 'POST':
         form = WiseRecipientForm(request.POST, profile=profile)
+        if form.is_valid() and not _under_limit(f'bank-setup:{request.user.pk}', BANK_SETUP_LIMIT,
+                                                 BANK_SETUP_WINDOW_SECONDS):
+            form.add_error(None, BANK_SETUP_REFUSED)
         if form.is_valid():
             state = init_verification_state(banking=banking_session_payload(form.cleaned_data))
             state['started_at'] = time.time()
@@ -313,7 +348,10 @@ def signup_banking_options(request):
     method = request.GET.get('method', '')
     bank_code = request.GET.get('bank_code', '')
     if bank_code:
-        choices = branch_choices(method, bank_code)
+        # Only a bank from Wise's own list, so made-up codes cannot each cost a call to Wise.
+        known = {key for key, _ in bank_choices(method)}
+        choices = branch_choices(method, bank_code) if bank_code in known else []
+
     else:
         choices = bank_choices(method)
     return JsonResponse({'options': [{'value': key, 'label': name} for key, name in choices]})
@@ -825,6 +863,8 @@ def check_wise_account(request):
                 'errors': form.errors,
             }, status=422)
         banking = banking_session_payload(form.cleaned_data)
+        if not _under_limit(f'bank-setup:{request.user.pk}', BANK_SETUP_LIMIT, BANK_SETUP_WINDOW_SECONDS):
+            return JsonResponse({'ready': False, 'message': BANK_SETUP_REFUSED}, status=429)
 
     result = check_wise_recipient(profile, banking=banking, auto_recreate=auto_recreate)
 
@@ -848,8 +888,6 @@ def _tell_about_refund(request, owing):
     )
 
 
-@login_required
-@group_required(GROUP_REQUESTER, GROUP_TSP)
 def _payout(profile):
     """The requester's payout currency and today's average rates into it, for the form's estimate."""
     if not (profile.is_requester and profile.wise_account_id):
@@ -858,6 +896,8 @@ def _payout(profile):
     return {'currency': profile.banking_currency, 'rates': exchange_rates.averages_into(profile.banking_currency)}
 
 
+@login_required
+@group_required(GROUP_REQUESTER, GROUP_TSP)
 def request_create(request):
     """Create a new travel request as draft with expense line items."""
     profile = get_profile(request.user)
@@ -1531,6 +1571,10 @@ def request_settle(request, pk):
     """Finance closes a request the advance already covered, or records a refund."""
     travel_request = get_object_or_404(TravelRequest, pk=pk)
     action = request.POST.get('action')
+    if travel_request.user_id == request.user.id:
+        messages.error(request, 'You cannot settle your own request. Another finance member has to.')
+        return redirect('request_detail', pk=pk)
+
 
     if action == 'close' and travel_request.advance_covers_costs():
         transition_request(

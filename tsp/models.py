@@ -225,11 +225,15 @@ class Event(AuditModel):
 class TravelRequest(AuditModel):
     """A requestor's application for travel support to a specific event."""
 
+    # Protected, as are the history, comments and documents below: they are
+    # the record of money paid and decisions made, so a person who leaves is
+    # switched off rather than deleted.
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         related_name='travel_requests',
     )
+
     event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='requests')
     talk_url = models.URLField(blank=True, null=True)
     talk_title = models.CharField(max_length=300, blank=True, null=True)
@@ -626,7 +630,7 @@ class StateHistory(AuditModel):
     )
     from_state = models.CharField(max_length=30, blank=True, null=True)
     to_state = models.CharField(max_length=30)
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
     notes = models.TextField(blank=True, null=True)
 
     class Meta:
@@ -644,7 +648,7 @@ class Comment(AuditModel):
     """
 
     request = models.ForeignKey(TravelRequest, on_delete=models.CASCADE, related_name='comments')
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
     body = models.TextField()
     internal = models.BooleanField(
         default=False,
@@ -672,7 +676,7 @@ class Document(AuditModel):
     original_name = models.CharField(max_length=255)
     mimetype = models.CharField(max_length=100)
     size = models.PositiveIntegerField()
-    uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
 
     class Meta:
         ordering = ['-created_at']

@@ -8,6 +8,7 @@ from django.contrib.auth.forms import (
     SetPasswordForm,
 )
 from django.contrib.auth.models import User
+from django.contrib.auth.password_validation import validate_password
 from django.core.validators import MinValueValidator
 
 from marvin.validators import NAME, line, restrict, single_line, text
@@ -99,7 +100,17 @@ class SignupAccountForm(forms.Form):
         p2 = cleaned.get('password2')
         if p1 and p2 and p1 != p2:
             raise forms.ValidationError('Passwords do not match.')
+        if p1:
+            # The same rules a password reset applies, checked against the
+            # name and email typed in alongside it.
+            user = User(username=cleaned.get('username', ''), email=cleaned.get('email', ''),
+                        first_name=cleaned.get('first_name', ''), last_name=cleaned.get('last_name', ''))
+            try:
+                validate_password(p1, user)
+            except forms.ValidationError as error:
+                self.add_error('password1', error)
         return cleaned
+
 
     def save(self):
         """Create ``User``, ``UserProfile``, and assign the Requester group."""
