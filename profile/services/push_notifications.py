@@ -19,6 +19,7 @@ from django.contrib.auth.models import User
 from django.urls import reverse
 
 from profile.groups import GROUP_FINANCE, GROUP_TSP
+from profile.models import muted
 from tsp.models import RequestState, TravelRequest
 
 logger = logging.getLogger('marvin.webpush')
@@ -39,13 +40,14 @@ def send_push_to_user(
     body: str,
     url: str | None = None,
     ttl: int = 86400,
+    kind: str | None = None,
 ) -> None:
     """
     Send one web push to ``user`` when notifications are enabled and subscribed.
 
     No-op for inactive users, disabled preferences, or missing subscriptions.
     """
-    if not user or not user.is_active:
+    if not user or not user.is_active or muted(user, kind):
         return
     # Subscribing a browser is how someone turns alerts on.
     if not user.webpush_info.exists():
@@ -70,6 +72,7 @@ def send_push_to_group(
     url: str | None = None,
     exclude_user: User | None = None,
     ttl: int = 86400,
+    kind: str | None = None,
 ) -> None:
     """Send the same push payload to every member of a Django auth group."""
     from django.contrib.auth.models import Group
@@ -84,7 +87,7 @@ def send_push_to_group(
         users = users.exclude(pk=exclude_user.pk)
 
     for user in users:
-        send_push_to_user(user, head=head, body=body, url=url, ttl=ttl)
+        send_push_to_user(user, head=head, body=body, url=url, ttl=ttl, kind=kind)
 
 
 def _request_label(travel_request: TravelRequest) -> str:
@@ -121,19 +124,19 @@ def notify_request_state_change(
     if to_state == RequestState.SUBMITTED:
         send_push_to_group(
             GROUP_TSP,
-            head='New travel request',
+            kind=to_state, head='New travel request',
             body=f'{label} was submitted for review.',
             url=url,
             exclude_user=actor,
         )
         for organiser in travel_request.event.organizers.exclude(pk=getattr(actor, 'pk', None)):
             if travel_request.event.is_organised_by(organiser):
-                send_push_to_user(organiser, head='New travel request',
+                send_push_to_user(organiser, kind=to_state, head='New travel request',
                                   body=f'{label} was submitted for review.', url=url)
     elif to_state == RequestState.APPROVED:
         send_push_to_user(
             requester,
-            head='Request approved',
+            kind=to_state, head='Request approved',
             body=f'{label} was approved by the committee.',
             url=url,
         )
@@ -141,7 +144,7 @@ def notify_request_state_change(
         detail = f' Notes: {notes}' if notes else ''
         send_push_to_user(
             requester,
-            head='Request rejected',
+            kind=to_state, head='Request rejected',
             body=f'{label} was rejected.{detail}',
             url=url,
         )
@@ -150,7 +153,7 @@ def notify_request_state_change(
         # just did. The committee is who needs to know the trip is confirmed.
         send_push_to_group(
             GROUP_TSP,
-            head='Request accepted',
+            kind=to_state, head='Request accepted',
             body=f'{label} was accepted by the requester.',
             url=url,
             exclude_user=actor,
@@ -158,7 +161,7 @@ def notify_request_state_change(
     elif to_state == RequestState.SUBMITTED_FOR_PAYMENT:
         send_push_to_group(
             GROUP_FINANCE,
-            head='Ready for payment',
+            kind=to_state, head='Ready for payment',
             body=f'{label} was submitted for reimbursement.',
             url=url,
             exclude_user=actor,
@@ -166,7 +169,7 @@ def notify_request_state_change(
     elif to_state == RequestState.PAID:
         send_push_to_user(
             requester,
-            head='Payment processed',
+            kind=to_state, head='Payment processed',
             body=f'Reimbursement for {label} has been processed.',
             url=url,
         )
@@ -174,7 +177,7 @@ def notify_request_state_change(
         if actor.pk == requester.pk:
             send_push_to_group(
                 GROUP_TSP,
-                head='Request cancelled',
+                kind=to_state, head='Request cancelled',
                 body=f'{label} was cancelled by the requester.',
                 url=url,
                 exclude_user=actor,
@@ -182,7 +185,7 @@ def notify_request_state_change(
         else:
             send_push_to_user(
                 requester,
-                head='Request cancelled',
+                kind=to_state, head='Request cancelled',
                 body=f'{label} was cancelled by the committee.',
                 url=url,
             )
@@ -194,19 +197,20 @@ def notify_request_comment(travel_request: TravelRequest, actor: User, internal:
     url = _request_url(travel_request)
 
     if internal:
-        # Tell the committee only. The requester must not learn an internal note
-        # exists, and that holds even when the requester sits on the committee.
-        from django.contrib.auth.models import Group
+        # Tell everyone who can read internal notes: the committee, finance and
+        # the event's organisers. Never the requester, even one on the committee.
+        from django.contrib.auth.models import User as UserModel
 
-        try:
-            committee = Group.objects.get(name=GROUP_TSP).user_set.exclude(
-                pk__in=[actor.pk, travel_request.user_id],
-            )
-        except Group.DoesNotExist:
-            return
-        for user in committee:
+        readers = UserModel.objects.filter(groups__name__in=[GROUP_TSP, GROUP_FINANCE])
+        organisers = [u.pk for u in travel_request.event.organizers.all()
+                      if travel_request.event.is_organised_by(u)]
+        readers = (readers | UserModel.objects.filter(pk__in=organisers)).exclude(
+            pk__in=[actor.pk, travel_request.user_id],
+        ).distinct()
+        for user in readers:
             send_push_to_user(
                 user,
+                kind='internal_note',
                 head='New internal note',
                 body=f'{actor.get_full_name() or actor.username} added an internal note on {label}.',
                 url=url,
@@ -216,7 +220,7 @@ def notify_request_comment(travel_request: TravelRequest, actor: User, internal:
     if actor.pk == travel_request.user_id:
         send_push_to_group(
             GROUP_TSP,
-            head='New comment',
+            kind='comment', head='New comment',
             body=f'{actor.get_full_name() or actor.username} commented on {label}.',
             url=url,
             exclude_user=actor,
@@ -224,7 +228,7 @@ def notify_request_comment(travel_request: TravelRequest, actor: User, internal:
     else:
         send_push_to_user(
             travel_request.user,
-            head='New comment',
+            kind='comment', head='New comment',
             body=f'{actor.get_full_name() or actor.username} commented on {label}.',
             url=url,
         )

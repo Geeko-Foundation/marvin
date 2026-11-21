@@ -270,6 +270,8 @@ BRAND_ORG_NAME = env('BRAND_ORG_NAME', 'Geeko Foundation')
 BRAND_TAGLINE = env('BRAND_TAGLINE', 'Travel Support Program')
 # Marvin's own joke. A fork sets this empty to drop the line.
 BRAND_STRAPLINE = env('BRAND_STRAPLINE', 'Your Travel Assistant')
+# The travel support policy people agree to. Linked from the menu once set.
+BRAND_POLICY_URL = env('BRAND_POLICY_URL', 'https://geekos.org/travel-policy/')
 
 # Theme names built into static/css/styles.css (see css_build/app.css).
 BRAND_THEME_LIGHT = env('BRAND_THEME_LIGHT', 'i-layer-light')

@@ -133,6 +133,25 @@
   </div>
 </div>
 
+<div id="notifications" class="card bg-base-100 shadow-sm mt-6 max-w-2xl">
+  <div class="card-body">
+    <h2 class="card-title text-lg">Notify me when</h2>
+    <p class="text-sm opacity-70">For browser alerts and emails. Payment problems are always sent.</p>
+    <form method="post" action="{% url 'notification_settings' %}">
+      {% csrf_token %}
+      <div class="grid gap-1 sm:grid-cols-2 my-2">
+        {% for kind, label, on in notification_kinds %}
+        <label class="flex items-center gap-3 py-1 cursor-pointer">
+          <input type="checkbox" class="checkbox checkbox-sm" name="notify" value="{{ kind }}" {% if on %}checked{% endif %}>
+          <span class="label-text">{{ label }}</span>
+        </label>
+        {% endfor %}
+      </div>
+      <button type="submit" class="btn btn-primary btn-sm">Save</button>
+    </form>
+  </div>
+</div>
+
 <div id="security" class="card bg-base-100 shadow-sm mt-6 max-w-2xl">
   <div class="card-body">
     <h2 class="card-title text-lg">Sign-in and Security</h2>

@@ -456,3 +456,58 @@ class ProposedQueueTests(TestCase):
             'end_date': event.end_date, 'approval_percent': '100',
         })
         self.assertNotIn(event, self.client.get(reverse('dashboard')).context['proposed_events'])
+
+
+class NotificationSettingsTests(TestCase):
+
+    def setUp(self):
+        self.owner = make_user('traveller', [GROUP_REQUESTER])
+        self.client.force_login(self.owner)
+
+    def test_switching_a_kind_off_stops_its_email(self):
+        from django.core import mail
+        from tsp.services.state_machine import transition_request
+        self.client.post(reverse('notification_settings'), {'notify': ['rejected', 'paid']})
+        self.owner.profile.refresh_from_db()
+        self.assertIn('approved', self.owner.profile.muted_notifications)
+        travel_request = make_request(self.owner, RequestState.SUBMITTED)
+        mail.outbox.clear()
+        transition_request(travel_request, RequestState.APPROVED, make_user('chair', [GROUP_TSP]))
+        self.assertFalse([m for m in mail.outbox if self.owner.email in m.to])
+
+    def test_kinds_left_on_still_arrive(self):
+        from django.core import mail
+        from tsp.services.state_machine import transition_request
+        travel_request = make_request(self.owner, RequestState.SUBMITTED)
+        mail.outbox.clear()
+        transition_request(travel_request, RequestState.APPROVED, make_user('chair', [GROUP_TSP]))
+        self.assertTrue([m for m in mail.outbox if self.owner.email in m.to])
+
+    def test_finance_and_organisers_hear_about_internal_notes(self):
+        from unittest import mock
+        from profile.services.push_notifications import notify_request_comment
+        travel_request = make_request(self.owner, RequestState.SUBMITTED)
+        organiser = make_user('organiser', [GROUP_REQUESTER])
+        travel_request.event.organizers.add(organiser)
+        finance = make_user('counter', [GROUP_FINANCE])
+        chair = make_user('chair', [GROUP_TSP])
+        with mock.patch('profile.services.push_notifications.send_push_to_user') as push:
+            notify_request_comment(travel_request, chair, internal=True)
+        told = {c.args[0] for c in push.call_args_list}
+        self.assertEqual(told, {organiser, finance})
+
+
+class NotificationChoicesTests(TestCase):
+
+    def kinds_for(self, user):
+        self.client.force_login(user)
+        return [kind for kind, _, _ in self.client.get(reverse('profile')).context['notification_kinds']]
+
+    def test_a_requester_is_not_offered_internal_notes(self):
+        kinds = self.kinds_for(make_user('traveller', [GROUP_REQUESTER]))
+        self.assertNotIn('internal_note', kinds)
+        self.assertIn('approved', kinds)
+
+    def test_finance_is_offered_what_finance_receives(self):
+        kinds = self.kinds_for(make_user('counter', [GROUP_FINANCE]))
+        self.assertEqual(set(kinds), {'submitted_for_payment', 'internal_note'})

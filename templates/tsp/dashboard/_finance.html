@@ -1,6 +1,7 @@
 {% load tsp_tags %}
 <h2 class="text-2xl font-bold mb-6">Finance</h2>
 
+<div id="finance-stats" data-live>
 <div class="stats stats-vertical lg:stats-horizontal shadow w-full mb-6 bg-base-100">
   <a class="stat hover:bg-base-200" href="{% url 'reports' %}?status=submitted_for_payment">
     <div class="stat-title">Awaiting Payment</div>
@@ -19,6 +20,8 @@
     <div class="stat-desc">{% if wise_sandbox %}Sandbox, not real money{% else %}Available to pay out{% endif %}</div>
   </a>
   {% endif %}
+</div>
+
 </div>
 
 <div class="flex gap-2 mb-6">
@@ -91,7 +94,7 @@
 </div>
 {% endif %}
 
-<div class="card bg-base-100 shadow-sm mb-6">
+<div class="card bg-base-100 shadow-sm mb-6" id="finance-queue" data-live>
   <div class="card-body">
     <h2 class="card-title">Payment Queue</h2>
     {% if payment_queue %}
