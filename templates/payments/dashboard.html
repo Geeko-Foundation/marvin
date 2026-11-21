@@ -38,15 +38,13 @@
           <span class="badge badge-error badge-sm">Wise not set up</span>
           {% endif %}
         </div>
-        <form method="post" action="{% url 'payments:process' %}" class="flex flex-wrap gap-2 items-end" data-process-payment>
+        {% if not item.sending %}
+        <form method="post" action="{% url 'payments:process' %}" class="flex flex-wrap gap-2 items-end"
+              hx-post="{% url 'payments:process' %}" hx-target="#pay-{{ item.object_id }}" hx-swap="outerHTML"
+              hx-on::after-request="if (event.detail.successful) this.remove()">
           {% csrf_token %}
           <input type="hidden" name="object_id" value="{{ item.object_id }}">
-          {% if item.sending %}
-          <span class="text-sm opacity-70 max-w-md" aria-live="polite"
-                data-payment-status="{% url 'payments:status' item.sending.pk %}">Sent {{ item.sending.created_at|date:"j M, H:i" }}. Waiting for Wise to confirm ({{ item.sending.get_status_display }}).
-            {% if item.sending.metadata.error %}<span class="block text-warning">Wise is holding it: {{ item.sending.metadata.error }}</span>
-            {% elif item.sending.metadata.awaiting_approval and item.sending.status == 'processing' %}<span class="block">{% if item.sending.metadata.batch_name %}In the Wise batch "{{ item.sending.metadata.batch_name }}". {% endif %}Approval sent to Wise. <a href="{{ wise_url }}" class="link" target="_blank" rel="noopener">Approve it in Wise</a> and it shows as paid here.</span>{% endif %}</span>
-          {% elif item.in_batch %}
+          {% if item.in_batch %}
           <span class="text-sm opacity-70">In the batch file exported {{ item.in_batch.created_at|date:"j M Y" }}</span>
           <input type="hidden" name="gateway_id" value="{{ item.in_batch.gateway_id }}">
           <button type="submit" class="btn btn-primary btn-sm">Mark Batch Paid</button>
@@ -59,12 +57,13 @@
           <button type="submit" class="btn btn-primary btn-sm" {% if not item.wise_ready %}disabled title="The requester must finish setting up Wise first"{% endif %}>Process Payment</button>
           {% endif %}
         </form>
+        {% endif %}
       </div>
-      <ul class="steps w-full text-xs mt-3" aria-label="Payment progress">
-        {% for label, reached in item.progress %}
-        <li class="step {% if reached %}step-primary{% endif %}">{{ label }}</li>
-        {% endfor %}
-      </ul>
+      {% if item.sending %}
+      {% include 'payments/_status.html' with pay_id=item.object_id progress=item.progress status_url=item.status_url message=item.status_message awaiting_approval=item.awaiting_approval final=False %}
+      {% else %}
+      {% include 'payments/_status.html' with pay_id=item.object_id progress=item.progress status_url='' message='' %}
+      {% endif %}
       {% if item.details_template %}
       <details class="collapse collapse-arrow bg-base-200 mt-2">
         <summary class="collapse-title text-sm font-medium">Expenses and documents</summary>
@@ -108,61 +107,3 @@
 {% endif %}
 {% endblock %}
 
-{% block extra_js %}
-<script>
-  // Wise reports progress in the background, so keep each waiting payment's
-  // status and progress bar current without a reload, and stop once it has an answer.
-  function showProgress(card, progress) {
-    var steps = card.querySelectorAll('[aria-label="Payment progress"] .step');
-    (progress || []).forEach(function (reached, i) {
-      if (steps[i]) steps[i].classList.toggle('step-primary', reached);
-    });
-  }
-  function watch(status) {
-    var card = status.closest('.card-body');
-    var timer = setInterval(check, 4000);
-    function check() {
-      if (document.hidden) return;
-      fetch(status.dataset.paymentStatus, {headers: {'Accept': 'application/json'}})
-        .then(function (response) { return response.ok ? response.json() : null; })
-        .then(function (data) {
-          if (!data) return;
-          status.textContent = data.message;
-          showProgress(card, data.progress);
-          if (data.final) {
-            clearInterval(timer);
-            status.classList.remove('opacity-70');
-            status.classList.add(data.paid ? 'text-success' : 'text-error');
-          }
-        })
-        .catch(function () {});
-    }
-  }
-  document.querySelectorAll('[data-payment-status]').forEach(watch);
-
-  // Pay one request in the background, then follow it on its progress bar.
-  document.querySelectorAll('form[data-process-payment]').forEach(function (form) {
-    form.addEventListener('submit', function (event) {
-      event.preventDefault();
-      var button = form.querySelector('button[type=submit]');
-      button.disabled = true;
-      button.textContent = 'Sending to Wise…';
-      fetch(form.action, {method: 'POST', body: new FormData(form), headers: {'Accept': 'application/json'}})
-        .then(function (response) { return response.json(); })
-        .then(function (data) {
-          var status = document.createElement('span');
-          status.className = 'text-sm max-w-md ' + (data.level === 'error' ? 'text-error' : 'opacity-70');
-          status.setAttribute('aria-live', 'polite');
-          status.textContent = data.message;
-          form.replaceWith(status);
-          showProgress(status.closest('.card-body'), data.progress);
-          if (data.status_url && !data.final) {
-            status.dataset.paymentStatus = data.status_url;
-            watch(status);
-          }
-        })
-        .catch(function () { form.submit(); });
-    });
-  });
-</script>
-{% endblock %}

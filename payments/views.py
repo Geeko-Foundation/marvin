@@ -7,6 +7,7 @@ from django.core.exceptions import PermissionDenied
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils.html import escape
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods, require_POST
 
@@ -89,6 +90,11 @@ def dashboard(request):
         ctx['in_batch'] = under_way.filter(status='exported').first()
         ctx['sending'] = under_way.exclude(status='exported').first()
         ctx['progress'] = _progress(ctx['sending'], ctx['in_batch'])
+        if ctx['sending']:
+            status = _status_context(ctx['sending'])
+            ctx['status_url'] = status['status_url']
+            ctx['status_message'] = status['message']
+            ctx['awaiting_approval'] = status['awaiting_approval']
         queue_items.append(ctx)
 
     batch_gateways = [gw for gw in get_all_gateways() if gw.supports_batch_export]
@@ -155,16 +161,11 @@ def process_payment(request):
     except Exception as exc:
         level, text = messages.ERROR, str(exc)
 
-    # The queue page sends this in the background, so it can show progress
-    # without a reload.
-    if request.headers.get('Accept') == 'application/json':
-        return JsonResponse({
-            'level': messages.DEFAULT_TAGS[level],
-            'message': text,
-            'status_url': reverse('payments:status', args=[record.pk]) if record else None,
-            'progress': [reached for _, reached in _progress(record, None)] if record else None,
-            'final': record is None or record.status in ('success', 'completed', 'failed', 'cancelled'),
-        })
+    # The queue page sends this through htmx and swaps in the payment's status.
+    if request.headers.get('HX-Request'):
+        if record is None:
+            return HttpResponse(f'<p class="text-sm text-error mt-3">{escape(text)}</p>')
+        return render(request, 'payments/_status.html', _status_context(record, message=text))
     messages.add_message(request, level, text)
     return redirect('payments:dashboard')
 
@@ -226,31 +227,53 @@ def payment_status(request, pk):
 
     Used by the dashboard to poll async gateway transfers (e.g. Wise API).
     """
-    record = get_object_or_404(PaymentRecord, pk=pk)
-    service = PaymentService()
-    record = service.refresh_status(record)
+    record = PaymentService().refresh_status(get_object_or_404(PaymentRecord, pk=pk))
+    status = _status_context(record)
+    if request.headers.get('HX-Request'):
+        return render(request, 'payments/_status.html', status)
+    return JsonResponse({
+        'id': record.pk,
+        'external_id': record.external_id,
+        'status': record.status,
+        'paid': status['paid'],
+        'final': status['final'],
+        'message': status['message'],
+        'progress': [reached for _, reached in status['progress']],
+    })
+
+
+def _status_context(record, message=None):
+    """What the payment status fragment shows for ``record``."""
     paid = record.status in ('success', 'completed')
     failed = record.status in ('failed', 'cancelled')
-    if paid:
+    awaiting = record.status == 'processing' and (
+        record.metadata.get('awaiting_approval')
+        or record.metadata.get('transfer_status') == 'incoming_payment_waiting'
+    )
+    if message:
+        pass
+    elif paid:
         message = f'Paid. Wise confirmed the transfer for {record.reference}.'
     elif failed:
         reason = record.metadata.get('error') or record.metadata.get('transfer_status') or record.status
         message = f'Not paid: {reason}. Reload the page to pay it again.'
     elif record.metadata.get('error'):
         message = f'Waiting for Wise. Wise is holding it: {record.metadata["error"]}'
-    elif record.metadata.get('transfer_status') == 'incoming_payment_waiting':
-        message = 'Approval sent to Wise. Approve it in Wise and it shows as paid here.'
+    elif awaiting:
+        batch = record.metadata.get('batch_name')
+        message = (f'In the Wise batch "{batch}". ' if batch else '') + 'Approval sent to Wise.'
     else:
         message = f'Waiting for Wise to confirm ({record.get_status_display()}).'
-    return JsonResponse({
-        'id': record.pk,
-        'external_id': record.external_id,
-        'status': record.status,
+    return {
+        'pay_id': record.object_id,
+        'status_url': reverse('payments:status', args=[record.pk]),
+        'message': message,
         'paid': paid,
         'final': paid or failed,
-        'message': message,
-        'progress': [reached for _, reached in _progress(record, None)],
-    })
+        'awaiting_approval': awaiting,
+        'wise_url': 'https://wise-sandbox.com/' if settings.WISE_API_SANDBOX else 'https://wise.com/',
+        'progress': _progress(record, None),
+    }
 
 
 @_require_payment_permission

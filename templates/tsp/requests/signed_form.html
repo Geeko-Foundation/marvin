@@ -1,12 +1,27 @@
-{% extends "base.html" %}
-{% load tsp_tags %}
-
-{% block title %}Reimbursement Agreement{% endblock %}
-
-{% block content %}
-<div class="max-w-3xl mx-auto bg-base-100 p-8 rounded-box shadow-sm print-only:block">
-  <div class="text-center mb-8 border-b pb-6">
-    <h1 class="text-2xl font-bold">{{ app_tagline }}</h1>
+{% load static tsp_tags %}
+<!DOCTYPE html>
+{# A page of its own, on paper-css: an A4 sheet on screen that prints exactly as shown, always in light colours. #}
+<html lang="en" data-theme="{{ theme_light }}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reimbursement Agreement · {{ travel_request.reference }}</title>
+  {% include "partials/head_assets.html" %}
+  <link rel="stylesheet" href="{% static 'css/paper.min.css' %}">
+  <style>@page { size: A4 }</style>
+</head>
+<body class="A4">
+  <div class="text-center py-4 no-print">
+    <button onclick="window.print()" class="btn btn-primary btn-sm">Print or save as PDF</button>
+    <a href="{% url 'request_detail' travel_request.pk %}" class="btn btn-ghost btn-sm ml-2">Back</a>
+  </div>
+  <section class="sheet padding-20mm bg-white text-black">
+  {# Letterhead. shortcut: the name only, add the logo here once the foundation's file is in static/. #}
+  <div class="border-b border-black pb-2 mb-8">
+    <p class="text-4xl font-light tracking-wide">{{ org_name }}</p>
+  </div>
+  <div class="text-center mb-8">
+    <h1 class="text-xl font-bold">{{ app_tagline }}</h1>
     <h2 class="text-lg opacity-70">Reimbursement Agreement</h2>
   </div>
 
@@ -72,10 +87,6 @@
       <p class="text-sm">Date</p>
     </div>
   </div>
-</div>
-
-<div class="text-center mt-6 no-print">
-  <button onclick="window.print()" class="btn btn-primary">Print or save as PDF</button>
-  <a href="{% url 'request_detail' travel_request.pk %}" class="btn btn-ghost ml-2">Back</a>
-</div>
-{% endblock %}
+</section>
+</body>
+</html>
