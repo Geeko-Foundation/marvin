@@ -202,6 +202,8 @@ EXCHANGE_RATE_API_KEY = env('EXCHANGE_RATE_API_KEY')
 EXCHANGE_RATE_API_URL = env('EXCHANGE_RATE_API_URL', 'https://v6.exchangerate-api.com/v6')
 EXCHANGE_RATES_URL = env('EXCHANGE_RATES_URL', 'https://api.frankfurter.dev/v1')
 EXCHANGE_RATES_FETCH = env_bool('EXCHANGE_RATES_FETCH', default=False)
+# Show the Wise balance on the finance dashboard. Off here so tests never call Wise.
+WISE_BALANCE_FETCH = env_bool('WISE_BALANCE_FETCH', default=False)
 
 
 # --- Logging ---

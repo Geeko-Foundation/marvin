@@ -533,6 +533,8 @@ def _wise_balance():
     or None when Wise cannot be reached. Kept for a minute, so a busy
     dashboard does not ask Wise on every load.
     """
+    if not settings.WISE_BALANCE_FETCH:
+        return None
     cached = cache.get('wise-balance')
     if cached is not None:
         return cached
@@ -613,6 +615,7 @@ def _finance_sections(request):
             budget__isnull=True, end_date__gte=timezone.now().date(),
         ).order_by('start_date'),
         'wise_sandbox': settings.WISE_API_SANDBOX,
+        'wise_balance_on': settings.WISE_BALANCE_FETCH,
     }
 
 
@@ -1128,7 +1131,8 @@ def request_approve(request, pk):
     # refused approval leaves no amounts behind to skew the event budget.
     with transaction.atomic():
         error = _apply_approved_amounts(travel_request, request.POST)
-        if not error:
+        # An advance is a decision to pay money early, so it stays with the committee.
+        if not error and profile.is_tsp:
             error = _set_advance(travel_request, request.POST)
         if not error:
             notes, error = _check_budget(travel_request, request.POST, notes, profile.is_tsp)
@@ -1232,10 +1236,12 @@ def request_batch_review(request):
     selected = TravelRequest.objects.filter(
         pk__in=ids, state=RequestState.SUBMITTED,
     ).select_related('event').prefetch_related('expenses')
+    not_yours = 0
     if not profile.is_tsp:
         organised = Event.organised_by(request.user)
         if not organised.exists():
             raise PermissionDenied
+        not_yours = selected.exclude(event__in=organised).count()
         selected = selected.filter(event__in=organised)
 
     reviewed, own, over_budget = 0, 0, []
@@ -1288,7 +1294,9 @@ def request_batch_review(request):
             f'Not approved, as they would go over the event budget: {", ".join(over_budget)}. '
             'Review them one at a time to approve over budget.',
         )
-    ignored = len(ids) - reviewed - own - len(over_budget)
+    if not_yours:
+        messages.warning(request, f'Left {not_yours} request{"s" if not_yours != 1 else ""} for events you do not organise.')
+    ignored = len(ids) - reviewed - own - len(over_budget) - not_yours
     if ignored:
         messages.warning(
             request,

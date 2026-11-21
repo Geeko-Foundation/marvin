@@ -3,7 +3,7 @@
 from decimal import Decimal
 
 from django.contrib.contenttypes.models import ContentType
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from payments.models import PaymentRecord
@@ -337,6 +337,7 @@ class EventMoneyTests(TestCase):
         self.assertContains(self.client.get(reverse('dashboard')), 'Money by event')
 
 
+@override_settings(WISE_BALANCE_FETCH=True)
 class WiseBalanceTests(TestCase):
 
     def setUp(self):
@@ -415,3 +416,22 @@ class ShortfallTests(TestCase):
         from tsp.views import _event_money, _shortfalls
         make_request(make_user('traveller', [GROUP_REQUESTER]), RequestState.SUBMITTED, amount='900')
         self.assertEqual(_shortfalls(_event_money(), [('EUR', Decimal('100'))])[0][3], Decimal('800'))
+
+
+class OrganiserAdvanceTests(TestCase):
+
+    def test_an_organiser_cannot_grant_an_advance(self):
+        owner = make_user('traveller', [GROUP_REQUESTER])
+        organiser = make_user('organiser', [GROUP_REQUESTER])
+        travel_request = make_request(owner, RequestState.SUBMITTED)
+        travel_request.event.organizers.add(organiser)
+        self.client.force_login(organiser)
+        expense = travel_request.expenses.get()
+        self.client.post(reverse('request_approve', args=[travel_request.pk]), {
+            'expense_id': expense.pk, f'approved_amount_{expense.pk}': '500',
+            f'approved_currency_{expense.pk}': 'EUR', 'approval_percent': '100',
+            'advance_amount': '400', 'advance_currency': 'EUR',
+        })
+        travel_request.refresh_from_db()
+        self.assertEqual(travel_request.state, RequestState.APPROVED)
+        self.assertIsNone(travel_request.advance_amount)

@@ -217,6 +217,7 @@
             Amounts in another currency are filled in at the 90-day average rate. That rate is saved with
             the approval, so the requester sees what it is worth in their own currency.
           </p>
+          {% if profile.is_tsp %}
           <div class="flex flex-wrap gap-3 items-end mb-3 p-3 bg-base-200 rounded-box">
             <span class="text-sm flex-1">
               Advance before the event (optional)
@@ -228,6 +229,7 @@
               {% for code in payout_currencies %}<option value="{{ code }}">{{ code }}</option>{% endfor %}
             </select>
           </div>
+          {% endif %}
           <script>
             var percent = document.querySelector('[data-percent]');
             var lines = document.querySelectorAll('[data-approval-line]');
