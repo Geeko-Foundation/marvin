@@ -8,6 +8,7 @@ from django.contrib.auth.models import User
 from django.core.mail import send_mail
 
 from django.shortcuts import redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
@@ -19,6 +20,7 @@ from django_otp.plugins.otp_totp.models import TOTPDevice
 from profile.audit_log import record as audit
 from profile.decorators import get_profile
 from profile.forms import ProfileForm, StaffBankingForm
+from profile.models import NOTIFICATION_KINDS
 from profile.two_factor import has_authenticator, two_factor_required
 from tsp.accounts import read_email_change_link, send_email_change_link
 from tsp.decorators import login_required
@@ -67,7 +69,22 @@ def profile_view(request):
         'profile': profile,
         'two_factor_on': has_authenticator(request.user),
         'two_factor_required': two_factor_required(request.user),
+        'notification_kinds': [
+            (kind, label, kind not in profile.muted_notifications) for kind, label in NOTIFICATION_KINDS
+        ],
     })
+
+
+@login_required
+@require_POST
+def notification_settings(request):
+    """Save which kinds of alert and email the signed-in user wants."""
+    profile = get_profile(request.user)
+    wanted = set(request.POST.getlist('notify'))
+    profile.muted_notifications = [kind for kind, _ in NOTIFICATION_KINDS if kind not in wanted]
+    profile.save(update_fields=['muted_notifications'])
+    messages.success(request, 'Notification settings saved.')
+    return redirect(reverse('profile') + '#notifications')
 
 
 def ask_to_confirm_email(request, form):

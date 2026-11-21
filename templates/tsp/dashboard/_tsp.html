@@ -1,6 +1,7 @@
 {% load tsp_tags %}
 <h2 class="text-2xl font-bold mb-6">Committee</h2>
 
+<div id="committee-live" data-live>
 <div class="stats stats-vertical lg:stats-horizontal shadow w-full mb-6 bg-base-100">
   <a class="stat hover:bg-base-200" href="{% url 'reports' %}?status=submitted">
     <div class="stat-title">Pending Review</div>
@@ -75,6 +76,8 @@
   </div>
 </div>
 
+</div>
+
 {% if proposed_events %}
 <div class="card bg-base-100 shadow-sm mb-6 border border-info">
   <div class="card-body">
@@ -94,19 +97,16 @@
 {% include "tsp/dashboard/_event_money.html" %}
 
 <script>
-  (function () {
-    const boxes = document.querySelectorAll('.select-pending');
-    const approve = document.getElementById('approve-selected');
-    const reject = document.getElementById('reject-selected');
-    const update = () => {
-      const any = [...boxes].some(box => box.checked);
-      approve.disabled = reject.disabled = !any;
-      approve.classList.toggle('btn-success', any);
-    };
-    document.getElementById('select-all-pending')?.addEventListener('change', function () {
-      boxes.forEach(box => { box.checked = this.checked; });
-      update();
-    });
-    boxes.forEach(box => box.addEventListener('change', update));
-  })();
+  // Listens on the page, not the boxes, so it keeps working after the queue refreshes itself.
+  document.addEventListener('change', function (event) {
+    if (event.target.id === 'select-all-pending') {
+      document.querySelectorAll('.select-pending').forEach(function (box) { box.checked = event.target.checked; });
+    } else if (!event.target.classList.contains('select-pending')) {
+      return;
+    }
+    var any = [...document.querySelectorAll('.select-pending')].some(function (box) { return box.checked; });
+    var approve = document.getElementById('approve-selected');
+    approve.disabled = document.getElementById('reject-selected').disabled = !any;
+    approve.classList.toggle('btn-success', any);
+  });
 </script>

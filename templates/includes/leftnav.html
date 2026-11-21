@@ -5,6 +5,12 @@
         <div class="p-4 border-b border-base-300">
           <h2 class="text-2xl font-bold text-primary"><a href="{% url 'dashboard' %}">{{ app_name }}</a></h2>
           <p class="text-sm opacity-60">{{ app_tagline }}</p>
+          {% if user.is_authenticated %}
+          <a href="{% url 'profile' %}" class="block mt-3 text-sm">
+            <span class="font-medium">{{ user.get_full_name|default:user.username }}</span>
+            <span class="badge {{ profile.group_badge_class }} badge-sm ml-1">{{ profile.role_label }}</span>
+          </a>
+          {% endif %}
         </div>
         <ul class="menu p-4 gap-1">
           <li><a href="{% url 'dashboard' %}" class="{% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
@@ -45,6 +51,12 @@
             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
             Profile
           </a></li>
+          {% if policy_url %}
+          <li><a href="{{ policy_url }}" target="_blank" rel="noopener">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6M7 4h7l5 5v11a1 1 0 01-1 1H7a1 1 0 01-1-1V5a1 1 0 011-1z" /></svg>
+            Policy
+          </a></li>
+          {% endif %}
         </ul>
       </aside>
     </div>

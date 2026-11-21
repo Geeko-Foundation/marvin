@@ -17,6 +17,26 @@ class BankingMethod(models.TextChoices):
     JAPAN = 'japan', 'Japan'
 
 
+# What someone can switch off, by what happened. Anything not listed, such as
+# a payment coming back, is always sent.
+NOTIFICATION_KINDS = [
+    ('submitted', 'A request is submitted for review'),
+    ('approved', 'A request is approved'),
+    ('rejected', 'A request is rejected'),
+    ('accepted', 'A request is accepted'),
+    ('submitted_for_payment', 'A request is ready for payment'),
+    ('paid', 'A request is paid'),
+    ('cancelled', 'A request is cancelled'),
+    ('comment', 'A new comment'),
+    ('internal_note', 'A new internal note'),
+]
+
+
+def muted(user, kind):
+    """True when ``user`` has switched off notifications of ``kind``."""
+    return bool(kind) and kind in getattr(getattr(user, 'profile', None), 'muted_notifications', [])
+
+
 class UserProfile(AuditModel):
     """Extended user record: contact info, role flags, Wise recipient, and push prefs."""
 
@@ -32,6 +52,7 @@ class UserProfile(AuditModel):
     country = models.CharField(max_length=100, blank=True)
     postal_code = models.CharField(max_length=20, blank=True)
     profile_completed_at = models.DateTimeField(blank=True, null=True)
+    muted_notifications = models.JSONField(default=list, blank=True)
     banking_method = models.CharField(
         max_length=20,
         choices=BankingMethod.choices,
