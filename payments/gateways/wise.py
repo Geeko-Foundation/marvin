@@ -277,8 +277,9 @@ class WiseApiGateway(PaymentGateway):
         """
         try:
             if self._client.sandbox:
-                # Nothing else moves a sandbox transfer on, so a check does it.
-                transfer = self._client.settle_sandbox_transfer(int(external_id), delay_seconds=0.5)
+                # Nothing else moves a sandbox transfer on, so a check does it,
+                # one step per check, so the queue shows it moving like a real one.
+                transfer = self._client.settle_sandbox_transfer(int(external_id), delay_seconds=0, max_steps=1)
             else:
                 transfer = self._client.get_transfer(int(external_id))
             return PaymentResult(

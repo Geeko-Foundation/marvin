@@ -473,3 +473,39 @@ class PaymentProgressTests(TestCase):
         self.assertEqual(reached('incoming_payment_waiting'), 2)
         self.assertEqual(reached('processing'), 3)
         self.assertEqual(reached('outgoing_payment_sent'), 4)
+
+
+class SandboxOneStepTests(TestCase):
+
+    def test_each_check_moves_a_sandbox_transfer_one_status_on(self):
+        from payments.gateways.wise_api import WiseApiClient
+        for status, steps in (
+            ('processing', ('processing', 'funds_converted')),
+            ('funds_converted', ('outgoing_payment_sent',)),
+            ('outgoing_payment_sent', ()),
+        ):
+            with self.subTest(status=status):
+                wise = mock.Mock(spec=WiseApiClient)
+                wise.get_transfer.return_value = {'status': status}
+                WiseApiClient.settle_sandbox_transfer(wise, 5, delay_seconds=0, max_steps=1)
+                ran = wise.advance_sandbox_transfer.call_args.kwargs['steps'] if wise.advance_sandbox_transfer.called else ()
+                self.assertEqual(tuple(ran), steps)
+
+
+class BackgroundPaymentTests(TestCase):
+
+    def test_the_queue_can_pay_without_a_reload(self):
+        from django.urls import reverse
+        from profile.groups import GROUP_FINANCE, GROUP_REQUESTER
+        from tsp.models import RequestState
+        from tsp.test_advances import make_request
+        from tsp.tests import make_user
+        travel_request = make_request(make_user('traveller', [GROUP_REQUESTER]), RequestState.SUBMITTED_FOR_PAYMENT,
+                                      actual='500')
+        self.client.force_login(make_user('counter', [GROUP_FINANCE]))
+        response = self.client.post(reverse('payments:process'),
+                                    {'object_id': travel_request.pk, 'gateway_id': 'manual'},
+                                    HTTP_ACCEPT='application/json')
+        data = response.json()
+        self.assertIn(travel_request.reference, data['message'])
+        self.assertTrue(data['final'])

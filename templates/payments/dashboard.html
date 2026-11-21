@@ -38,7 +38,7 @@
           <span class="badge badge-error badge-sm">Wise not set up</span>
           {% endif %}
         </div>
-        <form method="post" action="{% url 'payments:process' %}" class="flex flex-wrap gap-2 items-end">
+        <form method="post" action="{% url 'payments:process' %}" class="flex flex-wrap gap-2 items-end" data-process-payment>
           {% csrf_token %}
           <input type="hidden" name="object_id" value="{{ item.object_id }}">
           {% if item.sending %}
@@ -111,9 +111,16 @@
 {% block extra_js %}
 <script>
   // Wise reports progress in the background, so keep each waiting payment's
-  // status current without a reload, and stop once it has an answer.
-  document.querySelectorAll('[data-payment-status]').forEach(function (status) {
-    var timer = setInterval(check, 10000);
+  // status and progress bar current without a reload, and stop once it has an answer.
+  function showProgress(card, progress) {
+    var steps = card.querySelectorAll('[aria-label="Payment progress"] .step');
+    (progress || []).forEach(function (reached, i) {
+      if (steps[i]) steps[i].classList.toggle('step-primary', reached);
+    });
+  }
+  function watch(status) {
+    var card = status.closest('.card-body');
+    var timer = setInterval(check, 4000);
     function check() {
       if (document.hidden) return;
       fetch(status.dataset.paymentStatus, {headers: {'Accept': 'application/json'}})
@@ -121,10 +128,7 @@
         .then(function (data) {
           if (!data) return;
           status.textContent = data.message;
-          var steps = status.closest('.card-body').querySelectorAll('[aria-label="Payment progress"] .step');
-          (data.progress || []).forEach(function (reached, i) {
-            if (steps[i]) steps[i].classList.toggle('step-primary', reached);
-          });
+          showProgress(card, data.progress);
           if (data.final) {
             clearInterval(timer);
             status.classList.remove('opacity-70');
@@ -133,6 +137,32 @@
         })
         .catch(function () {});
     }
+  }
+  document.querySelectorAll('[data-payment-status]').forEach(watch);
+
+  // Pay one request in the background, then follow it on its progress bar.
+  document.querySelectorAll('form[data-process-payment]').forEach(function (form) {
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      var button = form.querySelector('button[type=submit]');
+      button.disabled = true;
+      button.textContent = 'Sending to Wise…';
+      fetch(form.action, {method: 'POST', body: new FormData(form), headers: {'Accept': 'application/json'}})
+        .then(function (response) { return response.json(); })
+        .then(function (data) {
+          var status = document.createElement('span');
+          status.className = 'text-sm max-w-md ' + (data.level === 'error' ? 'text-error' : 'opacity-70');
+          status.setAttribute('aria-live', 'polite');
+          status.textContent = data.message;
+          form.replaceWith(status);
+          showProgress(status.closest('.card-body'), data.progress);
+          if (data.status_url && !data.final) {
+            status.dataset.paymentStatus = data.status_url;
+            watch(status);
+          }
+        })
+        .catch(function () { form.submit(); });
+    });
   });
 </script>
 {% endblock %}

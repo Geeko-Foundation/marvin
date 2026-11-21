@@ -18,8 +18,8 @@
         <div class="flex-none gap-2">
           {% include "partials/theme_toggle.html" %}
           <div class="dropdown dropdown-end">
-            <div tabindex="0" role="button" class="btn btn-ghost btn-circle avatar placeholder">
-              <div class="bg-primary text-primary-content rounded-full w-10">
+            <div tabindex="0" role="button" class="btn btn-ghost btn-circle avatar avatar-placeholder" aria-label="Account menu">
+              <div class="bg-primary text-primary-content rounded-full w-10 h-10 flex items-center justify-center">
                 <span class="text-sm">{{ user.first_name|slice:":1"|default:user.username|slice:":1"|upper }}</span>
               </div>
             </div>
