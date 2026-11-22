@@ -1,6 +1,6 @@
 <h2 class="text-2xl font-bold mb-6">Events you organise</h2>
 
-<div id="organiser-live" data-live>
+<div id="organiser-live" hx-get="{{ request.get_full_path }}" hx-trigger="every 15s [quiet(this)]" hx-select="#organiser-live" hx-swap="outerHTML">
 {% for item in organised %}
 <div class="card bg-base-100 shadow-sm mb-6">
   <div class="card-body">

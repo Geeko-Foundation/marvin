@@ -505,7 +505,34 @@ class BackgroundPaymentTests(TestCase):
         self.client.force_login(make_user('counter', [GROUP_FINANCE]))
         response = self.client.post(reverse('payments:process'),
                                     {'object_id': travel_request.pk, 'gateway_id': 'manual'},
-                                    HTTP_ACCEPT='application/json')
-        data = response.json()
-        self.assertIn(travel_request.reference, data['message'])
-        self.assertTrue(data['final'])
+                                    HTTP_HX_REQUEST='true')
+        # htmx gets the payment's status fragment back, finished, so it stops asking.
+        self.assertContains(response, f'id="pay-{travel_request.pk}"')
+        self.assertContains(response, travel_request.reference)
+        self.assertNotContains(response, 'hx-trigger')
+
+
+class StatusFragmentTests(TestCase):
+
+    def test_a_waiting_payment_keeps_asking_and_a_paid_one_stops(self):
+        from django.contrib.contenttypes.models import ContentType
+        from django.urls import reverse
+        from payments.models import PaymentRecord
+        from profile.groups import GROUP_FINANCE, GROUP_REQUESTER
+        from tsp.models import RequestState
+        from tsp.test_advances import make_request
+        from tsp.tests import make_user
+        travel_request = make_request(make_user('traveller', [GROUP_REQUESTER]), RequestState.SUBMITTED_FOR_PAYMENT)
+        record = PaymentRecord.objects.create(
+            content_type=ContentType.objects.get_for_model(travel_request), object_id=travel_request.pk,
+            gateway_id='manual', amount=Decimal('500'), currency='EUR', recipient_name='T',
+            recipient_email='t@example.org', reference=travel_request.reference, status='processing',
+        )
+        self.client.force_login(make_user('counter', [GROUP_FINANCE]))
+        url = reverse('payments:status', args=[record.pk])
+        self.assertContains(self.client.get(url, HTTP_HX_REQUEST='true'), 'hx-trigger="every 4s"')
+        record.status = 'success'
+        record.save()
+        response = self.client.get(url, HTTP_HX_REQUEST='true')
+        self.assertContains(response, 'Paid.')
+        self.assertNotContains(response, 'hx-trigger')

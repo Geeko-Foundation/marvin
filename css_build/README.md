@@ -14,4 +14,6 @@ cp css_build/target/styles.css static/css/styles.css
 
 The build starts at `app.css`: it imports Tailwind, `src/themes.css` (the DaisyUI `i-layer-light` and `i-layer-dark` themes), and `src/custom.css`, then scans the templates, `static/js` and the app Python (which hands badge classes to templates) for utility classes and enables DaisyUI. Only those paths are scanned, so the build is the same on every machine. Edit those CSS sources and the templates rather than `target/styles.css`, which is generated. `src/custom.css` holds project-specific CSS, such as the print rules.
 
+htmx (`static/js/htmx.min.js`) and paper-css (`static/css/paper.min.css`) are pinned in `package.json` and copied from `node_modules` into `static/` by hand when they are updated, since Django serves them as they are.
+
 To watch while editing, run `npm --prefix css_build run watch` from the project root. Watch writes only to `css_build/target/styles.css`; copy it to `static/css/styles.css` after stopping the watcher, or from another terminal, to make the changes available to Django.

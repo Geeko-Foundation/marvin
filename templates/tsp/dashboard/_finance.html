@@ -1,7 +1,7 @@
 {% load tsp_tags %}
 <h2 class="text-2xl font-bold mb-6">Finance</h2>
 
-<div id="finance-stats" data-live>
+<div id="finance-stats" hx-get="{{ request.get_full_path }}" hx-trigger="every 15s [quiet(this)]" hx-select="#finance-stats" hx-swap="outerHTML">
 <div class="stats stats-vertical lg:stats-horizontal shadow w-full mb-6 bg-base-100">
   <a class="stat hover:bg-base-200" href="{% url 'reports' %}?status=submitted_for_payment">
     <div class="stat-title">Awaiting Payment</div>
@@ -94,7 +94,7 @@
 </div>
 {% endif %}
 
-<div class="card bg-base-100 shadow-sm mb-6" id="finance-queue" data-live>
+<div class="card bg-base-100 shadow-sm mb-6" id="finance-queue" hx-get="{{ request.get_full_path }}" hx-trigger="every 15s [quiet(this)]" hx-select="#finance-queue" hx-swap="outerHTML">
   <div class="card-body">
     <h2 class="card-title">Payment Queue</h2>
     {% if payment_queue %}
