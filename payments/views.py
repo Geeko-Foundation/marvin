@@ -90,6 +90,7 @@ def dashboard(request):
         ctx['in_batch'] = under_way.filter(status='exported').first()
         ctx['sending'] = under_way.exclude(status='exported').first()
         ctx['progress'] = _progress(ctx['sending'], ctx['in_batch'])
+        ctx['current_step'] = sum(reached for _, reached in ctx['progress'])
         if ctx['sending']:
             status = _status_context(ctx['sending'])
             ctx['status_url'] = status['status_url']
@@ -272,7 +273,8 @@ def _status_context(record, message=None):
         'final': paid or failed,
         'awaiting_approval': awaiting,
         'wise_url': 'https://wise-sandbox.com/' if settings.WISE_API_SANDBOX else 'https://wise.com/',
-        'progress': _progress(record, None),
+        'progress': (progress := _progress(record, None)),
+        'current_step': sum(reached for _, reached in progress),
     }
 
 

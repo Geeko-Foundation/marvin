@@ -530,7 +530,9 @@ class StatusFragmentTests(TestCase):
         )
         self.client.force_login(make_user('counter', [GROUP_FINANCE]))
         url = reverse('payments:status', args=[record.pk])
-        self.assertContains(self.client.get(url, HTTP_HX_REQUEST='true'), 'hx-trigger="every 4s"')
+        waiting = self.client.get(url, HTTP_HX_REQUEST='true')
+        self.assertContains(waiting, 'hx-trigger="every 4s"')
+        self.assertContains(waiting, 'aria-current="step">Sent to Wise<')
         record.status = 'success'
         record.save()
         response = self.client.get(url, HTTP_HX_REQUEST='true')

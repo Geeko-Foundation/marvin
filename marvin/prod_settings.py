@@ -53,18 +53,8 @@ X_FRAME_OPTIONS = 'DENY'
 # Database persistent connections (reduces connection overhead under load)
 DATABASES['default']['CONN_MAX_AGE'] = int(env('DATABASE_CONN_MAX_AGE', '60'))
 
-# PostgreSQL configuration template (uncomment when enabling PostgreSQL database backend)
-# DATABASES = {
-#     'default': {
-#         'ENGINE': 'django.db.backends.postgresql',
-#         'NAME': env('DATABASE_NAME', 'marvin'),
-#         'USER': env('DATABASE_USER', 'marvin'),
-#         'PASSWORD': env('DATABASE_PASSWORD', ''),
-#         'HOST': env('DATABASE_HOST', 'localhost'),
-#         'PORT': env('DATABASE_PORT', '5432'),
-#         'CONN_MAX_AGE': int(env('DATABASE_CONN_MAX_AGE', '60')),
-#     }
-# }
+# For PostgreSQL set DATABASE_ENGINE=django.db.backends.postgresql and
+# DATABASE_NAME, DATABASE_USER, DATABASE_PASSWORD, DATABASE_HOST, DATABASE_PORT.
 
 # ==============================================================================
 # STATIC & MEDIA ASSETS

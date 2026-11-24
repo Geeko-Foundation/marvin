@@ -143,18 +143,18 @@ class PaymentService:
             raise ValueError(f'Gateway {gateway_id} does not support batch export.')
 
         # Anything already in a file, or being paid another way, stays out, so
-        # exporting again cannot put the same person in two files.
-        # shortcut: two exports at the same instant could both include a request;
-        # fine for one finance team, lock the queue rows if that ever changes.
-        pending = [obj for obj in self.get_queue()
-                   if not self._payments_under_way(obj).exists() and not _is_own(obj, user)]
-        if not pending:
-            raise ValueError('Everything awaiting payment is already in an exported file or being paid.')
-        requests = [self.build_payment_request(obj) for obj in pending]
-        export = gateway.export_batch(requests)
-        if export is None:
-            raise ValueError(f'Gateway {gateway_id} returned no batch export.')
+        # exporting again cannot put the same person in two files. The queue rows
+        # stay locked until the records are written, so a second export at the
+        # same moment waits and then leaves these out.
         with transaction.atomic():
+            pending = [obj for obj in self.get_queue().select_for_update(of=('self',))
+                       if not self._payments_under_way(obj).exists() and not _is_own(obj, user)]
+            if not pending:
+                raise ValueError('Everything awaiting payment is already in an exported file or being paid.')
+            requests = [self.build_payment_request(obj) for obj in pending]
+            export = gateway.export_batch(requests)
+            if export is None:
+                raise ValueError(f'Gateway {gateway_id} returned no batch export.')
             for obj, payment_request in zip(pending, requests):
                 PaymentRecord.objects.create(
                     content_type=ContentType.objects.get_for_model(obj),
@@ -184,16 +184,16 @@ class PaymentService:
         gateway = get_gateway('wise-api')
         if gateway is None:
             raise ValueError('The Wise API gateway is not configured.')
-        pending = [obj for obj in self.get_queue()
-                   if not self._payments_under_way(obj).exists() and not _is_own(obj, user)]
-        if not pending:
-            raise ValueError('Nothing is waiting to be sent to Wise.')
-        requests = [self.build_payment_request(obj) for obj in pending]
-        name = f'Marvin {timezone.localtime():%d %b %Y %H:%M}'
-        results = gateway.send_batch(name, requests)
-
         records, problems = [], []
+        # Locked like export_batch, so two sends at once cannot both add a request.
         with transaction.atomic():
+            pending = [obj for obj in self.get_queue().select_for_update(of=('self',))
+                       if not self._payments_under_way(obj).exists() and not _is_own(obj, user)]
+            if not pending:
+                raise ValueError('Nothing is waiting to be sent to Wise.')
+            requests = [self.build_payment_request(obj) for obj in pending]
+            name = f'Marvin {timezone.localtime():%d %b %Y %H:%M}'
+            results = gateway.send_batch(name, requests)
             for obj, payment_request, result in zip(pending, requests, results):
                 if not result.external_id:
                     problems.append(f'{payment_request.reference}: {result.metadata.get("error", "not added")}')

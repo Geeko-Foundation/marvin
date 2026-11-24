@@ -60,9 +60,9 @@
         {% endif %}
       </div>
       {% if item.sending %}
-      {% include 'payments/_status.html' with pay_id=item.object_id progress=item.progress status_url=item.status_url message=item.status_message awaiting_approval=item.awaiting_approval final=False %}
+      {% include 'payments/_status.html' with pay_id=item.object_id progress=item.progress current_step=item.current_step status_url=item.status_url message=item.status_message awaiting_approval=item.awaiting_approval final=False %}
       {% else %}
-      {% include 'payments/_status.html' with pay_id=item.object_id progress=item.progress status_url='' message='' %}
+      {% include 'payments/_status.html' with pay_id=item.object_id progress=item.progress current_step=item.current_step status_url='' message='' %}
       {% endif %}
       {% if item.details_template %}
       <details class="collapse collapse-arrow bg-base-200 mt-2">

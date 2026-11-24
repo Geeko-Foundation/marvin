@@ -3,7 +3,7 @@
   {% if message %}<p class="text-sm mt-3 {% if final and paid %}text-success{% elif final %}text-error{% else %}opacity-70{% endif %}" aria-live="polite">{{ message }}{% if awaiting_approval and not final %} <a href="{{ wise_url }}" class="link" target="_blank" rel="noopener">Approve it in Wise</a>.{% endif %}</p>{% endif %}
   <ul class="steps w-full text-xs mt-3" aria-label="Payment progress">
     {% for label, reached in progress %}
-    <li class="step {% if reached %}step-primary{% endif %}">{{ label }}</li>
+    <li class="step {% if reached %}step-primary{% endif %}"{% if forloop.counter == current_step %} aria-current="step"{% endif %}>{{ label }}</li>
     {% endfor %}
   </ul>
 </div>
