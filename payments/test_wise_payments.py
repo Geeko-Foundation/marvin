@@ -533,6 +533,7 @@ class StatusFragmentTests(TestCase):
         waiting = self.client.get(url, HTTP_HX_REQUEST='true')
         self.assertContains(waiting, 'hx-trigger="every 4s"')
         self.assertContains(waiting, 'aria-current="step">Sent to Wise<')
+        self.assertContains(waiting, 'data-announce')
         record.status = 'success'
         record.save()
         response = self.client.get(url, HTTP_HX_REQUEST='true')

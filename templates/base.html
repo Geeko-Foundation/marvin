@@ -9,6 +9,7 @@
   {% block extra_head %}{% endblock %}
 </head>
 <body class="min-h-screen bg-base-200">
+  <div id="announcer" class="sr-only" role="status" aria-live="polite"></div>
   {% if user.is_authenticated %}
   {# The navigation is hidden when printing, not the page, so printed pages keep their content. #}
   <div class="drawer lg:drawer-open">
