@@ -357,14 +357,15 @@
           {% csrf_token %}
           <div class="flex flex-col gap-3" data-rows>
             <div class="flex flex-wrap gap-3 items-end" data-row>
-              <div class="form-control w-40">
-                <label class="label py-0"><span class="label-text text-xs">Type</span></label>
+              {# Each control sits inside its label, so rows added by "Add another" stay labelled without ids. #}
+              <label class="form-control w-40">
+                <span class="label py-0 label-text text-xs">Type</span>
                 {{ doc_form.kind }}
-              </div>
-              <div class="form-control flex-1 min-w-[200px]">
-                <label class="label py-0"><span class="label-text text-xs">File</span></label>
+              </label>
+              <label class="form-control flex-1 min-w-[200px]">
+                <span class="label py-0 label-text text-xs">File</span>
                 {{ doc_form.file }}
-              </div>
+              </label>
               <button type="button" class="btn btn-sm btn-ghost btn-square hidden" aria-label="Remove this row" data-remove>✕</button>
             </div>
           </div>

@@ -41,6 +41,7 @@
         {% if not item.sending %}
         <form method="post" action="{% url 'payments:process' %}" class="flex flex-wrap gap-2 items-end"
               hx-post="{% url 'payments:process' %}" hx-target="#pay-{{ item.object_id }}" hx-swap="outerHTML"
+              hx-disabled-elt="find button[type=submit]"
               hx-on::after-request="if (event.detail.successful) this.remove()">
           {% csrf_token %}
           <input type="hidden" name="object_id" value="{{ item.object_id }}">

@@ -117,7 +117,7 @@
       <fieldset class="form-control" id="organiser-picker">
         <legend class="label-text mb-2">Organisers</legend>
         <p class="text-sm mb-2 truncate" data-chosen></p>
-        <input type="search" class="input input-bordered input-sm w-full mb-2" placeholder="Search people by name or username" aria-label="Search people" data-search>
+        <search><input type="search" class="input input-bordered input-sm w-full mb-2" placeholder="Search people by name or username" aria-label="Search people" data-search></search>
         <div class="max-h-48 overflow-y-auto border border-base-300 p-2 flex flex-col" data-list>
           {% for choice in form.organizers %}
           <label class="flex items-center gap-3 py-1 cursor-pointer" data-person>
