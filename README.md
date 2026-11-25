@@ -6,7 +6,7 @@ Marvin is a Django web application for managing travel support requests: speaker
 
 - **Python 3.13+** (tested with 3.13)
 - **Django 6.x**
-- **SQLite** (default, development)
+- **SQLite** (default, development) or **PostgreSQL** (production)
 - **django-tables2** - searchable data tables
 - **django-webpush** - browser push notifications (opt-in)
 - **DaisyUI / Tailwind** - UI styling (via templates)
@@ -45,7 +45,7 @@ These fields are defined once in `marvin/audit.py`; concrete models inherit them
 
 ## Prerequisites
 
-- Python 3.11 or newer
+- Python 3.13 or newer
 - `pip` and `venv`
 
 ## Quick start
@@ -153,14 +153,16 @@ Groups are created automatically after migrations via `profile.groups.ensure_gro
 
 ## Wise integration (optional)
 
-Wise runs in **sandbox mode** by default. Banking account numbers are sent to Wise only during verification - they are not stored in Marvin.
+Wise runs in **sandbox mode** by default in development. `marvin.prod_settings` switches to the live API unless `WISE_API_SANDBOX=true` is set. Banking account numbers are sent to Wise only during verification - they are not stored in Marvin.
 
 Staff and superusers may **skip Wise banking** during signup and complete it later from their profile.
 
-Environment variables (all optional):
+`marvin/settings.py` still carries a published sandbox token as a fallback, so a deployment must set its own `WISE_API_TOKEN`. The published token should be treated as compromised.
+
+Environment variables:
 
 ```bash
-export WISE_API_TOKEN=your-sandbox-token
+export WISE_API_TOKEN=your-token
 export WISE_API_PROFILE_ID=          # auto-resolved when empty
 export WISE_API_SANDBOX=true
 export WISE_SOURCE_CURRENCY=EUR
@@ -177,7 +179,7 @@ Marvin uses [django-webpush](https://github.com/safwanrahman/django-webpush) for
 
 Notifications are only sent to users who have opted in and subscribed a browser. Disabling push in the profile removes stored subscriptions.
 
-Dev VAPID keys are included in settings. For production, generate your own and set:
+Dev VAPID keys are included in settings. They are public, so anyone with the repository could send pushes to a deployment that uses them. For production, generate your own (see `.env.example`) and set:
 
 ```bash
 export VAPID_PUBLIC_KEY=...
@@ -231,24 +233,35 @@ working with whichever pair you choose.
 
 ## Environment variables
 
-Configuration uses [python-dotenv](https://github.com/theskumar/python-dotenv). Sensitive values belong in a `.env` file at the project root (gitignored):
+Configuration uses [python-dotenv](https://github.com/theskumar/python-dotenv). Values are read from the environment, or from a `.env` file at the project root (gitignored). On a host such as Railway, set them as service variables instead. `.env.example` lists every one with notes.
 
 ```bash
 cp .env.example .env
-# edit .env with production secrets
 ```
 
-If `.env` is missing, `marvin/settings.py` falls back to **dev/test defaults** (insecure `SECRET_KEY`, Wise sandbox token, dev VAPID keys). Never deploy without a proper `.env`.
+Without them, `marvin/settings.py` falls back to **dev/test defaults** (insecure `SECRET_KEY`, Wise sandbox token, dev VAPID keys, SQLite). These are for local development only.
+
+There are two settings modules:
+
+- `marvin.settings` (the default) is for development and tests.
+- `marvin.prod_settings` builds on it for production: `DEBUG` off, HTTPS only, two-step sign-in enforced, the live Wise API, and WhiteNoise compressed static files. It refuses to start without a real `DJANGO_SECRET_KEY` and a public `ALLOWED_HOSTS`. Select it with `DJANGO_SETTINGS_MODULE=marvin.prod_settings`.
 
 | Variable | Purpose |
 |----------|---------|
-| `DJANGO_SECRET_KEY` | Django signing key |
-| `DEBUG` | `true` / `false` |
-| `ALLOWED_HOSTS` | Comma-separated hostnames |
+| `DJANGO_SETTINGS_MODULE` | `marvin.prod_settings` in production |
+| `DJANGO_SECRET_KEY` | Django signing key (required in production) |
+| `DEBUG` | `true` / `false` (always off in production) |
+| `ALLOWED_HOSTS` | Comma-separated hostnames (required in production) |
+| `CSRF_TRUSTED_ORIGINS` | Only for plain http or a non-standard port |
+| `DATABASE_ENGINE`, `DATABASE_NAME`, `DATABASE_USER`, `DATABASE_PASSWORD`, `DATABASE_HOST`, `DATABASE_PORT` | Database connection (see PostgreSQL) |
+| `MEDIA_ROOT` | Where uploaded documents are stored |
+| `EMAIL_HOST`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `DEFAULT_FROM_EMAIL` | SMTP mail (STARTTLS on port 587) |
+| `SITE_BASE_URL` | Public site URL for links in emails |
 | `WISE_API_TOKEN` | Wise API bearer token |
 | `WISE_API_SANDBOX` | `true` for sandbox, `false` for live |
 | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` | Web push keys |
 | `WEBPUSH_APP_BASE_URL` | Public site URL for notification links |
+| `TWO_FACTOR_ENFORCED` | Require two-step sign-in (on in production) |
 
 ## PostgreSQL
 
@@ -270,19 +283,34 @@ DATABASE_CONN_MAX_AGE=60      # seconds to reuse a connection; 0 closes each tim
 
 Then run `python manage.py migrate` and `python manage.py seed_data` as usual. CI runs the whole test suite against both SQLite and PostgreSQL.
 
-A single `DATABASE_URL=postgresql://user:password@host:5432/name` works in place of the variables above, which is what Railway provides.
+`DATABASE_URL` is not read. Set the separate variables above.
 
 ### Railway
 
 1. Add a PostgreSQL database to the project.
-2. On the web service, set `DATABASE_URL` to `${{Postgres.DATABASE_URL}}`.
-3. Set the start command to `python manage.py migrate && python manage.py createcachetable && gunicorn marvin.wsgi`. The cache table holds the sign-in limits, so production cannot sign anyone in without it. Leave `loaddata` out: on a lasting database it would reset every record in the fixture on each deploy.
-4. Load the starting data once, from the service's shell: `python manage.py loaddata tsp/fixtures/initial.json`.
+2. On the web service, set `DJANGO_SETTINGS_MODULE=marvin.prod_settings`.
+3. Set the database variables from the PostgreSQL service's reference variables:
+
+   ```bash
+   DATABASE_ENGINE=django.db.backends.postgresql
+   DATABASE_NAME=${{Postgres.PGDATABASE}}
+   DATABASE_USER=${{Postgres.PGUSER}}
+   DATABASE_PASSWORD=${{Postgres.PGPASSWORD}}
+   DATABASE_HOST=${{Postgres.PGHOST}}
+   DATABASE_PORT=${{Postgres.PGPORT}}
+   ```
+
+   Without them the app falls back to SQLite on the service's disk, which is replaced on every deploy.
+4. Attach a volume (for example at `/data`) and set `MEDIA_ROOT=/data/uploads`, or uploaded receipts and forms are lost on each deploy.
+5. Set `DJANGO_SECRET_KEY`, `ALLOWED_HOSTS`, `SITE_BASE_URL`, the email variables, `WISE_API_TOKEN` and the VAPID keys. Do not rely on the defaults in `marvin/settings.py`.
+6. Set the start command to `python manage.py collectstatic --noinput && python manage.py migrate && python manage.py createcachetable && gunicorn marvin.wsgi`. Production serves static files through a manifest, so pages fail to render if `collectstatic` has not run. The cache table holds the sign-in limits, so nobody can sign in without it; running the command again is harmless. Leave `loaddata` out: on a lasting database it would reset every record in the fixture on each deploy.
+7. Load the starting data once, from the service's shell: `python manage.py loaddata tsp/fixtures/initial.json`.
+8. Two-step sign-in is enforced in production, so every user sets it up at their first sign in.
 
 ## Development notes
 
-- **Database:** SQLite file at `db.sqlite3` in the project root. See PostgreSQL below to use that instead.
-- **Uploaded files:** stored under `uploads/` (served in development when `DEBUG=True`).
+- **Database:** SQLite file at `db.sqlite3` in the project root. See PostgreSQL above to use that instead.
+- **Uploaded files:** stored under `uploads/`, or `MEDIA_ROOT` when set (served in development when `DEBUG=True`).
 - **Static files:** served from `static/` during development.
 - **Audit fields:** defined on abstract `AuditModel` in `marvin/audit.py`.
 - **Login URLs:** the app uses `/login/` (username/password); Django admin uses `/admin/login/` separately.
