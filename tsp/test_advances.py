@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from django.test import TestCase
+from django.test import TestCase, skipUnlessDBFeature
 from django.urls import reverse
 
 from payments.models import PaymentRecord
@@ -69,6 +69,25 @@ class TakeBackTests(TestCase):
             content_object=self.request, gateway_id='wise-api', amount=400, currency='EUR',
             recipient_name='x', recipient_email='x@example.org', reference='TSP', status='pending',
         )
+        self.client.force_login(self.owner)
+        self.client.post(reverse('request_take_back', args=[self.request.pk]))
+        self.request.refresh_from_db()
+        self.assertEqual(self.request.state, RequestState.SUBMITTED_FOR_PAYMENT)
+
+    @skipUnlessDBFeature('has_select_for_update')
+    def test_it_waits_for_a_payment_that_is_starting(self):
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+        self.client.force_login(self.owner)
+        with CaptureQueriesContext(connection) as queries:
+            self.client.post(reverse('request_take_back', args=[self.request.pk]))
+        table = TravelRequest._meta.db_table
+        self.assertTrue(any('FOR UPDATE' in q['sql'] and f'FROM "{table}"' in q['sql'] for q in queries))
+
+    def test_not_while_a_payment_is_being_sent(self):
+        service = PaymentService()
+        service._sending_record(self.request, 'wise-api', service.build_payment_request(self.request),
+                                make_user('tbfinance', [GROUP_FINANCE]))
         self.client.force_login(self.owner)
         self.client.post(reverse('request_take_back', args=[self.request.pk]))
         self.request.refresh_from_db()

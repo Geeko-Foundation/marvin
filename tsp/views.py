@@ -1541,17 +1541,20 @@ def request_submit_for_payment(request, pk):
 @require_POST
 def request_take_back(request, pk):
     """Pull a request back out of the payment queue so the requester can fix it."""
-    travel_request = get_object_or_404(TravelRequest, pk=pk)
-    if travel_request.user_id != request.user.id:
-        raise PermissionDenied
-    if not travel_request.can_take_back_from_payment():
-        messages.error(request, 'Finance has already started paying this request.')
-        return redirect('request_detail', pk=pk)
+    # Locked as finance's payment locks it, so a payment starting at the same
+    # moment either goes first and is seen here, or waits and finds it gone.
+    with transaction.atomic():
+        travel_request = get_object_or_404(TravelRequest.objects.select_for_update(), pk=pk)
+        if travel_request.user_id != request.user.id:
+            raise PermissionDenied
+        if not travel_request.can_take_back_from_payment():
+            messages.error(request, 'Finance has already started paying this request.')
+            return redirect('request_detail', pk=pk)
 
-    transition_request(
-        travel_request, RequestState.ACCEPTED, request.user,
-        notes='Taken back from the payment queue to edit.',
-    )
+        transition_request(
+            travel_request, RequestState.ACCEPTED, request.user,
+            notes='Taken back from the payment queue to edit.',
+        )
     messages.success(request, 'Taken back. Fix your costs or documents, then submit for payment again.')
     return redirect('request_detail', pk=pk)
 
