@@ -90,6 +90,36 @@ class BatchSendingTests(TestCase):
         self.assertNotIn('Process Payment', html)
 
 
+class QueueStatusCheckTests(TestCase):
+    """The queue page brings a few statuses up to date per visit, not every one."""
+
+    def test_only_a_few_transfers_are_asked_about_on_each_visit(self):
+        from django.contrib.contenttypes.models import ContentType
+
+        from payments.base import PaymentResult
+        from payments.views import STATUS_CHECKS_PER_VISIT
+        finance = make_user('checksfinance', [GROUP_FINANCE])
+        for i in range(STATUS_CHECKS_PER_VISIT + 3):
+            req = TravelRequest.objects.create(user=make_user(f'checksowner{i}', [GROUP_REQUESTER]),
+                                               event=make_event(), state=RequestState.SUBMITTED_FOR_PAYMENT,
+                                               description='T')
+            PaymentRecord.objects.create(
+                content_type=ContentType.objects.get_for_model(req), object_id=req.pk, gateway_id='wise-api',
+                amount=10, currency='EUR', recipient_name='x', recipient_email='x@example.org',
+                reference=req.reference, external_id=str(9000 + i), status='processing')
+        self.client.force_login(finance)
+        with mock.patch('payments.services.get_gateway') as get_gateway:
+            get_gateway.return_value.get_status.return_value = PaymentResult(status='unknown')
+            self.client.get(reverse('payments:dashboard'))
+            first = [c.args[0] for c in get_gateway.return_value.get_status.call_args_list]
+            get_gateway.return_value.get_status.reset_mock()
+            self.client.get(reverse('payments:dashboard'))
+            second = [c.args[0] for c in get_gateway.return_value.get_status.call_args_list]
+        self.assertEqual(len(first), STATUS_CHECKS_PER_VISIT)
+        # The ones left out last time are asked about first on the next visit.
+        self.assertTrue(set(second) - set(first))
+
+
 class ApprovalInWiseTests(TestCase):
     """When Wise wants the payment approved in Wise, that is the next step, not an error."""
 

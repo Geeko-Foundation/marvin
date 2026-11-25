@@ -147,6 +147,28 @@ class PaymentService:
         ).exclude(status__in=['failed', 'cancelled']).exclude(
             status='sending', external_id=None, created_at__lt=gave_up)
 
+    def payments_under_way_by_object(self, objects) -> dict[int, list[PaymentRecord]]:
+        """
+        ``_payments_under_way`` for many objects in one query, newest first.
+
+        For pages that list the whole queue, which would otherwise ask once per row.
+        """
+        objects = list(objects)
+        if not objects:
+            return {}
+        purposes = {obj.pk: self.adapter.payment_purpose(obj) for obj in objects}
+        gave_up = timezone.now() - timedelta(seconds=SENDING_TIMEOUT_SECONDS)
+        records = PaymentRecord.objects.filter(
+            content_type=ContentType.objects.get_for_model(objects[0]),
+            object_id__in=purposes,
+        ).exclude(status__in=['failed', 'cancelled']).exclude(
+            status='sending', external_id=None, created_at__lt=gave_up).order_by('-created_at')
+        found = {pk: [] for pk in purposes}
+        for record in records:
+            if record.purpose == purposes[record.object_id]:
+                found[record.object_id].append(record)
+        return found
+
     def export_batch(self, gateway_id: str, user=None) -> tuple[str | bytes, str, str]:
         """
         Export all current queue items as a batch file for manual gateway upload.
