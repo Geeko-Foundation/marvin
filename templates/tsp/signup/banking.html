@@ -103,7 +103,7 @@
           {{ form.bank_account_type }}{{ form.bank_account_type.errors }}
         </div>
       </div>
-      {% if form.profile.wise_account_id %}
+      {% if form.profile.has_had_payout_account %}
       <div class="form-control mt-4">
         <label class="label" for="{{ form.current_password.id_for_label }}"><span class="label-text">Current password *</span></label>
         {{ form.current_password }}{{ form.current_password.errors }}

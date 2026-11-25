@@ -5,7 +5,12 @@ from payments.models import PaymentRecord, WiseLogEntry
 
 @admin.register(PaymentRecord)
 class PaymentRecordAdmin(admin.ModelAdmin):
-    """Read-only audit fields; filter and search payment history in Django admin."""
+    """
+    Filter and search payment history in Django admin, without changing it.
+
+    A record says what money moved, so editing or deleting one here would let
+    the history disagree with Wise, or let a paid request be paid again.
+    """
 
     list_display = (
         'reference', 'gateway_id', 'amount', 'currency',
@@ -14,6 +19,15 @@ class PaymentRecordAdmin(admin.ModelAdmin):
     list_filter = ('gateway_id', 'status', 'currency')
     search_fields = ('reference', 'recipient_name', 'recipient_email', 'external_id')
     readonly_fields = ('created_at', 'created_by', 'updated_at', 'changed_by')
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(WiseLogEntry)

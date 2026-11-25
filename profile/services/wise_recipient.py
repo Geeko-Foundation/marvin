@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from payments.gateways.wise_api import WiseApiError, get_wise_client
+from profile.audit_log import record
 from profile.countries import CODES_BY_NAME, VALID_CODES, state_code
 from profile.models import BankingMethod, UserProfile
 
@@ -170,7 +171,15 @@ def format_payee_summary(payee: dict, profile: UserProfile) -> str:
 
 
 def clear_stale_wise_recipient(profile: UserProfile) -> None:
-    """Remove Wise account linkage when the remote recipient no longer exists."""
+    """
+    Remove Wise account linkage when the remote recipient no longer exists.
+
+    The banking method stays, so setting up the next account is still
+    treated as a change: it asks for the password and is logged.
+    """
+    if profile.wise_account_id:
+        record('profile.payout_account_cleared', user=profile.user, target=profile.user.username,
+               detail=f'Wise recipient {profile.wise_account_id} no longer usable')
     profile.wise_account_id = None
     profile.wise_recipient_verified_at = None
     profile.save(update_fields=['wise_account_id', 'wise_recipient_verified_at'])

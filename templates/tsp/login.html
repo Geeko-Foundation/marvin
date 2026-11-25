@@ -6,7 +6,7 @@
 {% block auth_content %}
 <div class="relative min-h-screen overflow-hidden">
   <img
-    src="{% static 'img/waiting.jpg' %}"
+    src="{% static 'img/waiting.webp' %}"
     alt=""
     aria-hidden="true"
     fetchpriority="high"
@@ -28,7 +28,7 @@
       <p class="text-sm opacity-60 mb-4">Provided by the {{ org_name }}.</p>
       <div class="flex flex-wrap gap-2 justify-center lg:justify-start">
         <div class="badge badge-primary badge-outline">Request Lifecycle</div>
-        <div class="badge badge-secondary badge-outline">Wise Payments</div>
+        {% if use_wise %}<div class="badge badge-secondary badge-outline">Wise Payments</div>{% endif %}
         <div class="badge badge-accent badge-outline">Audit Trail</div>
       </div>
     </div>
@@ -67,7 +67,7 @@
 
         <a href="{% url 'signup' %}" class="btn btn-outline w-full">Create a Requester Account</a>
         <p class="text-xs text-center opacity-60 mt-2">
-          New contributors, sign up with our step-by-step wizard (account, profile, Wise banking)
+          New contributors, sign up with our step-by-step wizard (account, profile{% if use_wise %}, Wise banking{% endif %})
         </p>
       </div>
     </div>

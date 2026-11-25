@@ -1,7 +1,7 @@
 from datetime import date
 from decimal import Decimal
 
-from django.test import TestCase
+from django.test import TestCase, skipUnlessDBFeature
 from django.urls import reverse
 
 from payments.models import PaymentRecord
@@ -64,6 +64,16 @@ class ReviewTests(TestCase):
         self.approve(small, '50')
         small.refresh_from_db()
         self.assertEqual(small.state, RequestState.APPROVED)
+
+    @skipUnlessDBFeature('has_select_for_update')
+    def test_an_approval_holds_the_events_budget_until_it_commits(self):
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+        req = self.submitted()
+        with CaptureQueriesContext(connection) as queries:
+            self.approve(req, '50')
+        table = Event._meta.db_table
+        self.assertTrue(any('FOR UPDATE' in q['sql'] and f'FROM "{table}"' in q['sql'] for q in queries))
 
     def test_approving_a_request_that_has_moved_on_changes_no_amounts(self):
         req = self.submitted()
@@ -442,6 +452,54 @@ class AuditLogPageTests(TestCase):
         self.client.force_login(make_user('auditrequester', [GROUP_REQUESTER]))
         self.assertEqual(self.client.get(reverse('audit_log')).status_code, 403)
 
+    def test_a_failed_write_does_not_break_the_callers_transaction(self):
+        from django.db import transaction
+
+        from profile.audit_log import record
+        with transaction.atomic():
+            # No action breaks the not-null rule, a real database error.
+            self.assertIsNone(record(None, user=self.finance))
+            # Still usable afterwards: on Postgres this fails without the savepoint.
+            make_user('afterfailedaudit', [GROUP_REQUESTER])
+
+
+class HistoryProtectionTests(TestCase):
+    """Nothing in the admin can rewrite or remove what was paid."""
+
+    def setUp(self):
+        from django.contrib.contenttypes.models import ContentType
+        self.admin = make_user('historyadmin', [])
+        self.admin.is_staff = self.admin.is_superuser = True
+        self.admin.save()
+        self.event = make_event()
+        self.req = TravelRequest.objects.create(user=make_user('historyowner', [GROUP_REQUESTER]),
+                                                event=self.event, state=RequestState.PAID, description='T')
+        self.record = PaymentRecord.objects.create(
+            content_type=ContentType.objects.get_for_model(self.req), object_id=self.req.pk, gateway_id='manual',
+            amount=10, currency='EUR', status='completed', reference=self.req.reference,
+            recipient_name='x', recipient_email='x@example.org')
+        self.client.force_login(self.admin)
+
+    def test_payment_records_can_be_read_but_not_changed_or_deleted(self):
+        change = reverse('admin:payments_paymentrecord_change', args=[self.record.pk])
+        self.assertEqual(self.client.get(change).status_code, 200)
+        self.client.post(change, {'status': 'failed'})
+        self.client.post(reverse('admin:payments_paymentrecord_delete', args=[self.record.pk]), {'post': 'yes'})
+        self.record.refresh_from_db()
+        self.assertEqual(self.record.status, 'completed')
+
+    def test_a_paid_request_cannot_be_deleted_in_the_admin(self):
+        self.client.post(reverse('admin:tsp_travelrequest_delete', args=[self.req.pk]), {'post': 'yes'})
+        self.assertTrue(PaymentRecord.objects.filter(pk=self.record.pk).exists())
+        response = self.client.get(reverse('admin:tsp_travelrequest_changelist'))
+        self.assertNotContains(response, 'delete_selected')
+
+    def test_an_event_with_requests_cannot_be_deleted_at_all(self):
+        from django.db.models import ProtectedError
+        with self.assertRaises(ProtectedError):
+            self.event.delete()
+        self.assertTrue(PaymentRecord.objects.filter(pk=self.record.pk).exists())
+
 
 class LoginLimitTests(TestCase):
     """Guessing passwords for one account stops after ten wrong tries."""
@@ -472,6 +530,34 @@ class LoginLimitTests(TestCase):
         for _ in range(9):
             self.attempt('wrong')
         self.assertEqual(self.attempt('right-pass-phrase-9').status_code, 302)
+
+    def test_a_spread_out_attack_leaves_each_address_one_try_and_the_owner_still_gets_in(self):
+        from tsp.views import LOGIN_ACCOUNT_FAILURE_LIMIT, LOGIN_LOCK_SECONDS, _count_one
+        for _ in range(LOGIN_ACCOUNT_FAILURE_LIMIT):
+            _count_one('login-failures:lockme', LOGIN_LOCK_SECONDS)
+
+        def attempt_from(address, password):
+            return self.client.post(reverse('login'), {'username': 'lockme', 'password': password},
+                                    REMOTE_ADDR=address)
+        attempt_from('10.0.0.2', 'wrong')
+        self.assertContains(attempt_from('10.0.0.2', 'right-pass-phrase-9'), 'Too many failed sign-in attempts')
+        self.assertEqual(attempt_from('10.0.0.3', 'right-pass-phrase-9').status_code, 302)
+
+    def test_limits_hold_in_the_database_cache_production_uses(self):
+        from unittest import mock
+
+        from django.core.cache import caches
+        from django.core.management import call_command
+        from django.test import override_settings
+
+        from tsp import views
+        database = {'BACKEND': 'django.core.cache.backends.db.DatabaseCache', 'LOCATION': 'test_limits',
+                    'TIMEOUT': 24 * 60 * 60}
+        with override_settings(CACHES={'default': database, 'limits': database}):
+            call_command('createcachetable', verbosity=0)
+            with mock.patch.object(views, 'limits', caches['limits']):
+                results = [views._under_limit('bank-setup:1', 5, 24 * 60 * 60) for _ in range(6)]
+        self.assertEqual(results, [True] * 5 + [False])
 
     def test_next_never_leads_off_the_site(self):
         response = self.attempt('right-pass-phrase-9', next='https://evil.example/phish')
@@ -513,6 +599,44 @@ class ReportQueryTests(TestCase):
         few = self.queries_for_csv()
         self.add_requests(8)
         self.assertEqual(self.queries_for_csv(), few)
+
+
+class DashboardQueryTests(TestCase):
+    """The dashboard asks the database the same amount however many requests it lists."""
+
+    def setUp(self):
+        self.staff = make_user('dashboardstaff', [GROUP_TSP, GROUP_FINANCE])
+        self.event = make_event()
+
+    def add_requests(self, count):
+        states = (RequestState.SUBMITTED, RequestState.SUBMITTED_FOR_PAYMENT, RequestState.PAID)
+        for i in range(count):
+            owner = make_user(f'dashboardowner{TravelRequest.objects.count()}', [GROUP_REQUESTER])
+            req = TravelRequest.objects.create(user=owner, event=self.event, state=states[i % 3], description='T')
+            Expense.objects.create(request=req, category='flight', description='F', estimated_amount=10,
+                                   estimated_currency='EUR', approved_amount=10, approved_currency='EUR')
+
+    def queries_for_dashboard(self):
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+        self.client.force_login(self.staff)
+        with CaptureQueriesContext(connection) as captured:
+            self.assertEqual(self.client.get(reverse('dashboard')).status_code, 200)
+        return len(captured)
+
+    def test_more_requests_do_not_mean_more_queries(self):
+        self.add_requests(3)
+        self.queries_for_dashboard()  # The first visit fills caches the later ones read.
+        few = self.queries_for_dashboard()
+        self.add_requests(9)
+        self.assertEqual(self.queries_for_dashboard(), few)
+
+    def test_a_changed_group_is_seen_at_once(self):
+        from profile.groups import user_in_group
+        self.assertFalse(user_in_group(self.staff, GROUP_REQUESTER))
+        from django.contrib.auth.models import Group
+        self.staff.groups.add(Group.objects.get(name=GROUP_REQUESTER))
+        self.assertTrue(user_in_group(self.staff, GROUP_REQUESTER))
 
 
 class EventCategoryTests(TestCase):

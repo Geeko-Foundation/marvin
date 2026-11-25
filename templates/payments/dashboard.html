@@ -6,7 +6,7 @@
 <h1 class="text-2xl font-bold mb-2">Payment Processing</h1>
 <p class="text-sm opacity-60 mb-6">{{ adapter.label }}</p>
 
-{% if wise_sandbox %}
+{% if use_wise and wise_sandbox %}
 <div role="alert" class="alert alert-warning mb-6">
   <span><strong>Wise sandbox.</strong> Payments made here move no real money. Set WISE_API_SANDBOX=false and a live WISE_API_TOKEN before paying anyone.</span>
 </div>
@@ -32,7 +32,8 @@
           {% endif %}
           {% endif %}
           {% if item.banking %}<p class="text-sm opacity-60">Banking: {{ item.banking }}</p>{% endif %}
-          {% if item.wise_ready %}
+          {% if not use_wise %}
+          {% elif item.wise_ready %}
           <span class="badge badge-success badge-sm">Wise verified</span>
           {% else %}
           <span class="badge badge-error badge-sm">Wise not set up</span>
@@ -55,7 +56,7 @@
             <option value="{{ gateway.gateway_id }}">{{ gateway.label }}</option>
             {% endfor %}
           </select>
-          <button type="submit" class="btn btn-primary btn-sm" {% if not item.wise_ready %}disabled title="The requester must finish setting up Wise first"{% endif %}>Process Payment</button>
+          <button type="submit" class="btn btn-primary btn-sm" {% if use_wise and not item.wise_ready %}disabled title="The requester must finish setting up Wise first"{% endif %}>Process Payment</button>
           {% endif %}
         </form>
         {% endif %}

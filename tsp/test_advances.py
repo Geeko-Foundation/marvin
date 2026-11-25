@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from django.test import TestCase
+from django.test import TestCase, skipUnlessDBFeature
 from django.urls import reverse
 
 from payments.models import PaymentRecord
@@ -74,6 +74,28 @@ class TakeBackTests(TestCase):
         self.request.refresh_from_db()
         self.assertEqual(self.request.state, RequestState.SUBMITTED_FOR_PAYMENT)
 
+    @skipUnlessDBFeature('has_select_for_update')
+    def test_it_waits_for_a_payment_that_is_starting(self):
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+        self.client.force_login(self.owner)
+        with CaptureQueriesContext(connection) as queries:
+            self.client.post(reverse('request_take_back', args=[self.request.pk]))
+        table = TravelRequest._meta.db_table
+        self.assertTrue(any('FOR UPDATE' in q['sql'] and f'FROM "{table}"' in q['sql'] for q in queries))
+
+    def test_not_while_a_payment_is_being_sent(self):
+        from django.contrib.contenttypes.models import ContentType
+        PaymentRecord.objects.create(
+            content_type=ContentType.objects.get_for_model(self.request), object_id=self.request.pk,
+            gateway_id='wise-api', amount=Decimal('500'), currency='EUR', recipient_name='T',
+            recipient_email='t@example.org', reference=self.request.reference, status='processing',
+        )
+        self.client.force_login(self.owner)
+        self.client.post(reverse('request_take_back', args=[self.request.pk]))
+        self.request.refresh_from_db()
+        self.assertEqual(self.request.state, RequestState.SUBMITTED_FOR_PAYMENT)
+
     def test_only_the_owner_can_take_it_back(self):
         self.client.force_login(make_requester('tbother'))
         response = self.client.post(reverse('request_take_back', args=[self.request.pk]))
@@ -108,6 +130,15 @@ class ChangeAmountsTests(TestCase):
         self.assertEqual(expense.estimated_amount, Decimal('650'))
         self.assertIsNone(expense.approved_amount)
         self.assertIsNone(self.request.advance_amount)
+
+    def test_an_edit_that_fails_part_way_saves_nothing(self):
+        from unittest import mock
+        with mock.patch('tsp.views._send_back_for_review', side_effect=RuntimeError('mail down')):
+            with self.assertRaises(RuntimeError):
+                self._edit('650')
+        self.request.refresh_from_db()
+        self.assertEqual(self.request.state, RequestState.APPROVED)
+        self.assertEqual(self.request.expenses.get().estimated_amount, Decimal('500'))
 
     def test_not_once_an_advance_has_been_paid(self):
         self.request.state = RequestState.ACCEPTED

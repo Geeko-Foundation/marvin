@@ -11,7 +11,7 @@
     <ul class="steps steps-horizontal w-full mb-8">
       <li class="step {% if wizard_step >= 1 %}step-primary{% endif %}">Account</li>
       <li class="step {% if wizard_step >= 2 %}step-primary{% endif %}">Your details</li>
-      <li class="step {% if wizard_step >= 3 %}step-primary{% endif %}">Wise banking</li>
+      {% if use_wise %}<li class="step {% if wizard_step >= 3 %}step-primary{% endif %}">Wise banking</li>{% endif %}
     </ul>
 
     {% if messages %}

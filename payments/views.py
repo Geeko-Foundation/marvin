@@ -4,7 +4,7 @@ import logging
 from django.conf import settings
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
-from django.http import HttpResponse, JsonResponse
+from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.html import escape
@@ -48,6 +48,9 @@ def _require_payment_permission(view_func):
     return login_required(wrapper)
 
 
+# Wise calls made by one visit to the payment queue to bring its statuses up to date.
+STATUS_CHECKS_PER_VISIT = 5
+
 PROGRESS_STEPS = ('Ready to pay', 'Sent to Wise', 'Approved in Wise', 'Money sent')
 # Where each Wise transfer status sits among the steps above.
 _STEP_FOR_TRANSFER = {'processing': 2, 'funds_converted': 2, 'outgoing_payment_sent': 3}
@@ -72,23 +75,35 @@ def dashboard(request):
     """
     service = PaymentService()
     adapter = service.adapter
+    queue = list(service.get_queue())
+    under_way = service.payments_under_way_by_object(queue)
 
     # Ask Wise about transfers still waiting, so a settled one leaves the queue
-    # without waiting for a webhook. shortcut: one Wise call per waiting
-    # transfer on each visit; fine for a short queue.
-    for obj in service.get_queue():
-        for record in service._payments_under_way(obj).exclude(status='exported').exclude(external_id=None):
-            service.refresh_status(record)
+    # without waiting for a webhook. Only a few per visit, the ones asked about
+    # longest ago first, so a long queue does not make the page wait on Wise.
+    waiting = sorted(
+        (record for records in under_way.values() for record in records
+         if record.status != 'exported' and record.external_id),
+        key=lambda record: record.updated_at,
+    )
+    settled = False
+    for record in waiting[:STATUS_CHECKS_PER_VISIT]:
+        before = record.status
+        service.refresh_status(record)
+        settled = settled or record.status != before
+    if settled:
+        queue = list(service.get_queue())
+        under_way = service.payments_under_way_by_object(queue)
 
     queue_items = []
-    for obj in service.get_queue():
+    for obj in queue:
         ctx = adapter.get_queue_item_context(obj)
         ctx['object'] = obj
         ctx['object_id'] = obj.pk
         ctx['detail_url'] = adapter.get_detail_url(obj)
-        under_way = service._payments_under_way(obj)
-        ctx['in_batch'] = under_way.filter(status='exported').first()
-        ctx['sending'] = under_way.exclude(status='exported').first()
+        records = under_way[obj.pk]
+        ctx['in_batch'] = next((r for r in records if r.status == 'exported'), None)
+        ctx['sending'] = next((r for r in records if r.status != 'exported'), None)
         ctx['progress'] = _progress(ctx['sending'], ctx['in_batch'])
         ctx['current_step'] = sum(reached for _, reached in ctx['progress'])
         if ctx['sending']:
@@ -325,6 +340,8 @@ def wise_webhook(request):
     Wise retries on any non-2xx, so an event we have no record for is still
     answered 200. Only an unusable request is refused.
     """
+    if not settings.USE_WISE:
+        raise Http404
     # Wise checks the URL answers before saving it, by visiting it and by
     # sending a test notification. Neither carries anything to act on.
     if request.method != 'POST' or request.META.get(TEST_HEADER, '').lower() == 'true':

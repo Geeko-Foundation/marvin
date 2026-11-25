@@ -119,14 +119,14 @@ class UserProfile(AuditModel):
     @property
     def requires_wise_banking(self) -> bool:
         """Requestors (except staff/superuser) must complete Wise recipient verification."""
-        if not self.is_requester:
+        if not (settings.USE_WISE and self.is_requester):
             return False
         return not (self.user.is_staff or self.user.is_superuser)
 
     @property
     def can_skip_banking(self) -> bool:
         """Staff and superuser requestors may bypass Wise onboarding."""
-        return self.is_requester and (self.user.is_staff or self.user.is_superuser)
+        return settings.USE_WISE and self.is_requester and (self.user.is_staff or self.user.is_superuser)
 
     def is_profile_complete(self) -> bool:
         """True when required personal and address fields are filled."""
@@ -148,6 +148,15 @@ class UserProfile(AuditModel):
     def is_wise_recipient_ready(self) -> bool:
         """True when a verified Wise account ID is linked on the profile."""
         return bool(self.wise_account_id and self.wise_recipient_verified_at)
+
+    def has_had_payout_account(self) -> bool:
+        """
+        True once a payout account has been set up, even if Wise has since dropped it.
+
+        The method is only written when an account is set up and is kept when a
+        stale one is cleared, so replacing a cleared account still counts as a change.
+        """
+        return bool(self.wise_account_id or self.banking_method)
 
     def needs_onboarding(self) -> bool:
         """True when a requestor still owes profile or Wise banking setup."""

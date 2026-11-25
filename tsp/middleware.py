@@ -4,6 +4,7 @@ from django.shortcuts import redirect
 from django.urls import resolve
 
 from profile.decorators import get_profile
+from profile.services.wise_verification import verification_state
 
 ONBOARDING_URL_NAMES = {
     'signup',
@@ -81,4 +82,16 @@ class RequesterOnboardingMiddleware:
                     if current != step:
                         return redirect(step)
 
+        return self.get_response(request)
+
+
+class StaleBankDetailsMiddleware:
+    """Drop bank details left in the session by a verification nobody finished."""
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        """Checked on every request, so they go even if the banking pages are never opened again."""
+        verification_state(request.session)
         return self.get_response(request)

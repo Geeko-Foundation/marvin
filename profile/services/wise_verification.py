@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from decimal import Decimal
 
 from django.conf import settings
@@ -29,6 +30,10 @@ VERIFICATION_STEPS = [
 
 SESSION_KEY = 'wise_verification_state'
 
+# Bank details wait in the session only while Wise checks them, which takes
+# seconds. Anything older was abandoned, so it is dropped rather than kept.
+VERIFICATION_MAX_AGE_SECONDS = 60 * 60
+
 # Wise checks the bank details when the payee, the quote and the transfer are
 # created, and the test transfer is cancelled before anything is sent, so
 # funding it adds no check. On a live account funding would move real money,
@@ -43,6 +48,15 @@ class WiseVerificationError(Exception):
     def __init__(self, step: str, message: str):
         super().__init__(message)
         self.step = step
+
+
+def verification_state(session) -> dict | None:
+    """The verification in progress in ``session``, dropping it once it has been left too long."""
+    state = session.get(SESSION_KEY)
+    if state and time.time() - state.get('started_at', 0) > VERIFICATION_MAX_AGE_SECONDS:
+        del session[SESSION_KEY]
+        return None
+    return state
 
 
 def init_verification_state(banking: dict | None = None) -> dict:
@@ -170,6 +184,7 @@ def run_verification_step(profile: UserProfile, state: dict, step_id: str) -> di
 
         elif step_id == 'finalize':
             previous_account = profile.wise_account_id
+            replacing = profile.has_had_payout_account()
             profile.banking_method = banking.get('banking_method') or profile.banking_method
             profile.banking_currency = banking_currency
             profile.wise_account_id = state['account_id']
@@ -181,7 +196,7 @@ def run_verification_step(profile: UserProfile, state: dict, step_id: str) -> di
                 'wise_recipient_verified_at',
             ])
             state.pop('banking', None)
-            if previous_account and previous_account != state['account_id']:
+            if replacing and previous_account != state['account_id']:
                 _record_payout_change(user, previous_account, state['account_id'])
             result = {
                 'account_id': state['account_id'],
@@ -211,7 +226,7 @@ def _record_payout_change(user, old_account, new_account):
 
     from profile.audit_log import record
     record('profile.payout_account_changed', user=user, target=user.username,
-           detail=f'Wise recipient {old_account} -> {new_account}')
+           detail=f'Wise recipient {old_account or "(cleared)"} -> {new_account}')
     if user.email:
         send_mail(
             'Your Marvin payout account was changed',

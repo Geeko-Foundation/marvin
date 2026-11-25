@@ -17,7 +17,7 @@ from django.core.cache import caches
 from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import Count, Q, Sum, Value
+from django.db.models import Count, ProtectedError, Q, Sum, Value
 from django.db.models.functions import Coalesce, NullIf
 from django.http import FileResponse, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -49,9 +49,10 @@ from profile.services.wise_verification import (
     WiseVerificationError,
     init_verification_state,
     run_verification_step,
+    verification_state,
 )
 from tsp.accounts import activation_token, send_activation_email
-from tsp.decorators import group_required, login_required, staff_or_owner
+from tsp.decorators import group_required, login_required, staff_or_owner, wise_required
 from tsp.forms import (
     AcceptForm,
     ApprovalForm,
@@ -96,8 +97,9 @@ def _is_safe_redirect(request, url):
 
 
 # Ten wrong passwords from one address lock that address out of the account.
-# A far higher limit across every address still stops a spread-out attack,
-# without letting one person lock the real owner out after ten guesses.
+# Once the account has a hundred across every address, each address gets one
+# try instead, which stops a spread-out attack while the real owner, typing
+# the right password from their own address, still gets in.
 LOGIN_FAILURE_LIMIT = 10
 LOGIN_ACCOUNT_FAILURE_LIMIT = 100
 LOGIN_LOCK_SECONDS = 15 * 60
@@ -112,15 +114,46 @@ BANK_SETUP_REFUSED = 'Too many attempts to set up bank details today. Try again 
 
 
 # Counters live in a cache of their own, so filling the shared one cannot
-# reset them. shortcut: each server process keeps its own counts, so N
-# workers allow N times every limit; use a shared cache if that matters.
+# reset them. Production keeps it in the database, so every server process
+# shares the counts and a deploy does not reset them.
 limits = caches['limits']
+
+
+def _window_key(key, window_seconds):
+    """
+    ``key`` for the current window of ``window_seconds``.
+
+    The window is in the key, so a count ends with it in any cache, including
+    the database one, which forgets an entry's expiry when it is counted up.
+    """
+    return f'{key}:{int(time.time()) // window_seconds}'
+
+
+def _count(key, window_seconds):
+    """How many times ``key`` has been counted in the current window."""
+    return limits.get(_window_key(key, window_seconds), 0)
+
+
+def _count_one(key, window_seconds):
+    """Count one more use of ``key`` and return the new count."""
+    key = _window_key(key, window_seconds)
+    limits.add(key, 0, window_seconds)
+    return limits.incr(key)
 
 
 def _under_limit(key, limit, window_seconds):
     """Count one more use of ``key`` and say whether it is still within ``limit``."""
-    limits.add(key, 0, window_seconds)
-    return limits.incr(key) <= limit
+    return _count_one(key, window_seconds) <= limit
+
+
+def _counts_as_bank_attempt(form):
+    """
+    A bank setup try, or a wrong current password typed into one.
+
+    Wrong passwords count too, so the form cannot be used to guess the
+    password of whoever left their session open.
+    """
+    return form.is_valid() or bool(form.data.get('current_password') and 'current_password' in form.errors)
 
 
 def _client_address(request):
@@ -146,11 +179,11 @@ def login_view(request):
         username = request.POST.get('username', '').strip().lower()
         account_key = 'login-failures:' + username
         failures_key = f'{account_key}:{_client_address(request)}'
-        if (limits.get(failures_key, 0) >= LOGIN_FAILURE_LIMIT
-                or limits.get(account_key, 0) >= LOGIN_ACCOUNT_FAILURE_LIMIT):
+        under_attack = _count(account_key, LOGIN_LOCK_SECONDS) >= LOGIN_ACCOUNT_FAILURE_LIMIT
+        if _count(failures_key, LOGIN_LOCK_SECONDS) >= (1 if under_attack else LOGIN_FAILURE_LIMIT):
             form.add_error(None, 'Too many failed sign-in attempts for this account. Try again in 15 minutes.')
         elif form.is_valid():
-            limits.delete(failures_key)
+            limits.delete(_window_key(failures_key, LOGIN_LOCK_SECONDS))
             login(request, form.get_user())
             next_url = request.POST.get('next') or request.GET.get('next')
             if _is_safe_redirect(request, next_url):
@@ -160,8 +193,7 @@ def login_view(request):
             # Names with no account are not counted, so made-up ones cannot
             # fill the counters and push a real account's count out.
             for key in (failures_key, account_key):
-                limits.add(key, 0, LOGIN_LOCK_SECONDS)
-                limits.incr(key)
+                _count_one(key, LOGIN_LOCK_SECONDS)
 
 
     return render(request, 'tsp/login.html', {
@@ -267,7 +299,7 @@ def signup_profile(request):
     # Skip ahead only when nothing is missing here either. An address that a
     # later rule made incomplete, such as a postcode, still has to be filled in,
     # or the dashboard and this step would send the user back and forth.
-    if profile.is_profile_complete() and profile.is_wise_recipient_ready():
+    if profile.is_profile_complete() and (not settings.USE_WISE or profile.is_wise_recipient_ready()):
         return redirect('signup_complete')
 
     if request.method == 'POST':
@@ -286,6 +318,8 @@ def signup_profile(request):
                     'Skipped Wise banking. You can set it up later from your profile.',
                 )
                 return redirect('dashboard')
+            if not settings.USE_WISE:
+                return redirect('signup_complete')
             messages.success(request, 'Profile saved. Set up your Wise banking next.')
             return redirect('signup_banking')
     else:
@@ -298,6 +332,7 @@ def signup_profile(request):
     })
 
 
+@wise_required
 @login_required
 @group_required(GROUP_REQUESTER)
 def signup_banking(request):
@@ -321,8 +356,8 @@ def signup_banking(request):
 
     if request.method == 'POST':
         form = WiseRecipientForm(request.POST, profile=profile)
-        if form.is_valid() and not _under_limit(f'bank-setup:{request.user.pk}', BANK_SETUP_LIMIT,
-                                                 BANK_SETUP_WINDOW_SECONDS):
+        if _counts_as_bank_attempt(form) and not _under_limit(
+                f'bank-setup:{request.user.pk}', BANK_SETUP_LIMIT, BANK_SETUP_WINDOW_SECONDS):
             form.add_error(None, BANK_SETUP_REFUSED)
         if form.is_valid():
             state = init_verification_state(banking=banking_session_payload(form.cleaned_data))
@@ -341,6 +376,7 @@ def signup_banking(request):
     })
 
 
+@wise_required
 @login_required
 @group_required(GROUP_REQUESTER)
 def signup_banking_options(request):
@@ -357,6 +393,7 @@ def signup_banking_options(request):
     return JsonResponse({'options': [{'value': key, 'label': name} for key, name in choices]})
 
 
+@wise_required
 @login_required
 @group_required(GROUP_REQUESTER)
 @require_POST
@@ -373,20 +410,7 @@ def signup_skip_banking(request):
     return redirect('dashboard')
 
 
-# Bank details wait in the session only while Wise checks them, which takes
-# seconds. Anything older was abandoned, so it is dropped rather than kept.
-VERIFICATION_MAX_AGE_SECONDS = 60 * 60
-
-
-def _verification_state(request):
-    """The verification in progress, or None once it has been left too long."""
-    state = request.session.get(SESSION_KEY)
-    if state and time.time() - state.get('started_at', 0) > VERIFICATION_MAX_AGE_SECONDS:
-        del request.session[SESSION_KEY]
-        return None
-    return state
-
-
+@wise_required
 @login_required
 @group_required(GROUP_REQUESTER)
 def signup_banking_progress(request):
@@ -399,7 +423,7 @@ def signup_banking_progress(request):
     if profile.is_wise_recipient_ready():
         return redirect('signup_complete')
 
-    if _verification_state(request) is None:
+    if verification_state(request.session) is None:
         return redirect('signup_banking')
 
     return render(request, 'tsp/signup/banking_progress.html', {
@@ -409,6 +433,7 @@ def signup_banking_progress(request):
     })
 
 
+@wise_required
 @login_required
 @group_required(GROUP_REQUESTER)
 def signup_banking_step(request):
@@ -417,7 +442,7 @@ def signup_banking_step(request):
         return JsonResponse({'error': 'POST required'}, status=405)
 
     profile = get_profile(request.user)
-    state = _verification_state(request)
+    state = verification_state(request.session)
 
     if not state:
         return JsonResponse({'error': 'Verification not started. Go back to banking step.'}, status=400)
@@ -438,6 +463,9 @@ def signup_banking_step(request):
     try:
         result = run_verification_step(profile, state, step_id)
     except WiseVerificationError as exc:
+        # The page cannot carry on after a failed step, so the bank details go
+        # now and the form starts over.
+        request.session.pop(SESSION_KEY, None)
         return JsonResponse({
             'step': step_id,
             'status': 'error',
@@ -494,7 +522,7 @@ def _committee_sections(request):
     """Dashboard data for the TSP committee."""
     pending = TravelRequest.objects.filter(
         state=RequestState.SUBMITTED,
-    ).select_related('user', 'event').order_by('created_at')
+    ).select_related('user', 'event').prefetch_related('expenses').order_by('created_at')
 
     event_summaries = _event_money()
     proposed = Event.objects.filter(
@@ -626,7 +654,7 @@ def _finance_sections(request):
     """Dashboard data for the finance team."""
     recently_paid = TravelRequest.objects.filter(
         state=RequestState.PAID,
-    ).select_related('user', 'event').prefetch_related('payments').order_by('-updated_at')
+    ).select_related('user', 'event').prefetch_related('payments', 'expenses').order_by('-updated_at')
 
     travel_request_ct = ContentType.objects.get_for_model(TravelRequest)
     # Only transfers that went through count as paid, one figure per currency.
@@ -639,12 +667,13 @@ def _finance_sections(request):
 
     with_advance = TravelRequest.objects.filter(
         payments__purpose='advance', refund_settled_at__isnull=True,
-    ).distinct().select_related('user', 'event')
+    ).distinct().select_related('user', 'event').prefetch_related('payments', 'expenses')
 
     return {
         'payment_queue': TravelRequest.objects.filter(
             state=RequestState.SUBMITTED_FOR_PAYMENT,
-        ).select_related('user', 'event').annotate(doc_count=Count('documents')),
+        ).select_related('user', 'event').prefetch_related('expenses', 'payments')
+        .annotate(doc_count=Count('documents')),
         'advance_queue': TravelRequestPayableAdapter().get_queue().filter(state=RequestState.ACCEPTED),
         'owed_back': [r for r in with_advance if r.amount_owed_back()],
         'recently_paid': _paginate(request, recently_paid, 10, 'paid_page'),
@@ -677,7 +706,7 @@ def dashboard(request):
             {
                 'event': event,
                 'pending': event.requests.filter(state=RequestState.SUBMITTED)
-                                .select_related('user').order_by('created_at'),
+                                .select_related('user').prefetch_related('expenses').order_by('created_at'),
                 'approved': event.approved_against_budget(),
                 'remaining': event.budget_remaining(),
             }
@@ -696,6 +725,7 @@ def onboarding_personal(request):
     return redirect('signup_profile')
 
 
+@wise_required
 @login_required
 @group_required(GROUP_REQUESTER)
 def onboarding_wise(request):
@@ -827,24 +857,26 @@ def event_edit(request, pk):
 def event_delete(request, pk):
     """Delete an event, as long as nobody has applied to it yet."""
     event = get_object_or_404(Event, pk=pk)
-    # Deleting an event cascades to its requests and their payment records,
-    # so only an empty one can go. Closing it stops new requests instead.
-    if event.requests.exists():
+    # The database refuses to delete an event with requests, even one sent a
+    # moment ago, so only an empty one can go. Closing it stops new requests instead.
+    name = event.name
+    try:
+        event.delete()
+    except ProtectedError:
         messages.error(
             request,
-            f'{event.name} already has travel requests, so it cannot be deleted. '
+            f'{name} already has travel requests, so it cannot be deleted. '
             'Close it to stop new requests instead.',
         )
         return redirect('event_list')
 
-    name = event.name
-    audit('event.deleted', user=request.user, target=event.name,
+    audit('event.deleted', user=request.user, target=name,
           detail=f'{event.start_date} to {event.end_date}')
-    event.delete()
     messages.success(request, f'{name} deleted.')
     return redirect('event_list')
 
 
+@wise_required
 @login_required
 @group_required(GROUP_REQUESTER, GROUP_TSP)
 def check_wise_account(request):
@@ -858,6 +890,9 @@ def check_wise_account(request):
 
     if auto_recreate:
         form = WiseRecipientForm(request.POST, profile=profile)
+        if _counts_as_bank_attempt(form) and not _under_limit(
+                f'bank-setup:{request.user.pk}', BANK_SETUP_LIMIT, BANK_SETUP_WINDOW_SECONDS):
+            return JsonResponse({'ready': False, 'message': BANK_SETUP_REFUSED}, status=429)
         if not form.is_valid():
             return JsonResponse({
                 'ready': False,
@@ -867,8 +902,6 @@ def check_wise_account(request):
                 'errors': form.errors,
             }, status=422)
         banking = banking_session_payload(form.cleaned_data)
-        if not _under_limit(f'bank-setup:{request.user.pk}', BANK_SETUP_LIMIT, BANK_SETUP_WINDOW_SECONDS):
-            return JsonResponse({'ready': False, 'message': BANK_SETUP_REFUSED}, status=429)
 
     result = check_wise_recipient(profile, banking=banking, auto_recreate=auto_recreate)
 
@@ -938,7 +971,7 @@ def request_create(request):
         'profile': profile,
         'is_edit': False,
         'payout': _payout(profile),
-        'show_account_check': profile.is_requester,
+        'show_account_check': settings.USE_WISE and profile.is_requester,
         'banking_form': WiseRecipientForm(profile=profile) if profile.is_requester else None,
     })
 
@@ -1080,19 +1113,27 @@ def request_edit(request, pk):
         return redirect('request_detail', pk=pk)
 
     if request.method == 'POST':
-        form = TravelRequestForm(request.POST, instance=travel_request)
-        form_is_valid = form.is_valid()
-        event = form.cleaned_data.get('event') or travel_request.event
-        formset = ExpenseFormSet(request.POST, instance=travel_request, form_kwargs={'event': event})
-        if form_is_valid and formset.is_valid():
-            form.save()
-            formset.save()
-            if needs_review_again:
-                _send_back_for_review(travel_request, request.user)
-                messages.success(request, 'Request updated and sent back to the committee for approval.')
-            else:
-                messages.success(request, 'Request updated.')
-            return redirect('request_detail', pk=pk)
+        # Locked and checked again, so an approval made while the form was open
+        # is not saved over, and an edit that fails part way saves nothing.
+        with transaction.atomic():
+            travel_request = TravelRequest.objects.select_for_update().get(pk=pk)
+            needs_review_again = travel_request.can_change_amounts()
+            if not (travel_request.is_editable_by_requester or needs_review_again):
+                messages.error(request, 'This request can no longer be edited.')
+                return redirect('request_detail', pk=pk)
+            form = TravelRequestForm(request.POST, instance=travel_request)
+            form_is_valid = form.is_valid()
+            event = form.cleaned_data.get('event') or travel_request.event
+            formset = ExpenseFormSet(request.POST, instance=travel_request, form_kwargs={'event': event})
+            if form_is_valid and formset.is_valid():
+                form.save()
+                formset.save()
+                if needs_review_again:
+                    _send_back_for_review(travel_request, request.user)
+                    messages.success(request, 'Request updated and sent back to the committee for approval.')
+                else:
+                    messages.success(request, 'Request updated.')
+                return redirect('request_detail', pk=pk)
     else:
         form = TravelRequestForm(instance=travel_request)
         formset = ExpenseFormSet(instance=travel_request)
@@ -1180,6 +1221,7 @@ def request_approve(request, pk):
     # Everything below is undone if any check refuses the approval, so a
     # refused approval leaves no amounts behind to skew the event budget.
     with transaction.atomic():
+        _lock_budget(travel_request.event)
         error = _apply_approved_amounts(travel_request, request.POST)
         # An advance is a decision to pay money early, so it stays with the committee.
         if not error and profile.is_tsp:
@@ -1229,6 +1271,17 @@ def _apply_approved_amounts(travel_request, data):
             'approved_amount', 'approved_currency', 'approval_rate', 'approval_rate_date',
         ])
     return None
+
+
+def _lock_budget(event):
+    """
+    Hold the event's row until the approval commits.
+
+    Two approvals for one event at the same moment would each see the budget
+    before the other's amounts and both pass. The second now waits, then
+    checks against what the first approved.
+    """
+    Event.objects.select_for_update().get(pk=event.pk)
 
 
 def _check_budget(travel_request, data, notes, may_overspend=True):
@@ -1301,6 +1354,7 @@ def request_batch_review(request):
             continue
         with transaction.atomic():
             if action == 'approve':
+                _lock_budget(travel_request.event)
                 # Approving in bulk approves the event's usual share of what was
                 # asked for. Left unpriced, the request would reach finance worth
                 # nothing, since a missing approved amount counts for nothing.
@@ -1526,17 +1580,20 @@ def request_submit_for_payment(request, pk):
 @require_POST
 def request_take_back(request, pk):
     """Pull a request back out of the payment queue so the requester can fix it."""
-    travel_request = get_object_or_404(TravelRequest, pk=pk)
-    if travel_request.user_id != request.user.id:
-        raise PermissionDenied
-    if not travel_request.can_take_back_from_payment():
-        messages.error(request, 'Finance has already started paying this request.')
-        return redirect('request_detail', pk=pk)
+    # Locked as finance's payment locks it, so a payment starting at the same
+    # moment either goes first and is seen here, or waits and finds it gone.
+    with transaction.atomic():
+        travel_request = get_object_or_404(TravelRequest.objects.select_for_update(), pk=pk)
+        if travel_request.user_id != request.user.id:
+            raise PermissionDenied
+        if not travel_request.can_take_back_from_payment():
+            messages.error(request, 'Finance has already started paying this request.')
+            return redirect('request_detail', pk=pk)
 
-    transition_request(
-        travel_request, RequestState.ACCEPTED, request.user,
-        notes='Taken back from the payment queue to edit.',
-    )
+        transition_request(
+            travel_request, RequestState.ACCEPTED, request.user,
+            notes='Taken back from the payment queue to edit.',
+        )
     messages.success(request, 'Taken back. Fix your costs or documents, then submit for payment again.')
     return redirect('request_detail', pk=pk)
 

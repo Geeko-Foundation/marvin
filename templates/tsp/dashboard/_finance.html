@@ -26,11 +26,13 @@
 
 <div class="flex gap-2 mb-6">
   <a href="{% url 'payments:dashboard' %}" class="btn btn-primary">Payment Queue</a>
+  {% if use_wise %}
   <form method="post" action="{% url 'payments:batch_export' %}">
     {% csrf_token %}
     <input type="hidden" name="gateway_id" value="wise-csv">
     <button type="submit" class="btn btn-outline">Generate Wise CSV</button>
   </form>
+  {% endif %}
 </div>
 
 {% for currency, needed, held, short in shortfalls %}

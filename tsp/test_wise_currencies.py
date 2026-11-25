@@ -169,7 +169,9 @@ class BankingOptionsEndpointTests(TestCase):
         banks.assert_called_once_with('japan')
 
     def test_a_chosen_bank_asks_for_its_branches(self):
-        with mock.patch('tsp.views.branch_choices', return_value=[('001', 'Tokyo')]) as branches:
+        # The bank is checked against Wise's list first, so that is faked too.
+        with mock.patch('tsp.views.bank_choices', return_value=[('0443', 'BNP Paribas')]), \
+                mock.patch('tsp.views.branch_choices', return_value=[('001', 'Tokyo')]) as branches:
             response = self.client.get(reverse('signup_banking_options'),
                                        {'method': 'japan', 'bank_code': '0443'})
         self.assertEqual(response.json()['options'], [{'value': '001', 'label': 'Tokyo'}])

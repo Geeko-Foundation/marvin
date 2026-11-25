@@ -17,16 +17,21 @@ function quiet(section) {
   });
   document.addEventListener('htmx:afterSettle', function (event) {
     var announcer = document.getElementById('announcer');
+    if (!announcer) return;
+    var changed = [];
     // Look across the page: after an outerHTML swap the event's element can be the old one.
     document.querySelectorAll('[data-announce]').forEach(function (el) {
       var text = el.textContent.trim();
-      if (announcer && text && spoken[key(el)] !== text) {
+      if (text && spoken[key(el)] !== text) {
         spoken[key(el)] = text;
-        // Emptied first, so the same words for a second payment still count as new.
-        announcer.textContent = '';
-        setTimeout(function () { announcer.textContent = text; }, 100);
+        changed.push(text);
       }
     });
+    if (!changed.length) return;
+    // One message for everything that changed, so a second payment is not cut off.
+    // Emptied first, so the same words as last time still count as new.
+    announcer.textContent = '';
+    setTimeout(function () { announcer.textContent = changed.join('. '); }, 100);
   });
 })();
 

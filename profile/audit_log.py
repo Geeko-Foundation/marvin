@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from django.conf import settings
-from django.db import models
+from django.db import models, transaction
 
 
 class AuditLogEntry(models.Model):
@@ -55,15 +55,18 @@ def record(action: str, *, user=None, target='', detail='') -> AuditLogEntry | N
     Write one entry.
 
     Logging must never be the reason an action fails, so a failure here is
-    swallowed rather than raised.
+    swallowed rather than raised. The write gets its own savepoint, so a failed
+    insert inside the caller's transaction does not break the rest of it on
+    Postgres.
     """
     try:
-        return AuditLogEntry.objects.create(
-            action=action,
-            target=str(target)[:120],
-            detail=str(detail),
-            user=user if getattr(user, 'is_authenticated', False) else None,
-        )
+        with transaction.atomic():
+            return AuditLogEntry.objects.create(
+                action=action,
+                target=str(target)[:120],
+                detail=str(detail),
+                user=user if getattr(user, 'is_authenticated', False) else None,
+            )
     except Exception:  # pragma: no cover - logging must not break the caller
         import logging
 

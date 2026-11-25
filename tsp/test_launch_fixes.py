@@ -214,6 +214,23 @@ class BankingSessionTests(TestCase):
         self.client.post(reverse('signup_banking_step'), {'step': 'create_payee'})
         self.assertNotIn(SESSION_KEY, self.client.session)
 
+    def test_an_old_attempt_is_dropped_on_any_page(self):
+        self.seed(0)
+        self.client.get(reverse('dashboard'))
+        self.assertNotIn(SESSION_KEY, self.client.session)
+
+    def test_a_failed_step_drops_the_bank_details(self):
+        import time
+        from unittest import mock
+
+        from profile.services.wise_verification import WiseVerificationError
+        self.seed(time.time())
+        with mock.patch('tsp.views.run_verification_step',
+                        side_effect=WiseVerificationError('create_payee', 'Invalid IBAN')):
+            response = self.client.post(reverse('signup_banking_step'), {'step': 'create_payee'})
+        self.assertEqual(response.status_code, 422)
+        self.assertNotIn(SESSION_KEY, self.client.session)
+
 
 class TransitionMessageTests(TestCase):
     def test_a_refused_change_names_the_states_in_words(self):

@@ -551,6 +551,43 @@ class PayoutChangeTests(TestCase):
         self.assertIn('111 -> 222', entry.detail)
         self.assertEqual(mail.outbox[-1].to, [self.user.email])
 
+    def test_wrong_passwords_use_up_the_days_attempts(self):
+        from django.core.cache import caches
+        caches['limits'].clear()
+        self.profile.wise_account_id = 111
+        self.profile.save()
+        self.client.force_login(self.user)
+        data = {'banking_method': 'iban', 'banking_currency': 'EUR',
+                'bank_iban': 'DE89370400440532013000', 'recreate': '1'}
+        for attempt in range(5):
+            self.client.post(reverse('signup_banking'), {**data, 'current_password': f'guess-{attempt}'})
+        response = self.client.post(reverse('signup_banking'), {**data, 'current_password': 'right-password-1'})
+        self.assertContains(response, 'Too many attempts')
+
+    def test_an_account_wise_dropped_still_needs_the_password_to_replace(self):
+        self.profile.wise_account_id = 111
+        self.profile.banking_method = 'iban'
+        self.profile.save()
+        from profile.services.wise_recipient import clear_stale_wise_recipient
+        clear_stale_wise_recipient(self.profile)
+        self.assertIsNone(self.profile.wise_account_id)
+        self.assertIn('current_password', self.form().errors)
+
+    def test_replacing_a_dropped_account_is_logged_and_emailed(self):
+        from unittest import mock
+        from django.core import mail
+        from profile.models import AuditLogEntry
+        from profile.services.wise_verification import run_verification_step
+        self.profile.wise_account_id = None
+        self.profile.banking_method = 'iban'
+        self.profile.save()
+        state = {'account_id': 222, 'banking': {'banking_method': 'iban', 'bank_iban': 'DE89370400440532013000'}}
+        with mock.patch('profile.services.wise_verification.get_wise_client', return_value=mock.Mock()):
+            run_verification_step(self.profile, state, 'finalize')
+        entry = AuditLogEntry.objects.get(action='profile.payout_account_changed')
+        self.assertIn('(cleared) -> 222', entry.detail)
+        self.assertEqual(mail.outbox[-1].to, [self.user.email])
+
 
 class OrganiserTwoStepTests(TestCase):
 

@@ -53,6 +53,15 @@ X_FRAME_OPTIONS = 'DENY'
 # Database persistent connections (reduces connection overhead under load)
 DATABASES['default']['CONN_MAX_AGE'] = int(env('DATABASE_CONN_MAX_AGE', '60'))
 
+# Sign-in and other limits in the database, so every worker shares the counts
+# and a deploy does not reset them. The table is made by createcachetable.
+CACHES['limits'] = {
+    'BACKEND': 'django.core.cache.backends.db.DatabaseCache',
+    'LOCATION': 'marvin_limits',
+    'TIMEOUT': CACHES['limits']['TIMEOUT'],
+    'OPTIONS': {'MAX_ENTRIES': 100_000},
+}
+
 # For PostgreSQL set DATABASE_ENGINE=django.db.backends.postgresql and
 # DATABASE_NAME, DATABASE_USER, DATABASE_PASSWORD, DATABASE_HOST, DATABASE_PORT.
 
@@ -84,21 +93,7 @@ TWO_FACTOR_ENFORCED = env_bool('TWO_FACTOR_ENFORCED', default=True)
 
 # Live exchange rates fetching
 EXCHANGE_RATES_FETCH = env_bool('EXCHANGE_RATES_FETCH', default=True)
-WISE_BALANCE_FETCH = env_bool('WISE_BALANCE_FETCH', default=True)
-
-# Email Delivery Configuration
-MAILERS = {
-    'default': {
-        'BACKEND': "django.core.mail.backends.smtp.EmailBackend",
-        'OPTIONS': {
-            'host': env('EMAIL_HOST', 'localhost'),
-            'use_tls': True,    # port is not needed: it defaults to 587 with use_tls True.
-            'username': env('EMAIL_HOST_USER', ''),
-            'password': env('EMAIL_HOST_PASSWORD', ''),
-            'default_from_email': env('DEFAULT_FROM_EMAIL', ''),
-        },
-    },
-}
+WISE_BALANCE_FETCH = USE_WISE and env_bool('WISE_BALANCE_FETCH', default=True)
 
 # ==============================================================================
 # LOGGING
