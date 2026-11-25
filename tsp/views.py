@@ -17,7 +17,7 @@ from django.core.cache import caches
 from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import Count, Q, Sum, Value
+from django.db.models import Count, ProtectedError, Q, Sum, Value
 from django.db.models.functions import Coalesce, NullIf
 from django.http import FileResponse, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -837,20 +837,21 @@ def event_edit(request, pk):
 def event_delete(request, pk):
     """Delete an event, as long as nobody has applied to it yet."""
     event = get_object_or_404(Event, pk=pk)
-    # Deleting an event cascades to its requests and their payment records,
-    # so only an empty one can go. Closing it stops new requests instead.
-    if event.requests.exists():
+    # The database refuses to delete an event with requests, even one sent a
+    # moment ago, so only an empty one can go. Closing it stops new requests instead.
+    name = event.name
+    try:
+        event.delete()
+    except ProtectedError:
         messages.error(
             request,
-            f'{event.name} already has travel requests, so it cannot be deleted. '
+            f'{name} already has travel requests, so it cannot be deleted. '
             'Close it to stop new requests instead.',
         )
         return redirect('event_list')
 
-    name = event.name
-    audit('event.deleted', user=request.user, target=event.name,
+    audit('event.deleted', user=request.user, target=name,
           detail=f'{event.start_date} to {event.end_date}')
-    event.delete()
     messages.success(request, f'{name} deleted.')
     return redirect('event_list')
 

@@ -46,6 +46,18 @@ class TravelRequestAdmin(admin.ModelAdmin):
     readonly_fields = ('created_at', 'created_by', 'updated_at', 'changed_by')
     inlines = [ExpenseInline, StateHistoryInline]
 
+    def has_delete_permission(self, request, obj=None):
+        # Deleting a request deletes its payment records with it.
+        if obj is not None and obj.payments.exists():
+            return False
+        return super().has_delete_permission(request, obj)
+
+    def get_actions(self, request):
+        actions = super().get_actions(request)
+        # Deleting many at once would skip the check above.
+        actions.pop('delete_selected', None)
+        return actions
+
 
 @admin.register(Comment)
 class CommentAdmin(admin.ModelAdmin):

@@ -443,6 +443,44 @@ class AuditLogPageTests(TestCase):
         self.assertEqual(self.client.get(reverse('audit_log')).status_code, 403)
 
 
+class HistoryProtectionTests(TestCase):
+    """Nothing in the admin can rewrite or remove what was paid."""
+
+    def setUp(self):
+        from django.contrib.contenttypes.models import ContentType
+        self.admin = make_user('historyadmin', [])
+        self.admin.is_staff = self.admin.is_superuser = True
+        self.admin.save()
+        self.event = make_event()
+        self.req = TravelRequest.objects.create(user=make_user('historyowner', [GROUP_REQUESTER]),
+                                                event=self.event, state=RequestState.PAID, description='T')
+        self.record = PaymentRecord.objects.create(
+            content_type=ContentType.objects.get_for_model(self.req), object_id=self.req.pk, gateway_id='manual',
+            amount=10, currency='EUR', status='completed', reference=self.req.reference,
+            recipient_name='x', recipient_email='x@example.org')
+        self.client.force_login(self.admin)
+
+    def test_payment_records_can_be_read_but_not_changed_or_deleted(self):
+        change = reverse('admin:payments_paymentrecord_change', args=[self.record.pk])
+        self.assertEqual(self.client.get(change).status_code, 200)
+        self.client.post(change, {'status': 'failed'})
+        self.client.post(reverse('admin:payments_paymentrecord_delete', args=[self.record.pk]), {'post': 'yes'})
+        self.record.refresh_from_db()
+        self.assertEqual(self.record.status, 'completed')
+
+    def test_a_paid_request_cannot_be_deleted_in_the_admin(self):
+        self.client.post(reverse('admin:tsp_travelrequest_delete', args=[self.req.pk]), {'post': 'yes'})
+        self.assertTrue(PaymentRecord.objects.filter(pk=self.record.pk).exists())
+        response = self.client.get(reverse('admin:tsp_travelrequest_changelist'))
+        self.assertNotContains(response, 'delete_selected')
+
+    def test_an_event_with_requests_cannot_be_deleted_at_all(self):
+        from django.db.models import ProtectedError
+        with self.assertRaises(ProtectedError):
+            self.event.delete()
+        self.assertTrue(PaymentRecord.objects.filter(pk=self.record.pk).exists())
+
+
 class LoginLimitTests(TestCase):
     """Guessing passwords for one account stops after ten wrong tries."""
 

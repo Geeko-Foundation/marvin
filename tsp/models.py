@@ -235,7 +235,8 @@ class TravelRequest(AuditModel):
         related_name='travel_requests',
     )
 
-    event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='requests')
+    # Protected, so deleting an event can never take its requests and their payments with it.
+    event = models.ForeignKey(Event, on_delete=models.PROTECT, related_name='requests')
     talk_url = models.URLField(blank=True, null=True)
     talk_title = models.CharField(max_length=300, blank=True, null=True)
     description = models.TextField()
