@@ -123,6 +123,16 @@ def _under_limit(key, limit, window_seconds):
     return limits.incr(key) <= limit
 
 
+def _counts_as_bank_attempt(form):
+    """
+    A bank setup try, or a wrong current password typed into one.
+
+    Wrong passwords count too, so the form cannot be used to guess the
+    password of whoever left their session open.
+    """
+    return form.is_valid() or bool(form.data.get('current_password') and 'current_password' in form.errors)
+
+
 def _client_address(request):
     """
     The visitor's address. Behind a proxy that is the last one it appended.
@@ -321,8 +331,8 @@ def signup_banking(request):
 
     if request.method == 'POST':
         form = WiseRecipientForm(request.POST, profile=profile)
-        if form.is_valid() and not _under_limit(f'bank-setup:{request.user.pk}', BANK_SETUP_LIMIT,
-                                                 BANK_SETUP_WINDOW_SECONDS):
+        if _counts_as_bank_attempt(form) and not _under_limit(
+                f'bank-setup:{request.user.pk}', BANK_SETUP_LIMIT, BANK_SETUP_WINDOW_SECONDS):
             form.add_error(None, BANK_SETUP_REFUSED)
         if form.is_valid():
             state = init_verification_state(banking=banking_session_payload(form.cleaned_data))
@@ -858,6 +868,9 @@ def check_wise_account(request):
 
     if auto_recreate:
         form = WiseRecipientForm(request.POST, profile=profile)
+        if _counts_as_bank_attempt(form) and not _under_limit(
+                f'bank-setup:{request.user.pk}', BANK_SETUP_LIMIT, BANK_SETUP_WINDOW_SECONDS):
+            return JsonResponse({'ready': False, 'message': BANK_SETUP_REFUSED}, status=429)
         if not form.is_valid():
             return JsonResponse({
                 'ready': False,
@@ -867,8 +880,6 @@ def check_wise_account(request):
                 'errors': form.errors,
             }, status=422)
         banking = banking_session_payload(form.cleaned_data)
-        if not _under_limit(f'bank-setup:{request.user.pk}', BANK_SETUP_LIMIT, BANK_SETUP_WINDOW_SECONDS):
-            return JsonResponse({'ready': False, 'message': BANK_SETUP_REFUSED}, status=429)
 
     result = check_wise_recipient(profile, banking=banking, auto_recreate=auto_recreate)
 

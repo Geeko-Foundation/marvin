@@ -149,6 +149,15 @@ class UserProfile(AuditModel):
         """True when a verified Wise account ID is linked on the profile."""
         return bool(self.wise_account_id and self.wise_recipient_verified_at)
 
+    def has_had_payout_account(self) -> bool:
+        """
+        True once a payout account has been set up, even if Wise has since dropped it.
+
+        The method is only written when an account is set up and is kept when a
+        stale one is cleared, so replacing a cleared account still counts as a change.
+        """
+        return bool(self.wise_account_id or self.banking_method)
+
     def needs_onboarding(self) -> bool:
         """True when a requestor still owes profile or Wise banking setup."""
         if not self.is_requester:

@@ -253,7 +253,7 @@ class WiseRecipientForm(forms.Form):
     def clean(self):
         """Validate that required bank fields are present for the selected method."""
         cleaned = super().clean()
-        if (self.profile and self.profile.wise_account_id
+        if (self.profile and self.profile.has_had_payout_account()
                 and not self.profile.user.check_password(cleaned.get('current_password') or '')):
             self.add_error('current_password', 'Enter your current password to change where you are paid.')
         method = cleaned.get('banking_method')

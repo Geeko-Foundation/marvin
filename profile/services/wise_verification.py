@@ -170,6 +170,7 @@ def run_verification_step(profile: UserProfile, state: dict, step_id: str) -> di
 
         elif step_id == 'finalize':
             previous_account = profile.wise_account_id
+            replacing = profile.has_had_payout_account()
             profile.banking_method = banking.get('banking_method') or profile.banking_method
             profile.banking_currency = banking_currency
             profile.wise_account_id = state['account_id']
@@ -181,7 +182,7 @@ def run_verification_step(profile: UserProfile, state: dict, step_id: str) -> di
                 'wise_recipient_verified_at',
             ])
             state.pop('banking', None)
-            if previous_account and previous_account != state['account_id']:
+            if replacing and previous_account != state['account_id']:
                 _record_payout_change(user, previous_account, state['account_id'])
             result = {
                 'account_id': state['account_id'],
@@ -211,7 +212,7 @@ def _record_payout_change(user, old_account, new_account):
 
     from profile.audit_log import record
     record('profile.payout_account_changed', user=user, target=user.username,
-           detail=f'Wise recipient {old_account} -> {new_account}')
+           detail=f'Wise recipient {old_account or "(cleared)"} -> {new_account}')
     if user.email:
         send_mail(
             'Your Marvin payout account was changed',
