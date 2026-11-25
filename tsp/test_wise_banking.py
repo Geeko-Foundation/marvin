@@ -32,30 +32,24 @@ class WiseRecipientTypeTests(TestCase):
 class WiseUsAccountTests(TestCase):
     """Wise refuses a US payee without an account type and a state code."""
 
-    def _profile(self, state):
-        from profile.models import UserProfile
+    def _state(self, state):
+        from profile.services.wise_recipient import resolve_state
 
-        return UserProfile(state=state, country='US')
+        return resolve_state({'state': state}, 'US')
 
     def test_a_state_code_is_passed_through(self):
-        from profile.services.wise_recipient import resolve_state
-
-        self.assertEqual(resolve_state(self._profile('OR')), 'OR')
-        self.assertEqual(resolve_state(self._profile('tx')), 'TX')
+        self.assertEqual(self._state('OR'), 'OR')
+        self.assertEqual(self._state('tx'), 'TX')
 
     def test_a_spelled_out_state_becomes_a_code(self):
-        from profile.services.wise_recipient import resolve_state
-
-        self.assertEqual(resolve_state(self._profile('Oregon')), 'OR')
-        self.assertEqual(resolve_state(self._profile('new york')), 'NY')
-        self.assertEqual(resolve_state(self._profile('District of Columbia')), 'DC')
+        self.assertEqual(self._state('Oregon'), 'OR')
+        self.assertEqual(self._state('new york'), 'NY')
+        self.assertEqual(self._state('District of Columbia'), 'DC')
 
     def test_anything_unrecognised_is_left_out(self):
-        from profile.services.wise_recipient import resolve_state
-
-        self.assertIsNone(resolve_state(self._profile('')))
-        self.assertIsNone(resolve_state(self._profile('Bavaria')))
-        self.assertIsNone(resolve_state(self._profile('XX')))
+        self.assertIsNone(self._state(''))
+        self.assertIsNone(self._state('Bavaria'))
+        self.assertIsNone(self._state('XX'))
 
     def test_us_banking_sends_the_account_type(self):
         from profile.models import BankingMethod
@@ -78,6 +72,7 @@ class WiseUsAccountTests(TestCase):
             'banking_currency': 'USD',
             'bank_account_no': '12345678',
             'bank_routing_no': '111000025',
+            'address_line': '1 Main St', 'city': 'Portland', 'postal_code': '97201',
         }
         self.assertFalse(WiseRecipientForm(data=data).is_valid())
         self.assertTrue(WiseRecipientForm(data={**data, 'bank_account_type': 'SAVINGS'}).is_valid())
@@ -131,5 +126,6 @@ class BankingFormRenderTests(TestCase):
             'bank_account_no': '12345678',
             'bank_routing_no': '111000025',
             'bank_account_type': 'CHECKING',
+            'address_line': '1 Main St', 'city': 'Portland', 'postal_code': '97201',
         })
         self.assertTrue(form.is_valid(), form.errors.as_text())

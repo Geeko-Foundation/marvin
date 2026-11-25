@@ -118,9 +118,9 @@ def resolve_country(profile: UserProfile, banking: dict) -> str | None:
     return country or None
 
 
-def resolve_state(profile: UserProfile, country: str | None = None) -> str | None:
+def resolve_state(banking: dict, country: str | None) -> str | None:
     """The state code for a payee, from the country actually sent to Wise."""
-    return state_code(country or profile.country, profile.state)
+    return state_code(country, banking.get('state', ''))
 
 
 def banking_session_payload(cleaned_data: dict) -> dict:
@@ -139,6 +139,10 @@ def banking_session_payload(cleaned_data: dict) -> dict:
         'bank_branch': cleaned_data.get('bank_branch', ''),
         'bank_japan_branch': cleaned_data.get('bank_japan_branch', ''),
         'bank_cpf': cleaned_data.get('bank_cpf', ''),
+        'address_line': cleaned_data.get('address_line', ''),
+        'city': cleaned_data.get('city', ''),
+        'state': cleaned_data.get('state', ''),
+        'postal_code': cleaned_data.get('postal_code', ''),
     }
 
 

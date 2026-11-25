@@ -65,24 +65,13 @@ class ProfileForm(forms.ModelForm):
 
     class Meta:
         model = UserProfile
-        fields = [
-            'phone',
-            'address_line',
-            'city',
-            'state',
-            'country',
-            'postal_code',
-        ]
+        fields = ['phone', 'country']
         widgets = {
             'phone': forms.TextInput(attrs={'class': INPUT_CLASS}),
-            'address_line': forms.TextInput(attrs={'class': INPUT_CLASS}),
-            'city': forms.TextInput(attrs={'class': INPUT_CLASS}),
-            'state': forms.TextInput(attrs={'class': INPUT_CLASS}),
             'country': forms.Select(
                 attrs={'class': 'select select-bordered w-full'},
                 choices=[('', 'Select your country')] + list(COUNTRIES),
             ),
-            'postal_code': forms.TextInput(attrs={'class': INPUT_CLASS}),
         }
 
     def __init__(self, *args, **kwargs):
@@ -114,15 +103,10 @@ class ProfileForm(forms.ModelForm):
         return email if self.user and email.lower() != self.user.email.lower() else None
 
     def clean(self):
-        """Wise refuses US and Australian payees without a state it recognises."""
+        """A new email needs the current password."""
         cleaned = super().clean()
         if self.new_email and not self.user.check_password(cleaned.get('current_password') or ''):
             self.add_error('current_password', 'Enter your current password to change your email.')
-        country = normalise_country(cleaned.get('country'))
-
-        if country in STATE_CODES and not state_code(country, cleaned.get('state')):
-            example = 'Oregon' if country == 'US' else 'Victoria'
-            self.add_error('state', f'Enter a state for this country, for example "{example}".')
         return cleaned
 
     def save(self, user, commit=True):
@@ -142,15 +126,12 @@ class ProfileForm(forms.ModelForm):
 
 
 class OnboardingPersonalForm(ProfileForm):
-    """First-time requestor profile - all address fields required."""
+    """First-time requestor profile, where the country is required."""
 
     def __init__(self, *args, **kwargs):
-        """Require address fields that are optional on the standard profile form."""
+        """Require the country, which decides how someone can be paid."""
         super().__init__(*args, **kwargs)
-        self.fields['address_line'].required = True
-        self.fields['city'].required = True
         self.fields['country'].required = True
-        self.fields['postal_code'].required = True
 
     def save(self, user, commit=True):
         """Save personal details and record onboarding completion timestamp."""
@@ -229,6 +210,13 @@ class WiseRecipientForm(forms.Form):
         widget=forms.Select(attrs={'class': 'select select-bordered w-full'}),
     )
 
+    # The address goes to Wise with the bank details, which needs it to create
+    # the payee, and like them it is never saved here.
+    address_line = forms.CharField(label='Street address', widget=forms.TextInput(attrs={'class': INPUT_CLASS, 'autocomplete': 'street-address'}))
+    city = forms.CharField(widget=forms.TextInput(attrs={'class': INPUT_CLASS, 'autocomplete': 'address-level2'}))
+    state = forms.CharField(required=False, label='State / province', widget=forms.TextInput(attrs={'class': INPUT_CLASS, 'autocomplete': 'address-level1'}))
+    postal_code = forms.CharField(label='Postal code', widget=forms.TextInput(attrs={'class': INPUT_CLASS, 'autocomplete': 'postal-code'}))
+
     # Asked for only when there is already a payout account, so someone at an
     # unlocked screen cannot send the next payout to their own account.
     current_password = forms.CharField(
@@ -256,6 +244,11 @@ class WiseRecipientForm(forms.Form):
         if (self.profile and self.profile.has_had_payout_account()
                 and not self.profile.user.check_password(cleaned.get('current_password') or '')):
             self.add_error('current_password', 'Enter your current password to change where you are paid.')
+        # Wise refuses US and Australian payees without a state it recognises.
+        country = normalise_country(self.profile.country if self.profile else '')
+        if country in STATE_CODES and not state_code(country, cleaned.get('state')):
+            example = 'Oregon' if country == 'US' else 'Victoria'
+            self.add_error('state', f'Enter a state for this country, for example "{example}".')
         method = cleaned.get('banking_method')
         if not method:
             raise forms.ValidationError('Select a banking method.')
@@ -309,10 +302,11 @@ class StaffBankingForm(forms.ModelForm):
 
 # What each free-text field may hold. See marvin/validators.py.
 for _form in (ProfileForm, OnboardingPersonalForm):
-    restrict(
-        _form, first_name=NAME, last_name=NAME, phone=PHONE, postal_code=POSTCODE,
-        address_line=line(200), city=line(100), state=line(100), country=line(100),
-    )
+    restrict(_form, first_name=NAME, last_name=NAME, phone=PHONE, country=line(100))
+restrict(
+    WiseRecipientForm, postal_code=POSTCODE,
+    address_line=line(200), city=line(100), state=line(100),
+)
 restrict(WiseRecipientForm, **{
     name: BANK for name in (
         'bank_iban', 'bank_swift', 'bank_account_no', 'bank_routing_no', 'bank_ifsc',
