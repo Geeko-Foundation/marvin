@@ -118,12 +118,10 @@ After seeding, all users share the password **`demo`**. Sign in with username an
 
 | Username | Role | Notes |
 |----------|------|-------|
-| `admin` | Staff / superuser | Full Django admin access |
-| `requester` | Requester | Can submit travel requests |
-| `finance` | Finance | Can process reimbursements |
-| `superuser` | Staff superuser | Can skip Wise banking during onboarding |
-
-Additional seeded users (`wizard1`, `ibanonly`, etc.) are available for testing edge cases.
+| `admin` | TSP Committee, staff / superuser | Full Django admin access |
+| `douglasd`, `jane_doe`, `patrickf` | Requester | Can submit travel requests; seeded with requests in several states |
+| `finance_team` | Finance | Can process reimbursements |
+| `superuser` | Requester, staff / superuser | Can skip Wise banking during onboarding |
 
 ## URLs
 
