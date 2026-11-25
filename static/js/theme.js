@@ -5,7 +5,11 @@
     const DARK = toggle.dataset.dark;
     const apply = (theme) => {
       document.documentElement.setAttribute('data-theme', theme);
-      localStorage.setItem(STORAGE_KEY, theme);
+      // Keep a choice only when it differs from the system setting, so someone
+      // who picks what their system already uses keeps following it.
+      const system = matchMedia('(prefers-color-scheme: dark)').matches ? DARK : LIGHT;
+      if (theme === system) localStorage.removeItem(STORAGE_KEY);
+      else localStorage.setItem(STORAGE_KEY, theme);
       toggle.checked = theme === DARK;
       toggle.setAttribute('aria-checked', toggle.checked ? 'true' : 'false');
     };

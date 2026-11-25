@@ -44,6 +44,11 @@ REQUIRED_BANK_FIELDS = {
 }
 
 
+# Bank codes and numbers: no autocorrect, capitals or spellcheck, which would
+# change what someone types on a phone keyboard.
+CODE_FIELD = {'autocorrect': 'off', 'autocapitalize': 'none', 'spellcheck': 'false'}
+
+
 class ProfileForm(forms.ModelForm):
     """Personal details only - banking is managed via Wise onboarding for requestors."""
 
@@ -171,30 +176,31 @@ class WiseRecipientForm(forms.Form):
     )
     bank_iban = forms.CharField(
         required=False,
-        widget=forms.TextInput(attrs={'class': INPUT_CLASS}),
+        widget=forms.TextInput(attrs={**CODE_FIELD, 'class': INPUT_CLASS}),
     )
     bank_swift = forms.CharField(
         required=False,
         widget=forms.TextInput(attrs={
+            **CODE_FIELD,
             'class': INPUT_CLASS,
             'placeholder': 'Optional for SEPA / EUR',
         }),
     )
     bank_account_no = forms.CharField(
         required=False,
-        widget=forms.TextInput(attrs={'class': INPUT_CLASS}),
+        widget=forms.TextInput(attrs={**CODE_FIELD, 'inputmode': 'numeric', 'class': INPUT_CLASS}),
     )
     bank_routing_no = forms.CharField(
         required=False,
-        widget=forms.TextInput(attrs={'class': INPUT_CLASS}),
+        widget=forms.TextInput(attrs={**CODE_FIELD, 'inputmode': 'numeric', 'class': INPUT_CLASS}),
     )
     bank_ifsc = forms.CharField(
         required=False,
-        widget=forms.TextInput(attrs={'class': INPUT_CLASS}),
+        widget=forms.TextInput(attrs={**CODE_FIELD, 'class': INPUT_CLASS}),
     )
     bank_bsb = forms.CharField(
         required=False,
-        widget=forms.TextInput(attrs={'class': INPUT_CLASS}),
+        widget=forms.TextInput(attrs={**CODE_FIELD, 'class': INPUT_CLASS}),
     )
     bank_cpf = forms.CharField(
         required=False,
