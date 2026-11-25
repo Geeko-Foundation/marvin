@@ -95,20 +95,6 @@ TWO_FACTOR_ENFORCED = env_bool('TWO_FACTOR_ENFORCED', default=True)
 EXCHANGE_RATES_FETCH = env_bool('EXCHANGE_RATES_FETCH', default=True)
 WISE_BALANCE_FETCH = USE_WISE and env_bool('WISE_BALANCE_FETCH', default=True)
 
-# Email Delivery Configuration
-MAILERS = {
-    'default': {
-        'BACKEND': "django.core.mail.backends.smtp.EmailBackend",
-        'OPTIONS': {
-            'host': env('EMAIL_HOST', 'localhost'),
-            'use_tls': True,    # port is not needed: it defaults to 587 with use_tls True.
-            'username': env('EMAIL_HOST_USER', ''),
-            'password': env('EMAIL_HOST_PASSWORD', ''),
-            'default_from_email': env('DEFAULT_FROM_EMAIL', ''),
-        },
-    },
-}
-
 # ==============================================================================
 # LOGGING
 # ==============================================================================

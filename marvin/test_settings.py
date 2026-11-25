@@ -63,3 +63,29 @@ class ProductionSettingsTests(SimpleTestCase):
                   ALLOWED_HOSTS='tsp.example.org'),
             'LIVE True'
         )
+
+
+class TrustedOriginsTests(SimpleTestCase):
+    """Forms from the site's own https address are trusted without extra setup."""
+
+    def settings_with(self, **env):
+        code = 'from django.conf import settings; print(settings.CSRF_TRUSTED_ORIGINS)'
+        clean = {k: v for k, v in os.environ.items() if not k.startswith(('CSRF_', 'ALLOWED_'))}
+        result = subprocess.run(
+            [sys.executable, '-c', f'import django; django.setup(); {code}'],
+            env={**clean, 'DJANGO_SETTINGS_MODULE': 'marvin.settings', **env},
+            cwd=ROOT, capture_output=True, text=True, check=True,
+        )
+        return result.stdout.strip()
+
+    def test_public_hosts_are_trusted_over_https(self):
+        self.assertEqual(
+            self.settings_with(ALLOWED_HOSTS='travel.geekos.org,.example.org,localhost'),
+            "['https://travel.geekos.org', 'https://*.example.org']",
+        )
+
+    def test_an_explicit_list_wins(self):
+        self.assertEqual(
+            self.settings_with(ALLOWED_HOSTS='travel.geekos.org', CSRF_TRUSTED_ORIGINS='http://x.test:8080'),
+            "['http://x.test:8080']",
+        )

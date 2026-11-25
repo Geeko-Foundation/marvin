@@ -252,7 +252,7 @@ There are two settings modules:
 | `DJANGO_SECRET_KEY` | Django signing key (required in production) |
 | `DEBUG` | `true` / `false` (always off in production) |
 | `ALLOWED_HOSTS` | Comma-separated hostnames (required in production) |
-| `CSRF_TRUSTED_ORIGINS` | Only for plain http or a non-standard port |
+| `CSRF_TRUSTED_ORIGINS` | Defaults to `https://` plus each public `ALLOWED_HOSTS` entry; set it only for plain http or a non-standard port |
 | `DATABASE_ENGINE`, `DATABASE_NAME`, `DATABASE_USER`, `DATABASE_PASSWORD`, `DATABASE_HOST`, `DATABASE_PORT` | Database connection (see PostgreSQL) |
 | `MEDIA_ROOT` | Where uploaded documents are stored |
 | `EMAIL_HOST`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `DEFAULT_FROM_EMAIL` | SMTP mail (STARTTLS on port 587) |

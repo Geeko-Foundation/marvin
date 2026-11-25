@@ -1,6 +1,5 @@
 import base64
 import os
-from urllib.parse import unquote, urlsplit
 
 
 def env(key: str, default: str = '') -> str:
@@ -36,25 +35,3 @@ def normalize_vapid_private_key(value: str) -> str:
 # Alias for backwards compatibility
 vapid_private_key = normalize_vapid_private_key
 
-
-def parse_database_url(url: str) -> dict[str, str]:
-    """
-    Parse a database connection URL (e.g. postgresql://user:password@host:port/name).
-    """
-    if not url:
-        return {}
-    parsed = urlsplit(url)
-    engine = 'django.db.backends.postgresql'
-    if parsed.scheme in ('postgres', 'postgresql'):
-        engine = 'django.db.backends.postgresql'
-    elif parsed.scheme == 'sqlite':
-        return {'ENGINE': 'django.db.backends.sqlite3', 'NAME': unquote(parsed.path)}
-
-    return {
-        'ENGINE': engine,
-        'NAME': unquote(parsed.path.lstrip('/')),
-        'USER': unquote(parsed.username or ''),
-        'PASSWORD': unquote(parsed.password or ''),
-        'HOST': parsed.hostname or '',
-        'PORT': str(parsed.port or ''),
-    }

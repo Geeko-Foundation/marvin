@@ -4,13 +4,15 @@ Django Development settings for marvin project.
 Sensitive values are read from environment variables (loaded from `.env` via
 python-dotenv). Defaults in this file are for local development and tests only.
 Copy `.env.example` to `.env` and set production values there.
-These setting are inherited by prod_settings.py and selectively overridden.
+These settings are inherited by prod_settings.py and selectively overridden.
 """
 
-import os
 from pathlib import Path
-from .utils import *
+
 from dotenv import load_dotenv
+
+from .utils import env, env_bool, env_list, normalize_vapid_private_key
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 load_dotenv(BASE_DIR / '.env')
@@ -24,7 +26,12 @@ LOCAL_HOSTS = {'localhost', '127.0.0.1', '[::1]', '0.0.0.0', 'testserver'}
 SECRET_KEY = env('DJANGO_SECRET_KEY', DEV_SECRET_KEY)
 DEBUG = env_bool('DEBUG', default=True)
 ALLOWED_HOSTS = env_list('ALLOWED_HOSTS', 'localhost,127.0.0.1,testserver')
-CSRF_TRUSTED_ORIGINS = env_list('CSRF_TRUSTED_ORIGINS', '')
+# Forms posted from https://<each public host> are trusted. Behind a proxy that
+# does not say the request was https, Django would otherwise refuse every form.
+CSRF_TRUSTED_ORIGINS = env_list('CSRF_TRUSTED_ORIGINS', ','.join(
+    f"https://{'*' + host if host.startswith('.') else host}"
+    for host in ALLOWED_HOSTS if host not in LOCAL_HOSTS and host != '*'
+))
 
 # Strict Cookie & Transport Security
 # Sent only over HTTPS once DEBUG is off, so local development over plain
@@ -106,8 +113,7 @@ CACHES = {
 }
 
 
-
-# --- DEV Database: sql-lite ---
+# --- Database ---
 
 # SQLite by default; set DATABASE_ENGINE and the rest for PostgreSQL, as CI's
 # test-postgres job does. Payment row locks only take effect on PostgreSQL.
@@ -162,7 +168,7 @@ MEDIA_ROOT = Path(env('MEDIA_ROOT') or BASE_DIR / 'uploads')
 DJANGO_TABLES2_TEMPLATE = 'django_tables2/daisyui.html'
 
 
-# --- Wise Payments ---
+# --- Payments and Wise ---
 # Off runs the app without Wise: sign-up asks for no bank details and finance
 # records payments made outside the app.
 USE_WISE = env_bool('USE_WISE', default=True)
@@ -178,6 +184,22 @@ PAYMENTS_ADAPTERS = [
 
 PAYMENTS_DEFAULT_ADAPTER = 'tsp.travelrequest'
 PAYMENTS_PERMISSION_CHECK = 'profile.permissions.finance_can_process_payments'
+
+# Development sandbox token. Set WISE_API_TOKEN in .env for production.
+WISE_API_TOKEN = env(
+    'WISE_API_TOKEN',
+    'bdde76cb-fe9b-4664-974b-c7b52f66294d',
+)
+WISE_API_PROFILE_ID = env('WISE_API_PROFILE_ID', '')
+WISE_API_SANDBOX = env_bool('WISE_API_SANDBOX', default=True)
+WISE_SOURCE_CURRENCY = env('WISE_SOURCE_CURRENCY', 'EUR')
+
+# Wise signs webhook bodies with an RSA key it publishes per environment.
+# Without the key nothing delivered can be trusted, so the endpoint refuses.
+WISE_WEBHOOK_PUBLIC_KEY = env('WISE_WEBHOOK_PUBLIC_KEY', '').replace('\\n', '\n')
+
+# Show the Wise balance on the finance dashboard. Off here so tests never call Wise.
+WISE_BALANCE_FETCH = USE_WISE and env_bool('WISE_BALANCE_FETCH', default=False)
 
 
 # --- Web Push (django-webpush) ---
@@ -201,21 +223,8 @@ WEBPUSH_SETTINGS = {
     'VAPID_ADMIN_EMAIL': env('VAPID_ADMIN_EMAIL', 'admin@marvin.local'),
 }
 
-# --- Wise API ---
 
-# Development sandbox token. Set WISE_API_TOKEN in .env for production.
-WISE_API_TOKEN = env(
-    'WISE_API_TOKEN',
-    'bdde76cb-fe9b-4664-974b-c7b52f66294d',
-)
-WISE_API_PROFILE_ID = env('WISE_API_PROFILE_ID', '')
-WISE_API_SANDBOX = env_bool('WISE_API_SANDBOX', default=True)
-WISE_SOURCE_CURRENCY = env('WISE_SOURCE_CURRENCY', 'EUR')
-
-# Wise signs webhook bodies with an RSA key it publishes per environment.
-# Without the key nothing delivered can be trusted, so the endpoint refuses.
-WISE_WEBHOOK_PUBLIC_KEY = env('WISE_WEBHOOK_PUBLIC_KEY', '').replace('\\n', '\n')
-
+# --- Currencies ---
 # Currencies the committee approves in, which are the ones finance pays from.
 PAYOUT_CURRENCIES = env_list('PAYOUT_CURRENCIES', 'EUR,USD,GBP')
 
@@ -226,8 +235,6 @@ EXCHANGE_RATE_API_KEY = env('EXCHANGE_RATE_API_KEY')
 EXCHANGE_RATE_API_URL = env('EXCHANGE_RATE_API_URL', 'https://v6.exchangerate-api.com/v6')
 EXCHANGE_RATES_URL = env('EXCHANGE_RATES_URL', 'https://api.frankfurter.dev/v1')
 EXCHANGE_RATES_FETCH = env_bool('EXCHANGE_RATES_FETCH', default=False)
-# Show the Wise balance on the finance dashboard. Off here so tests never call Wise.
-WISE_BALANCE_FETCH = USE_WISE and env_bool('WISE_BALANCE_FETCH', default=False)
 
 
 # --- Logging ---
@@ -280,7 +287,7 @@ REIMBURSEMENT_WINDOW_DAYS = int(env('REIMBURSEMENT_WINDOW_DAYS', '30'))
 BRAND_APP_NAME = env('BRAND_APP_NAME', 'Marvin')
 BRAND_ORG_NAME = env('BRAND_ORG_NAME', 'Geeko Foundation')
 BRAND_TAGLINE = env('BRAND_TAGLINE', 'Travel Support Program')
-# Marvin's own joke. A fork sets this empty to drop the line.
+# The line under the name on the sign-in page. A fork sets this empty to drop it.
 BRAND_STRAPLINE = env('BRAND_STRAPLINE', 'Your Travel Assistant')
 # The travel support policy people agree to. Linked from the menu once set.
 BRAND_POLICY_URL = env('BRAND_POLICY_URL', 'https://geekos.org/travel-policy/')
