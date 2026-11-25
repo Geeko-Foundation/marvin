@@ -12,3 +12,11 @@
   }
 }
 .print-only { display: none; }
+
+/* Django's field error list. Fields point at it with aria-describedby, so it is
+   used as Django renders it rather than printed by hand. */
+.errorlist {
+  margin-top: 0.25rem;
+  font-size: 0.75rem;
+  color: var(--color-error);
+}

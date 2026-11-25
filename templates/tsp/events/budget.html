@@ -17,11 +17,11 @@
         <div class="form-control">
           <label class="label" for="{{ form.budget.id_for_label }}"><span class="label-text">Budget</span></label>
           {{ form.budget }}
-          {% for error in form.budget.errors %}<span class="label-text-alt text-error">{{ error }}</span>{% endfor %}
+          {{ form.budget.errors }}
         </div>
         <div class="form-control">
           <label class="label" for="{{ form.budget_currency.id_for_label }}"><span class="label-text">Currency</span></label>
-          {{ form.budget_currency }}
+          {{ form.budget_currency }}{{ form.budget_currency.errors }}
         </div>
       </div>
       <div class="card-actions justify-end">

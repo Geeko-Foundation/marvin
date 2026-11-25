@@ -43,17 +43,13 @@
           <div class="form-control">
             <label class="label" for="id_username"><span class="label-text">Username</span></label>
             {{ form.username }}
-            {% if form.username.errors %}
-            <label class="label"><span class="label-text-alt text-error">{{ form.username.errors.0 }}</span></label>
-            {% endif %}
+            {{ form.username.errors }}
           </div>
 
           <div class="form-control">
             <label class="label" for="id_password"><span class="label-text">Password</span></label>
             {{ form.password }}
-            {% if form.password.errors %}
-            <label class="label"><span class="label-text-alt text-error">{{ form.password.errors.0 }}</span></label>
-            {% endif %}
+            {{ form.password.errors }}
           </div>
 
           {% if form.non_field_errors %}

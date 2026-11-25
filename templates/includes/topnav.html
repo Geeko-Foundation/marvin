@@ -20,10 +20,10 @@
         <div class="flex-none gap-2">
           {% include "partials/theme_toggle.html" %}
           <div class="dropdown dropdown-end">
-            <div tabindex="0" role="button" class="btn btn-circle btn-primary text-sm" aria-label="Account menu">
+            <button type="button" class="btn btn-circle btn-primary text-sm" aria-label="Account menu">
               {{ user.first_name|slice:":1"|default:user.username|slice:":1"|upper }}
-            </div>
-            <ul tabindex="0" class="menu menu-sm dropdown-content mt-3 z-[1] p-2 shadow bg-base-100 rounded-box w-52">
+            </button>
+            <ul class="menu menu-sm dropdown-content mt-3 z-[1] p-2 shadow bg-base-100 rounded-box w-52">
               <li class="menu-title flex flex-col gap-0.5"><span>{{ user.get_full_name|default:user.username }}</span><span class="font-normal normal-case opacity-70">{{ profile.role_label|default:"User" }}</span></li>
               <li><a href="{% url 'profile' %}">Profile</a></li>
               <li><a href="{% url 'logout' %}">Sign out</a></li>
