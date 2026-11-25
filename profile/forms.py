@@ -229,9 +229,18 @@ class WiseRecipientForm(forms.Form):
         widget=forms.Select(attrs={'class': 'select select-bordered w-full'}),
     )
 
+    # Asked for only when there is already a payout account, so someone at an
+    # unlocked screen cannot send the next payout to their own account.
+    current_password = forms.CharField(
+        required=False,
+        label='Current password',
+        widget=forms.PasswordInput(attrs={'class': INPUT_CLASS, 'autocomplete': 'current-password'}),
+    )
+
     def __init__(self, *args, profile=None, **kwargs):
         """Pre-select banking method and currency from an existing profile when present."""
         super().__init__(*args, **kwargs)
+        self.profile = profile
         if profile:
             if profile.banking_method:
                 self.fields['banking_method'].initial = profile.banking_method
@@ -244,6 +253,9 @@ class WiseRecipientForm(forms.Form):
     def clean(self):
         """Validate that required bank fields are present for the selected method."""
         cleaned = super().clean()
+        if (self.profile and self.profile.wise_account_id
+                and not self.profile.user.check_password(cleaned.get('current_password') or '')):
+            self.add_error('current_password', 'Enter your current password to change where you are paid.')
         method = cleaned.get('banking_method')
         if not method:
             raise forms.ValidationError('Select a banking method.')

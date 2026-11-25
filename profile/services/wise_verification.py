@@ -169,6 +169,7 @@ def run_verification_step(profile: UserProfile, state: dict, step_id: str) -> di
             }
 
         elif step_id == 'finalize':
+            previous_account = profile.wise_account_id
             profile.banking_method = banking.get('banking_method') or profile.banking_method
             profile.banking_currency = banking_currency
             profile.wise_account_id = state['account_id']
@@ -180,6 +181,8 @@ def run_verification_step(profile: UserProfile, state: dict, step_id: str) -> di
                 'wise_recipient_verified_at',
             ])
             state.pop('banking', None)
+            if previous_account and previous_account != state['account_id']:
+                _record_payout_change(user, previous_account, state['account_id'])
             result = {
                 'account_id': state['account_id'],
                 'wise_recipient_verified_at': profile.wise_recipient_verified_at.isoformat(),
@@ -200,6 +203,22 @@ def run_verification_step(profile: UserProfile, state: dict, step_id: str) -> di
     state['steps_done'] = list(state.get('steps_done', [])) + [step_id]
     log_wise_step(step_id, f'Completed: {label}', user=user.username, **result)
     return result
+
+
+def _record_payout_change(user, old_account, new_account):
+    """Log a changed payout account and tell the person, in case it was not them."""
+    from django.core.mail import send_mail
+
+    from profile.audit_log import record
+    record('profile.payout_account_changed', user=user, target=user.username,
+           detail=f'Wise recipient {old_account} -> {new_account}')
+    if user.email:
+        send_mail(
+            'Your Marvin payout account was changed',
+            'The bank account your travel support is paid to was just changed.\n\n'
+            'If this was not you, sign in, change your password and contact the TSP team.',
+            None, [user.email], fail_silently=True,
+        )
 
 
 def setup_wise_recipient(profile: UserProfile, banking: dict) -> dict:
