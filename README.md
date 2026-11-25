@@ -317,6 +317,10 @@ Then run `python manage.py migrate` and `python manage.py seed_data` as usual. C
 - **Login URLs:** the app uses `/login/` (username/password); Django admin uses `/admin/login/` separately.
 - **UserProfile:** lives in the `profile` app (`profile.UserProfile`); database table remains `tsp_userprofile` for migration compatibility.
 
+## getting keys etc
+https://randomkeygen.com/vapid-key
+https://randomkeygen.com/django-secret-key
+
 ## Further reading
 
 See [PRD.md](PRD.md) for the full product requirements and architecture documentation.
