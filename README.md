@@ -276,7 +276,7 @@ A single `DATABASE_URL=postgresql://user:password@host:5432/name` works in place
 
 1. Add a PostgreSQL database to the project.
 2. On the web service, set `DATABASE_URL` to `${{Postgres.DATABASE_URL}}`.
-3. Set the start command to `python manage.py migrate && gunicorn marvin.wsgi`. Leave `loaddata` out: on a lasting database it would reset every record in the fixture on each deploy.
+3. Set the start command to `python manage.py migrate && python manage.py createcachetable && gunicorn marvin.wsgi`. The cache table holds the sign-in limits, so production cannot sign anyone in without it. Leave `loaddata` out: on a lasting database it would reset every record in the fixture on each deploy.
 4. Load the starting data once, from the service's shell: `python manage.py loaddata tsp/fixtures/initial.json`.
 
 ## Development notes

@@ -531,6 +531,34 @@ class LoginLimitTests(TestCase):
             self.attempt('wrong')
         self.assertEqual(self.attempt('right-pass-phrase-9').status_code, 302)
 
+    def test_a_spread_out_attack_leaves_each_address_one_try_and_the_owner_still_gets_in(self):
+        from tsp.views import LOGIN_ACCOUNT_FAILURE_LIMIT, LOGIN_LOCK_SECONDS, _count_one
+        for _ in range(LOGIN_ACCOUNT_FAILURE_LIMIT):
+            _count_one('login-failures:lockme', LOGIN_LOCK_SECONDS)
+
+        def attempt_from(address, password):
+            return self.client.post(reverse('login'), {'username': 'lockme', 'password': password},
+                                    REMOTE_ADDR=address)
+        attempt_from('10.0.0.2', 'wrong')
+        self.assertContains(attempt_from('10.0.0.2', 'right-pass-phrase-9'), 'Too many failed sign-in attempts')
+        self.assertEqual(attempt_from('10.0.0.3', 'right-pass-phrase-9').status_code, 302)
+
+    def test_limits_hold_in_the_database_cache_production_uses(self):
+        from unittest import mock
+
+        from django.core.cache import caches
+        from django.core.management import call_command
+        from django.test import override_settings
+
+        from tsp import views
+        database = {'BACKEND': 'django.core.cache.backends.db.DatabaseCache', 'LOCATION': 'test_limits',
+                    'TIMEOUT': 24 * 60 * 60}
+        with override_settings(CACHES={'default': database, 'limits': database}):
+            call_command('createcachetable', verbosity=0)
+            with mock.patch.object(views, 'limits', caches['limits']):
+                results = [views._under_limit('bank-setup:1', 5, 24 * 60 * 60) for _ in range(6)]
+        self.assertEqual(results, [True] * 5 + [False])
+
     def test_next_never_leads_off_the_site(self):
         response = self.attempt('right-pass-phrase-9', next='https://evil.example/phish')
         self.assertEqual(response['Location'], reverse('dashboard'))

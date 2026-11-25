@@ -99,6 +99,8 @@ CACHES = {
     'limits': {
         'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
         'LOCATION': 'limits',
+        # At least the longest limit window, a day.
+        'TIMEOUT': 24 * 60 * 60,
         'OPTIONS': {'MAX_ENTRIES': 100_000},
     },
 }

@@ -97,8 +97,9 @@ def _is_safe_redirect(request, url):
 
 
 # Ten wrong passwords from one address lock that address out of the account.
-# A far higher limit across every address still stops a spread-out attack,
-# without letting one person lock the real owner out after ten guesses.
+# Once the account has a hundred across every address, each address gets one
+# try instead, which stops a spread-out attack while the real owner, typing
+# the right password from their own address, still gets in.
 LOGIN_FAILURE_LIMIT = 10
 LOGIN_ACCOUNT_FAILURE_LIMIT = 100
 LOGIN_LOCK_SECONDS = 15 * 60
@@ -113,15 +114,36 @@ BANK_SETUP_REFUSED = 'Too many attempts to set up bank details today. Try again 
 
 
 # Counters live in a cache of their own, so filling the shared one cannot
-# reset them. shortcut: each server process keeps its own counts, so N
-# workers allow N times every limit; use a shared cache if that matters.
+# reset them. Production keeps it in the database, so every server process
+# shares the counts and a deploy does not reset them.
 limits = caches['limits']
+
+
+def _window_key(key, window_seconds):
+    """
+    ``key`` for the current window of ``window_seconds``.
+
+    The window is in the key, so a count ends with it in any cache, including
+    the database one, which forgets an entry's expiry when it is counted up.
+    """
+    return f'{key}:{int(time.time()) // window_seconds}'
+
+
+def _count(key, window_seconds):
+    """How many times ``key`` has been counted in the current window."""
+    return limits.get(_window_key(key, window_seconds), 0)
+
+
+def _count_one(key, window_seconds):
+    """Count one more use of ``key`` and return the new count."""
+    key = _window_key(key, window_seconds)
+    limits.add(key, 0, window_seconds)
+    return limits.incr(key)
 
 
 def _under_limit(key, limit, window_seconds):
     """Count one more use of ``key`` and say whether it is still within ``limit``."""
-    limits.add(key, 0, window_seconds)
-    return limits.incr(key) <= limit
+    return _count_one(key, window_seconds) <= limit
 
 
 def _counts_as_bank_attempt(form):
@@ -157,11 +179,11 @@ def login_view(request):
         username = request.POST.get('username', '').strip().lower()
         account_key = 'login-failures:' + username
         failures_key = f'{account_key}:{_client_address(request)}'
-        if (limits.get(failures_key, 0) >= LOGIN_FAILURE_LIMIT
-                or limits.get(account_key, 0) >= LOGIN_ACCOUNT_FAILURE_LIMIT):
+        under_attack = _count(account_key, LOGIN_LOCK_SECONDS) >= LOGIN_ACCOUNT_FAILURE_LIMIT
+        if _count(failures_key, LOGIN_LOCK_SECONDS) >= (1 if under_attack else LOGIN_FAILURE_LIMIT):
             form.add_error(None, 'Too many failed sign-in attempts for this account. Try again in 15 minutes.')
         elif form.is_valid():
-            limits.delete(failures_key)
+            limits.delete(_window_key(failures_key, LOGIN_LOCK_SECONDS))
             login(request, form.get_user())
             next_url = request.POST.get('next') or request.GET.get('next')
             if _is_safe_redirect(request, next_url):
@@ -171,8 +193,7 @@ def login_view(request):
             # Names with no account are not counted, so made-up ones cannot
             # fill the counters and push a real account's count out.
             for key in (failures_key, account_key):
-                limits.add(key, 0, LOGIN_LOCK_SECONDS)
-                limits.incr(key)
+                _count_one(key, LOGIN_LOCK_SECONDS)
 
 
     return render(request, 'tsp/login.html', {
