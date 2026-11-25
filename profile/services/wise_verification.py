@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from decimal import Decimal
 
 from django.conf import settings
@@ -29,6 +30,10 @@ VERIFICATION_STEPS = [
 
 SESSION_KEY = 'wise_verification_state'
 
+# Bank details wait in the session only while Wise checks them, which takes
+# seconds. Anything older was abandoned, so it is dropped rather than kept.
+VERIFICATION_MAX_AGE_SECONDS = 60 * 60
+
 # Wise checks the bank details when the payee, the quote and the transfer are
 # created, and the test transfer is cancelled before anything is sent, so
 # funding it adds no check. On a live account funding would move real money,
@@ -43,6 +48,15 @@ class WiseVerificationError(Exception):
     def __init__(self, step: str, message: str):
         super().__init__(message)
         self.step = step
+
+
+def verification_state(session) -> dict | None:
+    """The verification in progress in ``session``, dropping it once it has been left too long."""
+    state = session.get(SESSION_KEY)
+    if state and time.time() - state.get('started_at', 0) > VERIFICATION_MAX_AGE_SECONDS:
+        del session[SESSION_KEY]
+        return None
+    return state
 
 
 def init_verification_state(banking: dict | None = None) -> dict:

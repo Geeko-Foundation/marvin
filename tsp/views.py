@@ -49,6 +49,7 @@ from profile.services.wise_verification import (
     WiseVerificationError,
     init_verification_state,
     run_verification_step,
+    verification_state,
 )
 from tsp.accounts import activation_token, send_activation_email
 from tsp.decorators import group_required, login_required, staff_or_owner
@@ -383,20 +384,6 @@ def signup_skip_banking(request):
     return redirect('dashboard')
 
 
-# Bank details wait in the session only while Wise checks them, which takes
-# seconds. Anything older was abandoned, so it is dropped rather than kept.
-VERIFICATION_MAX_AGE_SECONDS = 60 * 60
-
-
-def _verification_state(request):
-    """The verification in progress, or None once it has been left too long."""
-    state = request.session.get(SESSION_KEY)
-    if state and time.time() - state.get('started_at', 0) > VERIFICATION_MAX_AGE_SECONDS:
-        del request.session[SESSION_KEY]
-        return None
-    return state
-
-
 @login_required
 @group_required(GROUP_REQUESTER)
 def signup_banking_progress(request):
@@ -409,7 +396,7 @@ def signup_banking_progress(request):
     if profile.is_wise_recipient_ready():
         return redirect('signup_complete')
 
-    if _verification_state(request) is None:
+    if verification_state(request.session) is None:
         return redirect('signup_banking')
 
     return render(request, 'tsp/signup/banking_progress.html', {
@@ -427,7 +414,7 @@ def signup_banking_step(request):
         return JsonResponse({'error': 'POST required'}, status=405)
 
     profile = get_profile(request.user)
-    state = _verification_state(request)
+    state = verification_state(request.session)
 
     if not state:
         return JsonResponse({'error': 'Verification not started. Go back to banking step.'}, status=400)
@@ -448,6 +435,9 @@ def signup_banking_step(request):
     try:
         result = run_verification_step(profile, state, step_id)
     except WiseVerificationError as exc:
+        # The page cannot carry on after a failed step, so the bank details go
+        # now and the form starts over.
+        request.session.pop(SESSION_KEY, None)
         return JsonResponse({
             'step': step_id,
             'status': 'error',

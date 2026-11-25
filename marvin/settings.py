@@ -65,6 +65,7 @@ MIDDLEWARE = [
     'django_otp.middleware.OTPMiddleware',
     'profile.two_factor.TwoFactorMiddleware',
     'marvin.audit.AuditUserMiddleware',
+    'tsp.middleware.StaleBankDetailsMiddleware',
     'tsp.middleware.RequesterOnboardingMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
