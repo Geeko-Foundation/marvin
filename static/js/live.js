@@ -22,7 +22,9 @@ function quiet(section) {
       var text = el.textContent.trim();
       if (announcer && text && spoken[key(el)] !== text) {
         spoken[key(el)] = text;
-        announcer.textContent = text;
+        // Emptied first, so the same words for a second payment still count as new.
+        announcer.textContent = '';
+        setTimeout(function () { announcer.textContent = text; }, 100);
       }
     });
   });
