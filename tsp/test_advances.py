@@ -128,6 +128,15 @@ class ChangeAmountsTests(TestCase):
         self.assertIsNone(expense.approved_amount)
         self.assertIsNone(self.request.advance_amount)
 
+    def test_an_edit_that_fails_part_way_saves_nothing(self):
+        from unittest import mock
+        with mock.patch('tsp.views._send_back_for_review', side_effect=RuntimeError('mail down')):
+            with self.assertRaises(RuntimeError):
+                self._edit('650')
+        self.request.refresh_from_db()
+        self.assertEqual(self.request.state, RequestState.APPROVED)
+        self.assertEqual(self.request.expenses.get().estimated_amount, Decimal('500'))
+
     def test_not_once_an_advance_has_been_paid(self):
         self.request.state = RequestState.ACCEPTED
         self.request.save()

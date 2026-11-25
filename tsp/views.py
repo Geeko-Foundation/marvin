@@ -1082,19 +1082,27 @@ def request_edit(request, pk):
         return redirect('request_detail', pk=pk)
 
     if request.method == 'POST':
-        form = TravelRequestForm(request.POST, instance=travel_request)
-        form_is_valid = form.is_valid()
-        event = form.cleaned_data.get('event') or travel_request.event
-        formset = ExpenseFormSet(request.POST, instance=travel_request, form_kwargs={'event': event})
-        if form_is_valid and formset.is_valid():
-            form.save()
-            formset.save()
-            if needs_review_again:
-                _send_back_for_review(travel_request, request.user)
-                messages.success(request, 'Request updated and sent back to the committee for approval.')
-            else:
-                messages.success(request, 'Request updated.')
-            return redirect('request_detail', pk=pk)
+        # Locked and checked again, so an approval made while the form was open
+        # is not saved over, and an edit that fails part way saves nothing.
+        with transaction.atomic():
+            travel_request = TravelRequest.objects.select_for_update().get(pk=pk)
+            needs_review_again = travel_request.can_change_amounts()
+            if not (travel_request.is_editable_by_requester or needs_review_again):
+                messages.error(request, 'This request can no longer be edited.')
+                return redirect('request_detail', pk=pk)
+            form = TravelRequestForm(request.POST, instance=travel_request)
+            form_is_valid = form.is_valid()
+            event = form.cleaned_data.get('event') or travel_request.event
+            formset = ExpenseFormSet(request.POST, instance=travel_request, form_kwargs={'event': event})
+            if form_is_valid and formset.is_valid():
+                form.save()
+                formset.save()
+                if needs_review_again:
+                    _send_back_for_review(travel_request, request.user)
+                    messages.success(request, 'Request updated and sent back to the committee for approval.')
+                else:
+                    messages.success(request, 'Request updated.')
+                return redirect('request_detail', pk=pk)
     else:
         form = TravelRequestForm(instance=travel_request)
         formset = ExpenseFormSet(instance=travel_request)
