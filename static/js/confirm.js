@@ -32,4 +32,14 @@
   });
 
   dialog.addEventListener('close', function () { pending = null; });
+
+  // A click on the dimmed area closes it. The .modal dialog fills the screen,
+  // so the overlay is the dialog itself and closedby="any" never sees an
+  // outside click. A press that starts inside the box (selecting text and
+  // letting go outside) does not count.
+  var pressedOverlay = false;
+  dialog.addEventListener('pointerdown', function (event) { pressedOverlay = event.target === dialog; });
+  dialog.addEventListener('click', function (event) {
+    if (pressedOverlay && event.target === dialog) dialog.close();
+  });
 })();
