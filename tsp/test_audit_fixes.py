@@ -1,7 +1,7 @@
 from datetime import date
 from decimal import Decimal
 
-from django.test import TestCase
+from django.test import TestCase, skipUnlessDBFeature
 from django.urls import reverse
 
 from payments.models import PaymentRecord
@@ -64,6 +64,16 @@ class ReviewTests(TestCase):
         self.approve(small, '50')
         small.refresh_from_db()
         self.assertEqual(small.state, RequestState.APPROVED)
+
+    @skipUnlessDBFeature('has_select_for_update')
+    def test_an_approval_holds_the_events_budget_until_it_commits(self):
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+        req = self.submitted()
+        with CaptureQueriesContext(connection) as queries:
+            self.approve(req, '50')
+        table = Event._meta.db_table
+        self.assertTrue(any('FOR UPDATE' in q['sql'] and f'FROM "{table}"' in q['sql'] for q in queries))
 
     def test_approving_a_request_that_has_moved_on_changes_no_amounts(self):
         req = self.submitted()

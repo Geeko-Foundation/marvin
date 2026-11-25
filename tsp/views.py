@@ -1182,6 +1182,7 @@ def request_approve(request, pk):
     # Everything below is undone if any check refuses the approval, so a
     # refused approval leaves no amounts behind to skew the event budget.
     with transaction.atomic():
+        _lock_budget(travel_request.event)
         error = _apply_approved_amounts(travel_request, request.POST)
         # An advance is a decision to pay money early, so it stays with the committee.
         if not error and profile.is_tsp:
@@ -1231,6 +1232,17 @@ def _apply_approved_amounts(travel_request, data):
             'approved_amount', 'approved_currency', 'approval_rate', 'approval_rate_date',
         ])
     return None
+
+
+def _lock_budget(event):
+    """
+    Hold the event's row until the approval commits.
+
+    Two approvals for one event at the same moment would each see the budget
+    before the other's amounts and both pass. The second now waits, then
+    checks against what the first approved.
+    """
+    Event.objects.select_for_update().get(pk=event.pk)
 
 
 def _check_budget(travel_request, data, notes, may_overspend=True):
@@ -1303,6 +1315,7 @@ def request_batch_review(request):
             continue
         with transaction.atomic():
             if action == 'approve':
+                _lock_budget(travel_request.event)
                 # Approving in bulk approves the event's usual share of what was
                 # asked for. Left unpriced, the request would reach finance worth
                 # nothing, since a missing approved amount counts for nothing.
