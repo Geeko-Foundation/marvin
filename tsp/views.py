@@ -494,7 +494,7 @@ def _committee_sections(request):
     """Dashboard data for the TSP committee."""
     pending = TravelRequest.objects.filter(
         state=RequestState.SUBMITTED,
-    ).select_related('user', 'event').order_by('created_at')
+    ).select_related('user', 'event').prefetch_related('expenses').order_by('created_at')
 
     event_summaries = _event_money()
     proposed = Event.objects.filter(
@@ -626,7 +626,7 @@ def _finance_sections(request):
     """Dashboard data for the finance team."""
     recently_paid = TravelRequest.objects.filter(
         state=RequestState.PAID,
-    ).select_related('user', 'event').prefetch_related('payments').order_by('-updated_at')
+    ).select_related('user', 'event').prefetch_related('payments', 'expenses').order_by('-updated_at')
 
     travel_request_ct = ContentType.objects.get_for_model(TravelRequest)
     # Only transfers that went through count as paid, one figure per currency.
@@ -639,12 +639,13 @@ def _finance_sections(request):
 
     with_advance = TravelRequest.objects.filter(
         payments__purpose='advance', refund_settled_at__isnull=True,
-    ).distinct().select_related('user', 'event')
+    ).distinct().select_related('user', 'event').prefetch_related('payments', 'expenses')
 
     return {
         'payment_queue': TravelRequest.objects.filter(
             state=RequestState.SUBMITTED_FOR_PAYMENT,
-        ).select_related('user', 'event').annotate(doc_count=Count('documents')),
+        ).select_related('user', 'event').prefetch_related('expenses', 'payments')
+        .annotate(doc_count=Count('documents')),
         'advance_queue': TravelRequestPayableAdapter().get_queue().filter(state=RequestState.ACCEPTED),
         'owed_back': [r for r in with_advance if r.amount_owed_back()],
         'recently_paid': _paginate(request, recently_paid, 10, 'paid_page'),
@@ -677,7 +678,7 @@ def dashboard(request):
             {
                 'event': event,
                 'pending': event.requests.filter(state=RequestState.SUBMITTED)
-                                .select_related('user').order_by('created_at'),
+                                .select_related('user').prefetch_related('expenses').order_by('created_at'),
                 'approved': event.approved_against_budget(),
                 'remaining': event.budget_remaining(),
             }

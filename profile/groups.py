@@ -1,8 +1,10 @@
 """Django auth groups and permissions for Marvin role-based access."""
 
-from django.contrib.auth.models import Group, Permission
+from django.contrib.auth.models import Group, Permission, User
 from django.contrib.contenttypes.models import ContentType
 from django.db import OperationalError, ProgrammingError
+from django.db.models.signals import m2m_changed
+from django.dispatch import receiver
 
 GROUP_REQUESTER = 'Requester'
 GROUP_TSP = 'TSP Committee'
@@ -58,16 +60,37 @@ def ensure_groups() -> None:
         group.permissions.set([perms[c] for c in codenames if c in perms])
 
 
+def _group_names(user) -> set[str]:
+    """
+    The names of ``user``'s groups, asked for once and kept on the user.
+
+    A page checks the groups many times over, once per menu entry and
+    section. Adding or removing a group drops the kept names, see
+    ``_forget_group_names``.
+    """
+    names = getattr(user, '_group_names', None)
+    if names is None:
+        names = user._group_names = set(user.groups.values_list('name', flat=True))
+    return names
+
+
+@receiver(m2m_changed, sender=User.groups.through)
+def _forget_group_names(sender, instance, **kwargs):
+    """Drop the kept group names when the groups change."""
+    if isinstance(instance, User):
+        instance.__dict__.pop('_group_names', None)
+
+
 def user_in_group(user, group_name: str) -> bool:
     """Return True when ``user`` belongs to the named Marvin group."""
-    return user.is_authenticated and user.groups.filter(name=group_name).exists()
+    return user.is_authenticated and group_name in _group_names(user)
 
 
 def user_in_any_group(user, *group_names: str) -> bool:
     """Return True when ``user`` belongs to at least one of the given groups."""
     if not user.is_authenticated:
         return False
-    return user.groups.filter(name__in=group_names).exists()
+    return not _group_names(user).isdisjoint(group_names)
 
 
 def assign_user_to_group(user, group_name: str, *, replace: bool = False) -> None:

@@ -146,6 +146,10 @@ class Event(AuditModel):
 
     def _live_requests(self):
         """Requests that still count against the budget."""
+        if 'requests' in getattr(self, '_prefetched_objects_cache', {}):
+            # A page that prefetched the requests, such as the dashboard's
+            # event summaries, asks nothing more.
+            return [r for r in self.requests.all() if r.state not in (RequestState.REJECTED, RequestState.CANCELLED)]
         return self.requests.exclude(
             state__in=[RequestState.REJECTED, RequestState.CANCELLED],
         ).prefetch_related('expenses')
@@ -306,9 +310,9 @@ class TravelRequest(AuditModel):
 
     def advance_payment(self):
         """The advance that has actually been paid, if any."""
-        return self.payments.filter(
-            purpose='advance', status__in=['success', 'completed'],
-        ).order_by('-created_at').first()
+        # Filtered in Python, like payment below, so a list that prefetched payments asks nothing more.
+        records = [p for p in self.payments.all() if p.purpose == 'advance' and p.status in SETTLED_PAYMENT_STATUSES]
+        return max(records, key=lambda p: p.created_at, default=None)
 
     def can_request_advance(self):
         return (

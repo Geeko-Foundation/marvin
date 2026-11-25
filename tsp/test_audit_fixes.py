@@ -563,6 +563,44 @@ class ReportQueryTests(TestCase):
         self.assertEqual(self.queries_for_csv(), few)
 
 
+class DashboardQueryTests(TestCase):
+    """The dashboard asks the database the same amount however many requests it lists."""
+
+    def setUp(self):
+        self.staff = make_user('dashboardstaff', [GROUP_TSP, GROUP_FINANCE])
+        self.event = make_event()
+
+    def add_requests(self, count):
+        states = (RequestState.SUBMITTED, RequestState.SUBMITTED_FOR_PAYMENT, RequestState.PAID)
+        for i in range(count):
+            owner = make_user(f'dashboardowner{TravelRequest.objects.count()}', [GROUP_REQUESTER])
+            req = TravelRequest.objects.create(user=owner, event=self.event, state=states[i % 3], description='T')
+            Expense.objects.create(request=req, category='flight', description='F', estimated_amount=10,
+                                   estimated_currency='EUR', approved_amount=10, approved_currency='EUR')
+
+    def queries_for_dashboard(self):
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+        self.client.force_login(self.staff)
+        with CaptureQueriesContext(connection) as captured:
+            self.assertEqual(self.client.get(reverse('dashboard')).status_code, 200)
+        return len(captured)
+
+    def test_more_requests_do_not_mean_more_queries(self):
+        self.add_requests(3)
+        self.queries_for_dashboard()  # The first visit fills caches the later ones read.
+        few = self.queries_for_dashboard()
+        self.add_requests(9)
+        self.assertEqual(self.queries_for_dashboard(), few)
+
+    def test_a_changed_group_is_seen_at_once(self):
+        from profile.groups import user_in_group
+        self.assertFalse(user_in_group(self.staff, GROUP_REQUESTER))
+        from django.contrib.auth.models import Group
+        self.staff.groups.add(Group.objects.get(name=GROUP_REQUESTER))
+        self.assertTrue(user_in_group(self.staff, GROUP_REQUESTER))
+
+
 class EventCategoryTests(TestCase):
     """An event can cover costs the policy leaves out, and requesters see exactly those."""
 
