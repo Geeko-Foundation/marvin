@@ -613,6 +613,7 @@ Changing an existing payout account requires the current password, is rate limit
 
 | Setting | Default | Description |
 |---|---|---|
+| `USE_WISE` | `true` | `false` runs without Wise: no bank step at sign-up, no Wise gateways, pages or webhook; payments are recorded manually |
 | `WISE_API_TOKEN` | Published sandbox token | Must be set in any deployment |
 | `WISE_API_PROFILE_ID` | *(auto)* | Wise business profile |
 | `WISE_API_SANDBOX` | `true` in development, `false` in production | Sandbox or live API |
@@ -721,12 +722,12 @@ Each kind below can be muted per user. Anything not listed, such as a payment co
 | Advances, actual costs and refunds |
 | Configurable branding |
 | Append-only audit log |
+| `USE_WISE` switch to run without Wise |
 
 ### Next
 
 | Task | Priority |
 |---|---|
-| A `USE_WISE` switch, so an instance can run without Wise | Medium |
 | First production deployment and end-to-end test against Wise | High |
 | Schedule `send_claim_reminders` and `fetch_exchange_rates` | Medium |
 | SSO/OAuth (Keycloak, GitHub) | Medium |

@@ -155,6 +155,8 @@ Wise runs in **sandbox mode** by default in development. `marvin.prod_settings` 
 
 Staff and superusers may **skip Wise banking** during signup and complete it later from their profile.
 
+Set `USE_WISE=false` to run without Wise at all. Sign-up then ends after the profile step, the Wise pages and webhook are switched off, and finance records payments made outside the app with the manual gateway.
+
 `marvin/settings.py` still carries a published sandbox token as a fallback, so a deployment must set its own `WISE_API_TOKEN`. The published token should be treated as compromised.
 
 Environment variables:
@@ -255,6 +257,7 @@ There are two settings modules:
 | `MEDIA_ROOT` | Where uploaded documents are stored |
 | `EMAIL_HOST`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `DEFAULT_FROM_EMAIL` | SMTP mail (STARTTLS on port 587) |
 | `SITE_BASE_URL` | Public site URL for links in emails |
+| `USE_WISE` | `false` runs without Wise: no bank step at sign-up, payments recorded by hand |
 | `WISE_API_TOKEN` | Wise API bearer token |
 | `WISE_API_SANDBOX` | `true` for sandbox, `false` for live |
 | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` | Web push keys |

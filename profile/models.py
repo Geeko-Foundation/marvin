@@ -119,14 +119,14 @@ class UserProfile(AuditModel):
     @property
     def requires_wise_banking(self) -> bool:
         """Requestors (except staff/superuser) must complete Wise recipient verification."""
-        if not self.is_requester:
+        if not (settings.USE_WISE and self.is_requester):
             return False
         return not (self.user.is_staff or self.user.is_superuser)
 
     @property
     def can_skip_banking(self) -> bool:
         """Staff and superuser requestors may bypass Wise onboarding."""
-        return self.is_requester and (self.user.is_staff or self.user.is_superuser)
+        return settings.USE_WISE and self.is_requester and (self.user.is_staff or self.user.is_superuser)
 
     def is_profile_complete(self) -> bool:
         """True when required personal and address fields are filled."""

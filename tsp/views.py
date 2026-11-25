@@ -52,7 +52,7 @@ from profile.services.wise_verification import (
     verification_state,
 )
 from tsp.accounts import activation_token, send_activation_email
-from tsp.decorators import group_required, login_required, staff_or_owner
+from tsp.decorators import group_required, login_required, staff_or_owner, wise_required
 from tsp.forms import (
     AcceptForm,
     ApprovalForm,
@@ -299,7 +299,7 @@ def signup_profile(request):
     # Skip ahead only when nothing is missing here either. An address that a
     # later rule made incomplete, such as a postcode, still has to be filled in,
     # or the dashboard and this step would send the user back and forth.
-    if profile.is_profile_complete() and profile.is_wise_recipient_ready():
+    if profile.is_profile_complete() and (not settings.USE_WISE or profile.is_wise_recipient_ready()):
         return redirect('signup_complete')
 
     if request.method == 'POST':
@@ -318,6 +318,8 @@ def signup_profile(request):
                     'Skipped Wise banking. You can set it up later from your profile.',
                 )
                 return redirect('dashboard')
+            if not settings.USE_WISE:
+                return redirect('signup_complete')
             messages.success(request, 'Profile saved. Set up your Wise banking next.')
             return redirect('signup_banking')
     else:
@@ -330,6 +332,7 @@ def signup_profile(request):
     })
 
 
+@wise_required
 @login_required
 @group_required(GROUP_REQUESTER)
 def signup_banking(request):
@@ -373,6 +376,7 @@ def signup_banking(request):
     })
 
 
+@wise_required
 @login_required
 @group_required(GROUP_REQUESTER)
 def signup_banking_options(request):
@@ -389,6 +393,7 @@ def signup_banking_options(request):
     return JsonResponse({'options': [{'value': key, 'label': name} for key, name in choices]})
 
 
+@wise_required
 @login_required
 @group_required(GROUP_REQUESTER)
 @require_POST
@@ -405,6 +410,7 @@ def signup_skip_banking(request):
     return redirect('dashboard')
 
 
+@wise_required
 @login_required
 @group_required(GROUP_REQUESTER)
 def signup_banking_progress(request):
@@ -427,6 +433,7 @@ def signup_banking_progress(request):
     })
 
 
+@wise_required
 @login_required
 @group_required(GROUP_REQUESTER)
 def signup_banking_step(request):
@@ -718,6 +725,7 @@ def onboarding_personal(request):
     return redirect('signup_profile')
 
 
+@wise_required
 @login_required
 @group_required(GROUP_REQUESTER)
 def onboarding_wise(request):
@@ -868,6 +876,7 @@ def event_delete(request, pk):
     return redirect('event_list')
 
 
+@wise_required
 @login_required
 @group_required(GROUP_REQUESTER, GROUP_TSP)
 def check_wise_account(request):
@@ -962,7 +971,7 @@ def request_create(request):
         'profile': profile,
         'is_edit': False,
         'payout': _payout(profile),
-        'show_account_check': profile.is_requester,
+        'show_account_check': settings.USE_WISE and profile.is_requester,
         'banking_form': WiseRecipientForm(profile=profile) if profile.is_requester else None,
     })
 

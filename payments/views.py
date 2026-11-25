@@ -4,7 +4,7 @@ import logging
 from django.conf import settings
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
-from django.http import HttpResponse, JsonResponse
+from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.html import escape
@@ -340,6 +340,8 @@ def wise_webhook(request):
     Wise retries on any non-2xx, so an event we have no record for is still
     answered 200. Only an unusable request is refused.
     """
+    if not settings.USE_WISE:
+        raise Http404
     # Wise checks the URL answers before saving it, by visiting it and by
     # sending a test notification. Neither carries anything to act on.
     if request.method != 'POST' or request.META.get(TEST_HEADER, '').lower() == 'true':

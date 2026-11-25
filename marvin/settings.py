@@ -163,9 +163,12 @@ DJANGO_TABLES2_TEMPLATE = 'django_tables2/daisyui.html'
 
 
 # --- Wise Payments ---
+# Off runs the app without Wise: sign-up asks for no bank details and finance
+# records payments made outside the app.
+USE_WISE = env_bool('USE_WISE', default=True)
+
 PAYMENTS_GATEWAYS = [
-    'payments.gateways.wise.WiseApiGateway',
-    'payments.gateways.wise.WiseCsvGateway',
+    *(['payments.gateways.wise.WiseApiGateway', 'payments.gateways.wise.WiseCsvGateway'] if USE_WISE else []),
     'payments.gateways.manual.ManualTransferGateway',
 ]
 
@@ -224,7 +227,7 @@ EXCHANGE_RATE_API_URL = env('EXCHANGE_RATE_API_URL', 'https://v6.exchangerate-ap
 EXCHANGE_RATES_URL = env('EXCHANGE_RATES_URL', 'https://api.frankfurter.dev/v1')
 EXCHANGE_RATES_FETCH = env_bool('EXCHANGE_RATES_FETCH', default=False)
 # Show the Wise balance on the finance dashboard. Off here so tests never call Wise.
-WISE_BALANCE_FETCH = env_bool('WISE_BALANCE_FETCH', default=False)
+WISE_BALANCE_FETCH = USE_WISE and env_bool('WISE_BALANCE_FETCH', default=False)
 
 
 # --- Logging ---

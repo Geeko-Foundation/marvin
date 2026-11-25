@@ -66,7 +66,8 @@
     </div>
   </div>
 
-  {% if profile.is_requester %}
+  {% if not use_wise %}
+  {% elif profile.is_requester %}
   <div class="card bg-base-100 shadow-sm mb-6">
     <div class="card-body">
       <h2 class="card-title text-lg">Wise Recipient Account</h2>

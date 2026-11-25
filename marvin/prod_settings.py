@@ -93,7 +93,7 @@ TWO_FACTOR_ENFORCED = env_bool('TWO_FACTOR_ENFORCED', default=True)
 
 # Live exchange rates fetching
 EXCHANGE_RATES_FETCH = env_bool('EXCHANGE_RATES_FETCH', default=True)
-WISE_BALANCE_FETCH = env_bool('WISE_BALANCE_FETCH', default=True)
+WISE_BALANCE_FETCH = USE_WISE and env_bool('WISE_BALANCE_FETCH', default=True)
 
 # Email Delivery Configuration
 MAILERS = {

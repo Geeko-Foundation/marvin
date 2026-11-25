@@ -5,6 +5,7 @@ from functools import partial, wraps
 from django.conf import settings
 from django.contrib.auth.decorators import login_required as django_login_required
 from django.core.exceptions import PermissionDenied
+from django.http import Http404
 from django.shortcuts import get_object_or_404
 
 from profile.decorators import get_profile
@@ -12,6 +13,16 @@ from profile.groups import user_in_any_group
 from tsp.models import RequestState, TravelRequest
 
 login_required = partial(django_login_required, login_url=settings.APP_LOGIN_URL)
+
+
+def wise_required(view_func):
+    """Hide a Wise-only page when the app runs without Wise (``USE_WISE`` off)."""
+    @wraps(view_func)
+    def wrapper(request, *args, **kwargs):
+        if not settings.USE_WISE:
+            raise Http404
+        return view_func(request, *args, **kwargs)
+    return wrapper
 
 
 def group_required(*group_names):
