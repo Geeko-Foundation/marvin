@@ -27,3 +27,16 @@ function quiet(section) {
     });
   });
 })();
+
+// A row copied from one with errors would show the same errors and point at
+// the same error id. The copy starts clean instead.
+function dropCopiedErrors(row) {
+  row.querySelectorAll('.errorlist').forEach(function (list) { list.remove(); });
+  row.querySelectorAll('[aria-invalid], [aria-describedby]').forEach(function (field) {
+    field.removeAttribute('aria-invalid');
+    var rest = (field.getAttribute('aria-describedby') || '').split(/\s+/)
+      .filter(function (id) { return id && !/_error$/.test(id); });
+    if (rest.length) field.setAttribute('aria-describedby', rest.join(' '));
+    else field.removeAttribute('aria-describedby');
+  });
+}

@@ -200,6 +200,7 @@
     newRow.removeAttribute('data-saved');
     newRow.classList.remove('opacity-40');
     newRow.querySelector('[name$="-DELETE"]')?.closest('span')?.remove();
+    dropCopiedErrors(newRow);
     newRow.querySelectorAll('input, select').forEach(el => {
       el.name = el.name.replace(new RegExp(`${prefix}-\\d+-`), `${prefix}-${count}-`);
       el.id = el.id.replace(new RegExp(`${prefix}-\\d+-`), `${prefix}-${count}-`);

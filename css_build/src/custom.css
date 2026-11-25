@@ -20,3 +20,24 @@
   font-size: 0.75rem;
   color: var(--color-error);
 }
+
+/* Account menu: a popover under its button. Where anchor positioning is not
+   available it sits in the top-right corner, under the button, rather than in
+   the middle of the screen where a popover would otherwise appear. */
+/* daisyUI's .menu sets display, which would otherwise keep a closed popover visible. */
+.account-menu:not(:popover-open) { display: none; }
+.account-menu {
+  position: fixed;
+  inset: 4rem 1rem auto auto;
+  margin: 0;
+  border: 0;
+}
+@supports (position-area: bottom) {
+  .account-trigger { anchor-name: --account-trigger; }
+  .account-menu {
+    position-anchor: --account-trigger;
+    position-area: bottom span-left;
+    inset: auto;
+    margin-top: 0.5rem;
+  }
+}

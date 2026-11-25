@@ -382,6 +382,7 @@
             let next = 1;
             form.querySelector('[data-add]').addEventListener('click', () => {
               const row = first.cloneNode(true);
+              dropCopiedErrors(row);
               const n = next++;
               row.querySelector('select').name = 'kind_' + n;
               row.querySelector('select').removeAttribute('id');
