@@ -4,7 +4,7 @@
   <div class="form-control">
     <label class="label" for="{{ field.id_for_label }}"><span class="label-text">{{ field.label }}</span></label>
     {{ field }}
-    {% for error in field.errors %}<span class="label-text-alt text-error mt-1">{{ error }}</span>{% endfor %}
+    {{ field.errors }}
   </div>
   {% endfor %}
   {% for error in form.non_field_errors %}<div class="alert alert-error"><span>{{ error }}</span></div>{% endfor %}

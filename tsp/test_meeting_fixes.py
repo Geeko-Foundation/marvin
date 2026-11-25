@@ -511,3 +511,70 @@ class NotificationChoicesTests(TestCase):
     def test_finance_is_offered_what_finance_receives(self):
         kinds = self.kinds_for(make_user('counter', [GROUP_FINANCE]))
         self.assertEqual(set(kinds), {'submitted_for_payment', 'internal_note'})
+
+
+class PayoutChangeTests(TestCase):
+
+    def setUp(self):
+        self.user = make_user('traveller', [GROUP_REQUESTER])
+        self.user.set_password('right-password-1')
+        self.user.save()
+        self.profile = self.user.profile
+
+    def form(self, **extra):
+        from profile.forms import WiseRecipientForm
+        data = {'banking_method': 'iban', 'banking_currency': 'EUR',
+                'bank_iban': 'DE89370400440532013000', **extra}
+        return WiseRecipientForm(data, profile=self.profile)
+
+    def test_first_setup_needs_no_password(self):
+        self.profile.wise_account_id = None
+        self.assertTrue(self.form().is_valid())
+
+    def test_changing_an_existing_account_needs_the_password(self):
+        self.profile.wise_account_id = 111
+        self.assertIn('current_password', self.form().errors)
+        self.assertIn('current_password', self.form(current_password='wrong').errors)
+        self.assertTrue(self.form(current_password='right-password-1').is_valid())
+
+    def test_a_new_account_is_logged_and_emailed(self):
+        from unittest import mock
+        from django.core import mail
+        from profile.models import AuditLogEntry
+        from profile.services.wise_verification import run_verification_step
+        self.profile.wise_account_id = 111
+        self.profile.save()
+        state = {'account_id': 222, 'banking': {'banking_method': 'iban', 'bank_iban': 'DE89370400440532013000'}}
+        with mock.patch('profile.services.wise_verification.get_wise_client', return_value=mock.Mock()):
+            run_verification_step(self.profile, state, 'finalize')
+        entry = AuditLogEntry.objects.get(action='profile.payout_account_changed')
+        self.assertIn('111 -> 222', entry.detail)
+        self.assertEqual(mail.outbox[-1].to, [self.user.email])
+
+
+class OrganiserTwoStepTests(TestCase):
+
+    def test_an_organiser_must_use_two_step_sign_in(self):
+        from profile.two_factor import two_factor_required
+        owner = make_user('traveller', [GROUP_REQUESTER])
+        organiser = make_user('organiser', [GROUP_REQUESTER])
+        self.assertFalse(two_factor_required(organiser))
+        make_request(owner, RequestState.SUBMITTED).event.organizers.add(organiser)
+        self.assertTrue(two_factor_required(organiser))
+
+
+class CancelWhilePayingTests(TestCase):
+
+    def test_an_advance_still_being_paid_blocks_the_cancel(self):
+        owner = make_user('traveller', [GROUP_REQUESTER])
+        travel_request = make_request(owner, RequestState.ACCEPTED)
+        PaymentRecord.objects.create(
+            content_type=ContentType.objects.get_for_model(travel_request), object_id=travel_request.pk,
+            gateway_id='wise-csv', amount=Decimal('100'), currency='EUR', recipient_name='T',
+            recipient_email='t@example.org', reference=travel_request.reference,
+            status='exported', purpose='advance',
+        )
+        self.client.force_login(owner)
+        self.client.post(reverse('request_cancel', args=[travel_request.pk]))
+        travel_request.refresh_from_db()
+        self.assertEqual(travel_request.state, RequestState.ACCEPTED)

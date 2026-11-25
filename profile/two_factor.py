@@ -13,8 +13,11 @@ EXEMPT_URL_NAMES = {'two_factor_setup', 'two_factor_verify', 'logout'}
 
 
 def two_factor_required(user):
-    """Anyone who can approve requests or move money has to use it."""
-    return user.is_superuser or user.is_staff or get_profile(user).is_committee
+    """Anyone who can approve requests or move money has to use it, organisers included."""
+    if user.is_superuser or user.is_staff or get_profile(user).is_committee:
+        return True
+    from tsp.models import Event
+    return Event.organised_by(user).exists()
 
 
 def has_authenticator(user):

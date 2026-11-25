@@ -862,7 +862,8 @@ def check_wise_account(request):
             return JsonResponse({
                 'ready': False,
                 'needs_recreate': True,
-                'message': 'Invalid bank details.',
+                'message': (form.errors['current_password'][0] if 'current_password' in form.errors
+                            else 'Invalid bank details.'),
                 'errors': form.errors,
             }, status=422)
         banking = banking_session_payload(form.cleaned_data)
@@ -1390,7 +1391,9 @@ def request_cancel(request, pk):
 
     if not (is_owner or profile.is_tsp or (profile.is_finance and waits_for_payment)):
         raise PermissionDenied
-    if waits_for_payment and PaymentService()._payments_under_way(travel_request).exists():
+    # Any money still on its way, the advance included, has to settle or be
+    # cancelled in Wise first, or a transfer or batch file is left behind.
+    if travel_request.payments.exclude(status__in=['success', 'completed', 'failed', 'cancelled']).exists():
         messages.error(
             request,
             'A payment for this request is already under way. Cancel it in Wise first, '

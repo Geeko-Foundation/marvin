@@ -41,6 +41,7 @@
         {% if not item.sending %}
         <form method="post" action="{% url 'payments:process' %}" class="flex flex-wrap gap-2 items-end"
               hx-post="{% url 'payments:process' %}" hx-target="#pay-{{ item.object_id }}" hx-swap="outerHTML"
+              hx-disabled-elt="find button[type=submit]"
               hx-on::after-request="if (event.detail.successful) this.remove()">
           {% csrf_token %}
           <input type="hidden" name="object_id" value="{{ item.object_id }}">
@@ -60,9 +61,9 @@
         {% endif %}
       </div>
       {% if item.sending %}
-      {% include 'payments/_status.html' with pay_id=item.object_id progress=item.progress status_url=item.status_url message=item.status_message awaiting_approval=item.awaiting_approval final=False %}
+      {% include 'payments/_status.html' with pay_id=item.object_id progress=item.progress current_step=item.current_step status_url=item.status_url message=item.status_message awaiting_approval=item.awaiting_approval final=False %}
       {% else %}
-      {% include 'payments/_status.html' with pay_id=item.object_id progress=item.progress status_url='' message='' %}
+      {% include 'payments/_status.html' with pay_id=item.object_id progress=item.progress current_step=item.current_step status_url='' message='' %}
       {% endif %}
       {% if item.details_template %}
       <details class="collapse collapse-arrow bg-base-200 mt-2">

@@ -9,7 +9,9 @@
   {% block extra_head %}{% endblock %}
 </head>
 <body class="min-h-screen bg-base-200">
+  <div id="announcer" class="sr-only" role="status" aria-live="polite"></div>
   {% if user.is_authenticated %}
+  <a href="#main" class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 btn btn-primary btn-sm">Skip to content</a>
   {# The navigation is hidden when printing, not the page, so printed pages keep their content. #}
   <div class="drawer lg:drawer-open">
     <input id="sidebar-drawer" type="checkbox" class="drawer-toggle" />
@@ -20,14 +22,14 @@
       {% if messages %}
       <div class="px-4 lg:px-6 pt-4 no-print">
         {% for message in messages %}
-        <div class="alert alert-{% if message.tags == 'error' %}error{% elif message.tags == 'success' %}success{% elif message.tags == 'warning' %}warning{% else %}info{% endif %} mb-2">
+        <div class="alert alert-{% if message.tags == 'error' %}error{% elif message.tags == 'success' %}success{% elif message.tags == 'warning' %}warning{% else %}info{% endif %} mb-2"{% if message.tags == 'error' %} role="alert"{% else %} role="status"{% endif %}>
           <span>{{ message }}</span>
         </div>
         {% endfor %}
       </div>
       {% endif %}
 
-      <main class="flex-1 p-4 lg:p-6">
+      <main id="main" tabindex="-1" class="flex-1 p-4 lg:p-6">
         {% block content %}{% endblock %}
       </main>
     </div>
@@ -43,10 +45,11 @@
   {% endif %}
   <dialog id="confirm-dialog" class="modal" aria-labelledby="confirm-dialog-title">
     <div class="modal-box max-w-md">
-      <h3 id="confirm-dialog-title" class="font-semibold text-lg" data-confirm-title></h3>
+      <h1 id="confirm-dialog-title" class="font-semibold text-lg" data-confirm-title></h1>
       <p class="py-3 text-sm opacity-70" data-confirm-detail hidden></p>
       <div class="modal-action">
-        <form method="dialog"><button class="btn btn-ghost">Keep it</button></form>
+        {# Focus starts on the safe choice, so Enter does not confirm by accident. #}
+        <form method="dialog"><button class="btn btn-ghost" autofocus>Keep it</button></form>
         <button type="button" class="btn btn-error" data-confirm-accept>Confirm</button>
       </div>
     </div>

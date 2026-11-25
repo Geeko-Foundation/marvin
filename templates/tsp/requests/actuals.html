@@ -48,11 +48,9 @@
               <td>
                 {{ form.id }}
                 {{ form.actual_amount }}
-                {% for error in form.actual_amount.errors %}
-                <span class="label-text-alt text-error">{{ error }}</span>
-                {% endfor %}
+                {{ form.actual_amount.errors }}
               </td>
-              <td>{{ form.actual_currency }}</td>
+              <td>{{ form.actual_currency }}{{ form.actual_currency.errors }}</td>
             </tr>
             {% endfor %}
           </tbody>

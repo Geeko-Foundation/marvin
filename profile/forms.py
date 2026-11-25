@@ -44,6 +44,11 @@ REQUIRED_BANK_FIELDS = {
 }
 
 
+# Bank codes and numbers: no autocorrect, capitals or spellcheck, which would
+# change what someone types on a phone keyboard.
+CODE_FIELD = {'autocorrect': 'off', 'autocapitalize': 'none', 'spellcheck': 'false'}
+
+
 class ProfileForm(forms.ModelForm):
     """Personal details only - banking is managed via Wise onboarding for requestors."""
 
@@ -171,30 +176,31 @@ class WiseRecipientForm(forms.Form):
     )
     bank_iban = forms.CharField(
         required=False,
-        widget=forms.TextInput(attrs={'class': INPUT_CLASS}),
+        widget=forms.TextInput(attrs={**CODE_FIELD, 'class': INPUT_CLASS}),
     )
     bank_swift = forms.CharField(
         required=False,
         widget=forms.TextInput(attrs={
+            **CODE_FIELD,
             'class': INPUT_CLASS,
             'placeholder': 'Optional for SEPA / EUR',
         }),
     )
     bank_account_no = forms.CharField(
         required=False,
-        widget=forms.TextInput(attrs={'class': INPUT_CLASS}),
+        widget=forms.TextInput(attrs={**CODE_FIELD, 'inputmode': 'numeric', 'class': INPUT_CLASS}),
     )
     bank_routing_no = forms.CharField(
         required=False,
-        widget=forms.TextInput(attrs={'class': INPUT_CLASS}),
+        widget=forms.TextInput(attrs={**CODE_FIELD, 'inputmode': 'numeric', 'class': INPUT_CLASS}),
     )
     bank_ifsc = forms.CharField(
         required=False,
-        widget=forms.TextInput(attrs={'class': INPUT_CLASS}),
+        widget=forms.TextInput(attrs={**CODE_FIELD, 'class': INPUT_CLASS}),
     )
     bank_bsb = forms.CharField(
         required=False,
-        widget=forms.TextInput(attrs={'class': INPUT_CLASS}),
+        widget=forms.TextInput(attrs={**CODE_FIELD, 'class': INPUT_CLASS}),
     )
     bank_cpf = forms.CharField(
         required=False,
@@ -223,9 +229,18 @@ class WiseRecipientForm(forms.Form):
         widget=forms.Select(attrs={'class': 'select select-bordered w-full'}),
     )
 
+    # Asked for only when there is already a payout account, so someone at an
+    # unlocked screen cannot send the next payout to their own account.
+    current_password = forms.CharField(
+        required=False,
+        label='Current password',
+        widget=forms.PasswordInput(attrs={'class': INPUT_CLASS, 'autocomplete': 'current-password'}),
+    )
+
     def __init__(self, *args, profile=None, **kwargs):
         """Pre-select banking method and currency from an existing profile when present."""
         super().__init__(*args, **kwargs)
+        self.profile = profile
         if profile:
             if profile.banking_method:
                 self.fields['banking_method'].initial = profile.banking_method
@@ -238,6 +253,9 @@ class WiseRecipientForm(forms.Form):
     def clean(self):
         """Validate that required bank fields are present for the selected method."""
         cleaned = super().clean()
+        if (self.profile and self.profile.wise_account_id
+                and not self.profile.user.check_password(cleaned.get('current_password') or '')):
+            self.add_error('current_password', 'Enter your current password to change where you are paid.')
         method = cleaned.get('banking_method')
         if not method:
             raise forms.ValidationError('Select a banking method.')

@@ -357,14 +357,15 @@
           {% csrf_token %}
           <div class="flex flex-col gap-3" data-rows>
             <div class="flex flex-wrap gap-3 items-end" data-row>
-              <div class="form-control w-40">
-                <label class="label py-0"><span class="label-text text-xs">Type</span></label>
-                {{ doc_form.kind }}
-              </div>
-              <div class="form-control flex-1 min-w-[200px]">
-                <label class="label py-0"><span class="label-text text-xs">File</span></label>
-                {{ doc_form.file }}
-              </div>
+              {# Each control sits inside its label, so rows added by "Add another" stay labelled without ids. #}
+              <label class="form-control w-40">
+                <span class="label py-0 label-text text-xs">Type</span>
+                {{ doc_form.kind }}{{ doc_form.kind.errors }}
+              </label>
+              <label class="form-control flex-1 min-w-[200px]">
+                <span class="label py-0 label-text text-xs">File</span>
+                {{ doc_form.file }}{{ doc_form.file.errors }}
+              </label>
               <button type="button" class="btn btn-sm btn-ghost btn-square hidden" aria-label="Remove this row" data-remove>✕</button>
             </div>
           </div>
@@ -381,6 +382,7 @@
             let next = 1;
             form.querySelector('[data-add]').addEventListener('click', () => {
               const row = first.cloneNode(true);
+              dropCopiedErrors(row);
               const n = next++;
               row.querySelector('select').name = 'kind_' + n;
               row.querySelector('select').removeAttribute('id');
@@ -469,10 +471,10 @@
         </div>
         <form method="post" action="{% url 'request_comment' travel_request.pk %}">
           {% csrf_token %}
-          {{ comment_form.body }}
+          {{ comment_form.body }}{{ comment_form.body.errors }}
           {% if sees_internal_notes %}
           <label class="label cursor-pointer justify-start gap-2 mt-2">
-            {{ comment_form.internal }}
+            {{ comment_form.internal }}{{ comment_form.internal.errors }}
             <span class="label-text text-sm">Internal note, visible only to the committee and finance</span>
           </label>
           {% endif %}

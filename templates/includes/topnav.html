@@ -7,26 +7,28 @@
         </div>
         <div class="flex-1 flex items-center gap-2">
           <a href="{% url 'dashboard' %}" class="text-2xl font-bold text-primary lg:hidden">{{ app_name }}</a>
-          <form method="get" action="{% url 'search' %}" class="hidden md:flex max-w-xs ml-auto">
+          <search class="hidden md:flex max-w-xs ml-auto">
+          <form method="get" action="{% url 'search' %}" class="flex w-full">
               <label class="input input-sm flex w-full items-center mr-2">
                   <input type="search" name="q" value="{{ request.GET.q }}" placeholder="Search..."
                          class="grow" aria-label="Search" data-search-key>
                   <kbd class="kbd kbd-xs opacity-60" aria-hidden="true">/</kbd>
               </label>
           </form>
+          </search>
         </div>
         <div class="flex-none gap-2">
           {% include "partials/theme_toggle.html" %}
-          <div class="dropdown dropdown-end">
-            <div tabindex="0" role="button" class="btn btn-circle btn-primary text-sm" aria-label="Account menu">
-              {{ user.first_name|slice:":1"|default:user.username|slice:":1"|upper }}
-            </div>
-            <ul tabindex="0" class="menu menu-sm dropdown-content mt-3 z-[1] p-2 shadow bg-base-100 rounded-box w-52">
+          {# A popover opens on click in every browser, including Safari, which does not focus a clicked button. #}
+          <button type="button" class="btn btn-circle btn-primary text-sm account-trigger" aria-label="Account menu"
+                  popovertarget="account-menu">
+            {{ user.first_name|slice:":1"|default:user.username|slice:":1"|upper }}
+          </button>
+          <ul id="account-menu" popover class="menu menu-sm p-2 shadow bg-base-100 rounded-box w-52 account-menu">
               <li class="menu-title flex flex-col gap-0.5"><span>{{ user.get_full_name|default:user.username }}</span><span class="font-normal normal-case opacity-70">{{ profile.role_label|default:"User" }}</span></li>
               <li><a href="{% url 'profile' %}">Profile</a></li>
               <li><a href="{% url 'logout' %}">Sign out</a></li>
             </ul>
-          </div>
         </div>
       </div>
       <!-- end of topnav-->

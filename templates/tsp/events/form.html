@@ -12,20 +12,20 @@
     <div class="card-body gap-4">
       <div class="form-control">
         <label class="label" for="{{ form.name.id_for_label }}"><span class="label-text">Event Name</span></label>
-        {{ form.name }}
+        {{ form.name }}{{ form.name.errors }}
       </div>
       <div class="form-control">
         <label class="label" for="{{ form.location.id_for_label }}"><span class="label-text">Location</span></label>
-        {{ form.location }}
+        {{ form.location }}{{ form.location.errors }}
       </div>
       <div class="grid grid-cols-2 gap-4">
         <div class="form-control">
           <label class="label" for="{{ form.start_date.id_for_label }}"><span class="label-text">Start Date</span></label>
-          {{ form.start_date }}
+          {{ form.start_date }}{{ form.start_date.errors }}
         </div>
         <div class="form-control">
           <label class="label" for="{{ form.end_date.id_for_label }}"><span class="label-text">End Date</span></label>
-          {{ form.end_date }}
+          {{ form.end_date }}{{ form.end_date.errors }}
         </div>
       </div>
       {% if not profile.is_tsp %}
@@ -34,11 +34,11 @@
           <label class="label" for="{{ form.suggested_budget.id_for_label }}"><span class="label-text">Suggested budget</span></label>
           {{ form.suggested_budget }}
 
-          {% for error in form.suggested_budget.errors %}<span class="label-text-alt text-error">{{ error }}</span>{% endfor %}
+          {{ form.suggested_budget.errors }}
         </div>
         <div class="form-control">
           <label class="label" for="{{ form.budget_currency.id_for_label }}"><span class="label-text">Currency</span></label>
-          {{ form.budget_currency }}
+          {{ form.budget_currency }}{{ form.budget_currency.errors }}
         </div>
       </div>
       {% elif form.budget %}
@@ -49,13 +49,11 @@
           <label class="label">
             <span class="label-text-alt">{% if event.suggested_budget %}Suggested when proposed: {{ event.suggested_budget|floatformat:"2g" }} {{ event.budget_currency }}{% else %}Leave blank for no limit{% endif %}</span>
           </label>
-          {% for error in form.budget.errors %}
-          <span class="label-text-alt text-error">{{ error }}</span>
-          {% endfor %}
+          {{ form.budget.errors }}
         </div>
         <div class="form-control">
           <label class="label" for="{{ form.budget_currency.id_for_label }}"><span class="label-text">Budget Currency</span></label>
-          {{ form.budget_currency }}
+          {{ form.budget_currency }}{{ form.budget_currency.errors }}
         </div>
       </div>
       {% elif profile.is_tsp %}
@@ -66,22 +64,20 @@
         <label class="label" for="{{ form.approval_percent.id_for_label }}"><span class="label-text">Share of each request covered (%)</span></label>
         {{ form.approval_percent }}
 
-        {% for error in form.approval_percent.errors %}
-        <span class="label-text-alt text-error">{{ error }}</span>
-        {% endfor %}
+        {{ form.approval_percent.errors }}
       </div>
 
       <div class="grid gap-4 md:grid-cols-2">
         <div class="form-control">
           <label class="label" for="{{ form.requests_open_until.id_for_label }}"><span class="label-text">Requests close on</span></label>
-          {{ form.requests_open_until }}
+          {{ form.requests_open_until }}{{ form.requests_open_until.errors }}
           <label class="label">
             <span class="label-text-alt">Leave blank to close it by hand</span>
           </label>
         </div>
         <div class="form-control">
           <label class="label" for="{{ form.reimbursements_open_until.id_for_label }}"><span class="label-text">Claims close on</span></label>
-          {{ form.reimbursements_open_until }}
+          {{ form.reimbursements_open_until }}{{ form.reimbursements_open_until.errors }}
           <label class="label">
             <span class="label-text-alt">Defaults to 30 days after the event</span>
           </label>
@@ -90,11 +86,11 @@
       {% endif %}
       <div class="form-control">
         <label class="label" for="{{ form.url.id_for_label }}"><span class="label-text">Event URL</span></label>
-        {{ form.url }}
+        {{ form.url }}{{ form.url.errors }}
       </div>
       <div class="form-control">
         <label class="label" for="{{ form.description.id_for_label }}"><span class="label-text">Description</span></label>
-        {{ form.description }}
+        {{ form.description }}{{ form.description.errors }}
       </div>
       {% if profile.is_tsp %}
       <fieldset class="form-control gap-2">
@@ -108,16 +104,16 @@
         </div>
         <label class="label pb-1 mt-2" for="{{ form.custom_categories.id_for_label }}"><span class="label-text">Other categories, separated by commas</span></label>
         {{ form.custom_categories }}
-        {% for error in form.custom_categories.errors %}<span class="label-text-alt text-error">{{ error }}</span>{% endfor %}
+        {{ form.custom_categories.errors }}
       </fieldset>
       <label class="label cursor-pointer justify-start gap-3">
-        {{ form.visa_letters_offered }}
+        {{ form.visa_letters_offered }}{{ form.visa_letters_offered.errors }}
         <span class="label-text">Visa letters offered</span>
       </label>
       <fieldset class="form-control" id="organiser-picker">
         <legend class="label-text mb-2">Organisers</legend>
         <p class="text-sm mb-2 truncate" data-chosen></p>
-        <input type="search" class="input input-bordered input-sm w-full mb-2" placeholder="Search people by name or username" aria-label="Search people" data-search>
+        <search><input type="search" class="input input-bordered input-sm w-full mb-2" placeholder="Search people by name or username" aria-label="Search people" data-search></search>
         <div class="max-h-48 overflow-y-auto border border-base-300 p-2 flex flex-col" data-list>
           {% for choice in form.organizers %}
           <label class="flex items-center gap-3 py-1 cursor-pointer" data-person>
@@ -155,7 +151,7 @@
         })();
       </script>
       <label class="label cursor-pointer justify-start gap-3">
-        {{ form.accepting_requests }}
+        {{ form.accepting_requests }}{{ form.accepting_requests.errors }}
         <span class="label-text">Accepting travel support requests</span>
       </label>
       {% endif %}

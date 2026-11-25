@@ -42,35 +42,39 @@
       <div class="grid gap-4 md:grid-cols-2" id="recreate-banking-fields">
         <div class="form-control md:col-span-2">
           <label class="label" for="{{ banking_form.banking_method.id_for_label }}"><span class="label-text">Banking Method</span></label>
-          {{ banking_form.banking_method }}
+          {{ banking_form.banking_method }}{{ banking_form.banking_method.errors }}
         </div>
         <div class="form-control">
           <label class="label" for="{{ banking_form.banking_currency.id_for_label }}"><span class="label-text">Currency</span></label>
-          {{ banking_form.banking_currency }}
+          {{ banking_form.banking_currency }}{{ banking_form.banking_currency.errors }}
         </div>
         <div class="form-control recreate-iban">
           <label class="label" for="{{ banking_form.bank_iban.id_for_label }}"><span class="label-text">IBAN</span></label>
-          {{ banking_form.bank_iban }}
+          {{ banking_form.bank_iban }}{{ banking_form.bank_iban.errors }}
         </div>
         <div class="form-control recreate-iban">
           <label class="label" for="{{ banking_form.bank_swift.id_for_label }}"><span class="label-text">SWIFT/BIC (optional)</span></label>
-          {{ banking_form.bank_swift }}
+          {{ banking_form.bank_swift }}{{ banking_form.bank_swift.errors }}
         </div>
         <div class="form-control recreate-us hidden">
-          <label class="label"><span class="label-text">Account Number</span></label>
-          <input type="text" name="bank_account_no" class="input input-bordered w-full recreate-acct-no" />
+          <label class="label" for="recreate-acct-no-us"><span class="label-text">Account Number</span></label>
+          <input type="text" name="bank_account_no" id="recreate-acct-no-us" class="input input-bordered w-full recreate-acct-no" inputmode="numeric" autocorrect="off" autocapitalize="none" spellcheck="false" />
         </div>
         <div class="form-control recreate-us hidden">
           <label class="label" for="{{ banking_form.bank_routing_no.id_for_label }}"><span class="label-text">Routing Number</span></label>
-          {{ banking_form.bank_routing_no }}
+          {{ banking_form.bank_routing_no }}{{ banking_form.bank_routing_no.errors }}
         </div>
         <div class="form-control recreate-india hidden">
-          <label class="label"><span class="label-text">Account Number</span></label>
-          <input type="text" name="bank_account_no" class="input input-bordered w-full recreate-acct-no" disabled />
+          <label class="label" for="recreate-acct-no-india"><span class="label-text">Account Number</span></label>
+          <input type="text" name="bank_account_no" id="recreate-acct-no-india" class="input input-bordered w-full recreate-acct-no" inputmode="numeric" autocorrect="off" autocapitalize="none" spellcheck="false" disabled />
         </div>
         <div class="form-control recreate-india hidden">
           <label class="label" for="{{ banking_form.bank_ifsc.id_for_label }}"><span class="label-text">IFSC</span></label>
-          {{ banking_form.bank_ifsc }}
+          {{ banking_form.bank_ifsc }}{{ banking_form.bank_ifsc.errors }}
+        </div>
+        <div class="form-control">
+          <label class="label" for="{{ banking_form.current_password.id_for_label }}"><span class="label-text">Current password</span></label>
+          {{ banking_form.current_password }}
         </div>
       </div>
       <div class="flex flex-wrap gap-2 mt-4">
@@ -97,19 +101,19 @@
       <div class="grid gap-4">
         <div class="form-control">
           <label class="label" for="{{ form.event.id_for_label }}"><span class="label-text">Event</span></label>
-          {{ form.event }}
+          {{ form.event }}{{ form.event.errors }}
         </div>
         <div class="form-control">
           <label class="label" for="{{ form.talk_title.id_for_label }}"><span class="label-text">Talk title</span><span class="label-text-alt opacity-60">Optional</span></label>
-          {{ form.talk_title }}
+          {{ form.talk_title }}{{ form.talk_title.errors }}
         </div>
         <div class="form-control">
           <label class="label" for="{{ form.talk_url.id_for_label }}"><span class="label-text">Talk link</span><span class="label-text-alt opacity-60">Optional</span></label>
-          {{ form.talk_url }}
+          {{ form.talk_url }}{{ form.talk_url.errors }}
         </div>
         <div class="form-control">
           <label class="label" for="{{ form.description.id_for_label }}"><span class="label-text">Why you are going</span></label>
-          {{ form.description }}
+          {{ form.description }}{{ form.description.errors }}
         </div>
       </div>
     </div>
@@ -134,19 +138,19 @@
           {% for hidden in expense_form.hidden_fields %}{{ hidden }}{% endfor %}
           <label class="form-control md:col-span-3">
             <span class="label-text text-xs mb-1 md:sr-only">Category</span>
-            {{ expense_form.category }}
+            {{ expense_form.category }}{{ expense_form.category.errors }}
           </label>
           <label class="form-control md:col-span-3">
             <span class="label-text text-xs mb-1 md:sr-only">Description</span>
-            {{ expense_form.description }}
+            {{ expense_form.description }}{{ expense_form.description.errors }}
           </label>
           <label class="form-control md:col-span-2">
             <span class="label-text text-xs mb-1 md:sr-only">Amount</span>
-            {{ expense_form.estimated_amount }}
+            {{ expense_form.estimated_amount }}{{ expense_form.estimated_amount.errors }}
           </label>
           <label class="form-control md:col-span-2">
             <span class="label-text text-xs mb-1 md:sr-only">Currency</span>
-            {{ expense_form.estimated_currency }}
+            {{ expense_form.estimated_currency }}{{ expense_form.estimated_currency.errors }}
           </label>
           <div class="md:col-span-2 flex justify-end md:justify-center">
             {% if expense_form.DELETE %}<span class="hidden">{{ expense_form.DELETE }}</span>{% endif %}
@@ -200,6 +204,7 @@
     newRow.removeAttribute('data-saved');
     newRow.classList.remove('opacity-40');
     newRow.querySelector('[name$="-DELETE"]')?.closest('span')?.remove();
+    dropCopiedErrors(newRow);
     newRow.querySelectorAll('input, select').forEach(el => {
       el.name = el.name.replace(new RegExp(`${prefix}-\\d+-`), `${prefix}-${count}-`);
       el.id = el.id.replace(new RegExp(`${prefix}-\\d+-`), `${prefix}-${count}-`);

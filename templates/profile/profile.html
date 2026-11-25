@@ -22,45 +22,45 @@
       <div class="grid gap-4 md:grid-cols-2">
         <div class="form-control">
           <label class="label" for="{{ form.first_name.id_for_label }}"><span class="label-text">First Name</span></label>
-          {{ form.first_name }}
+          {{ form.first_name }}{{ form.first_name.errors }}
         </div>
         <div class="form-control">
           <label class="label" for="{{ form.last_name.id_for_label }}"><span class="label-text">Last Name</span></label>
-          {{ form.last_name }}
+          {{ form.last_name }}{{ form.last_name.errors }}
         </div>
         <div class="form-control md:col-span-2">
           <label class="label" for="{{ form.email.id_for_label }}"><span class="label-text">Email</span></label>
-          {{ form.email }}
+          {{ form.email }}{{ form.email.errors }}
         </div>
         <div class="form-control md:col-span-2">
           <label class="label" for="{{ form.current_password.id_for_label }}"><span class="label-text">Current password</span><span class="label-text-alt">Only to change your email</span></label>
           {{ form.current_password }}
-          {% if form.current_password.errors %}<label class="label"><span class="label-text-alt text-error">{{ form.current_password.errors.0 }}</span></label>{% endif %}
+          {{ form.current_password.errors }}
         </div>
 
         <div class="form-control md:col-span-2">
           <label class="label" for="{{ form.address_line.id_for_label }}"><span class="label-text">Street Address</span></label>
-          {{ form.address_line }}
+          {{ form.address_line }}{{ form.address_line.errors }}
         </div>
         <div class="form-control">
           <label class="label" for="{{ form.city.id_for_label }}"><span class="label-text">City</span></label>
-          {{ form.city }}
+          {{ form.city }}{{ form.city.errors }}
         </div>
         <div class="form-control">
           <label class="label" for="{{ form.state.id_for_label }}"><span class="label-text">State/Province</span></label>
-          {{ form.state }}
+          {{ form.state }}{{ form.state.errors }}
         </div>
         <div class="form-control">
           <label class="label" for="{{ form.postal_code.id_for_label }}"><span class="label-text">Postal Code</span></label>
-          {{ form.postal_code }}
+          {{ form.postal_code }}{{ form.postal_code.errors }}
         </div>
         <div class="form-control">
           <label class="label" for="{{ form.country.id_for_label }}"><span class="label-text">Country</span></label>
-          {{ form.country }}
+          {{ form.country }}{{ form.country.errors }}
         </div>
         <div class="form-control md:col-span-2">
           <label class="label" for="{{ form.phone.id_for_label }}"><span class="label-text">Phone</span></label>
-          {{ form.phone }}
+          {{ form.phone }}{{ form.phone.errors }}
         </div>
       </div>
     </div>
@@ -96,11 +96,11 @@
       <div class="grid gap-4 md:grid-cols-2">
         <div class="form-control">
           <label class="label" for="{{ banking_form.banking_method.id_for_label }}"><span class="label-text">Banking Method</span></label>
-          {{ banking_form.banking_method }}
+          {{ banking_form.banking_method }}{{ banking_form.banking_method.errors }}
         </div>
         <div class="form-control">
           <label class="label" for="{{ banking_form.banking_currency.id_for_label }}"><span class="label-text">Currency</span></label>
-          {{ banking_form.banking_currency }}
+          {{ banking_form.banking_currency }}{{ banking_form.banking_currency.errors }}
         </div>
       </div>
       <button type="submit" name="banking_submit" value="1" class="btn btn-outline btn-sm mt-4">Save Banking</button>
@@ -135,9 +135,9 @@
 
 <div id="notifications" class="card bg-base-100 shadow-sm mt-6 max-w-2xl">
   <div class="card-body">
-    <h2 class="card-title text-lg">Notify me when</h2>
+    <h2 class="card-title text-lg" id="notifications-heading">Notify me when</h2>
     <p class="text-sm opacity-70">For browser alerts and emails. Payment problems are always sent.</p>
-    <form method="post" action="{% url 'notification_settings' %}">
+    <form method="post" action="{% url 'notification_settings' %}" aria-labelledby="notifications-heading">
       {% csrf_token %}
       <div class="grid gap-1 sm:grid-cols-2 my-2">
         {% for kind, label, on in notification_kinds %}
