@@ -452,6 +452,16 @@ class AuditLogPageTests(TestCase):
         self.client.force_login(make_user('auditrequester', [GROUP_REQUESTER]))
         self.assertEqual(self.client.get(reverse('audit_log')).status_code, 403)
 
+    def test_a_failed_write_does_not_break_the_callers_transaction(self):
+        from django.db import transaction
+
+        from profile.audit_log import record
+        with transaction.atomic():
+            # No action breaks the not-null rule, a real database error.
+            self.assertIsNone(record(None, user=self.finance))
+            # Still usable afterwards: on Postgres this fails without the savepoint.
+            make_user('afterfailedaudit', [GROUP_REQUESTER])
+
 
 class HistoryProtectionTests(TestCase):
     """Nothing in the admin can rewrite or remove what was paid."""

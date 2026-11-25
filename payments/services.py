@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 from django.contrib.contenttypes.models import ContentType
 from django.db import transaction
 from django.utils import timezone
@@ -10,6 +12,9 @@ from payments.base import PaymentRequest
 from payments.models import PaymentRecord
 from payments.registry import get_adapter, get_default_adapter, get_gateway
 from profile.audit_log import record as audit
+
+# How long a payment can show as sending before it is treated as never sent.
+SENDING_TIMEOUT_SECONDS = 15 * 60
 
 
 def _is_own(obj, user) -> bool:
@@ -44,72 +49,66 @@ class PaymentService:
         """Build a normalized payment instruction from a single payable object."""
         return self.adapter.build_payment_request(obj)
 
-    @transaction.atomic
     def process_payment(self, object_id: int, gateway_id: str, user) -> PaymentRecord:
         """
         Initiate payment for one queue item and persist the result.
 
         Steps:
-        1. Load the payable object via the adapter.
-        2. Call ``gateway.initiate_payment`` with the built request.
-        3. Create a ``PaymentRecord`` linked to the object via GenericForeignKey.
+        1. Load and lock the payable object via the adapter, and write a
+           ``sending`` record so a second payment at the same time is refused.
+        2. Call ``gateway.initiate_payment`` with the built request. This runs
+           outside the lock, so a slow Wise call holds no rows.
+        3. Save the result on the record.
         4. Invoke ``adapter.on_payment_completed`` (e.g. mark travel request paid).
 
         Raises:
             ValueError: Unknown ``gateway_id``.
         """
-        obj = self.adapter.get_object(object_id)
-        obj = type(obj)._default_manager.select_for_update().get(pk=obj.pk)
-        if not self.adapter.get_queue().filter(pk=obj.pk).exists():
-            raise ValueError('This request is no longer awaiting payment.')
-        if _is_own(obj, user):
-            raise ValueError('You cannot pay your own request. Another finance member has to.')
-        ct = ContentType.objects.get_for_model(obj)
-        purpose = self.adapter.payment_purpose(obj)
-        existing = self._payments_under_way(obj)
-        if gateway_id == 'wise-csv':
-            # Finance confirming that the batch file it was in went through.
-            if not existing.filter(status='exported').exists():
+        with transaction.atomic():
+            obj = self.adapter.get_object(object_id)
+            obj = type(obj)._default_manager.select_for_update().get(pk=obj.pk)
+            if not self.adapter.get_queue().filter(pk=obj.pk).exists():
+                raise ValueError('This request is no longer awaiting payment.')
+            if _is_own(obj, user):
+                raise ValueError('You cannot pay your own request. Another finance member has to.')
+            existing = self._payments_under_way(obj)
+            if gateway_id == 'wise-csv':
+                # Finance confirming that the batch file it was in went through.
+                if not existing.filter(status='exported').exists():
+                    raise ValueError(
+                        'This request has not been exported in a batch file, so no money has '
+                        'been sent. Export the batch and upload it to Wise first.'
+                    )
+                existing = existing.exclude(status='exported')
+            if existing.filter(status='exported').exists():
                 raise ValueError(
-                    'This request has not been exported in a batch file, so no money has '
-                    'been sent. Export the batch and upload it to Wise first.'
+                    'This request is in an exported batch file. Mark it paid with Wise Batch CSV '
+                    'once Wise has processed the file, rather than paying it again.'
                 )
-            existing = existing.exclude(status='exported')
-        if existing.filter(status='exported').exists():
-            raise ValueError(
-                'This request is in an exported batch file. Mark it paid with Wise Batch CSV '
-                'once Wise has processed the file, rather than paying it again.'
-            )
-        if existing.exists():
-            raise ValueError('A payment already exists for this request. Check its status before retrying.')
-        gateway = get_gateway(gateway_id)
-        if gateway is None:
-            raise ValueError(f'Unknown gateway: {gateway_id}')
+            if existing.exists():
+                raise ValueError('A payment already exists for this request. Check its status before retrying.')
+            gateway = get_gateway(gateway_id)
+            if gateway is None:
+                raise ValueError(f'Unknown gateway: {gateway_id}')
 
-        payment_request = self.adapter.build_payment_request(obj)
-        result = gateway.initiate_payment(payment_request)
+            payment_request = self.adapter.build_payment_request(obj)
+            record = self._sending_record(obj, gateway_id, payment_request, user)
 
-        ct = ContentType.objects.get_for_model(obj)
-        record = PaymentRecord.objects.create(
-            content_type=ct,
-            object_id=obj.pk,
-            gateway_id=gateway_id,
-            amount=payment_request.amount,
-            currency=payment_request.currency,
-            recipient_name=payment_request.recipient_name,
-            recipient_email=payment_request.recipient_email,
-            reference=payment_request.reference,
-            external_id=result.external_id,
-            status=result.status,
-            purpose=purpose,
-            metadata=result.metadata,
-            processed_by=user,
-            created_by=user,
-            changed_by=user,
-        )
+        try:
+            result = gateway.initiate_payment(payment_request)
+        except Exception:
+            # Nothing came back to keep, so it can be paid again. Wise's transaction
+            # id is the same on a retry, so a transfer it did make is not made twice.
+            record.delete()
+            raise
 
-        if record.status in {'success', 'completed'}:
-            self.adapter.on_payment_completed(obj, record, user)
+        with transaction.atomic():
+            record.external_id = result.external_id
+            record.status = result.status
+            record.metadata = result.metadata
+            record.save()
+            if record.status in {'success', 'completed'}:
+                self.adapter.on_payment_completed(obj, record, user)
         audit(
             'payment.processed',
             user=user,
@@ -118,13 +117,35 @@ class PaymentService:
         )
         return record
 
+    def _sending_record(self, obj, gateway_id: str, payment_request: PaymentRequest, user) -> PaymentRecord:
+        """A record that holds the payment's place while the gateway is called."""
+        return PaymentRecord.objects.create(
+            content_type=ContentType.objects.get_for_model(obj),
+            object_id=obj.pk,
+            gateway_id=gateway_id,
+            amount=payment_request.amount,
+            currency=payment_request.currency,
+            recipient_name=payment_request.recipient_name,
+            recipient_email=payment_request.recipient_email,
+            reference=payment_request.reference,
+            status='sending',
+            purpose=self.adapter.payment_purpose(obj),
+            processed_by=user,
+            created_by=user,
+            changed_by=user,
+        )
+
     def _payments_under_way(self, obj):
         """Records for ``obj`` that mean money is moving, or about to, for its current purpose."""
+        # A send that never finished, because the server stopped during the gateway
+        # call, stops holding the request after a while so it can be paid again.
+        gave_up = timezone.now() - timedelta(seconds=SENDING_TIMEOUT_SECONDS)
         return PaymentRecord.objects.filter(
             content_type=ContentType.objects.get_for_model(obj),
             object_id=obj.pk,
             purpose=self.adapter.payment_purpose(obj),
-        ).exclude(status__in=['failed', 'cancelled'])
+        ).exclude(status__in=['failed', 'cancelled']).exclude(
+            status='sending', external_id=None, created_at__lt=gave_up)
 
     def export_batch(self, gateway_id: str, user=None) -> tuple[str | bytes, str, str]:
         """
@@ -186,35 +207,32 @@ class PaymentService:
             raise ValueError('The Wise API gateway is not configured.')
         records, problems = [], []
         # Locked like export_batch, so two sends at once cannot both add a request.
+        # The records are written as sending before the lock is let go, and Wise is
+        # called after, so a slow Wise holds no rows.
         with transaction.atomic():
             pending = [obj for obj in self.get_queue().select_for_update(of=('self',))
                        if not self._payments_under_way(obj).exists() and not _is_own(obj, user)]
             if not pending:
                 raise ValueError('Nothing is waiting to be sent to Wise.')
             requests = [self.build_payment_request(obj) for obj in pending]
-            name = f'Marvin {timezone.localtime():%d %b %Y %H:%M}'
+            sending = [self._sending_record(obj, gateway.gateway_id, payment_request, user)
+                       for obj, payment_request in zip(pending, requests)]
+        name = f'Marvin {timezone.localtime():%d %b %Y %H:%M}'
+        try:
             results = gateway.send_batch(name, requests)
-            for obj, payment_request, result in zip(pending, requests, results):
-                if not result.external_id:
-                    problems.append(f'{payment_request.reference}: {result.metadata.get("error", "not added")}')
-                    continue
-                records.append(PaymentRecord.objects.create(
-                    content_type=ContentType.objects.get_for_model(obj),
-                    object_id=obj.pk,
-                    gateway_id=gateway.gateway_id,
-                    amount=payment_request.amount,
-                    currency=payment_request.currency,
-                    recipient_name=payment_request.recipient_name,
-                    recipient_email=payment_request.recipient_email,
-                    reference=payment_request.reference,
-                    external_id=result.external_id,
-                    status=result.status,
-                    purpose=self.adapter.payment_purpose(obj),
-                    metadata=result.metadata,
-                    processed_by=user,
-                    created_by=user,
-                    changed_by=user,
-                ))
+        except Exception:
+            PaymentRecord.objects.filter(pk__in=[r.pk for r in sending]).delete()
+            raise
+        for record, result in zip(sending, results):
+            if not result.external_id:
+                problems.append(f'{record.reference}: {result.metadata.get("error", "not added")}')
+                record.delete()
+                continue
+            record.external_id = result.external_id
+            record.status = result.status
+            record.metadata = result.metadata
+            record.save()
+            records.append(record)
         audit('payment.batch_sent', user=user, target=name,
               detail=f'{len(records)} added, {len(problems)} not added')
         return records, problems

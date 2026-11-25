@@ -125,18 +125,23 @@ class UnclearOutcomeTests(TestCase):
         client.get_transfer.assert_not_called()
 
 
+def payable_request(name):
+    owner = make_user(f'{name}owner', [GROUP_REQUESTER])
+    req = TravelRequest.objects.create(
+        user=owner, event=make_event(), state=RequestState.SUBMITTED_FOR_PAYMENT, description='T')
+    Expense.objects.create(
+        request=req, category='flight', description='F', estimated_amount=100,
+        estimated_currency='EUR', approved_amount=100, approved_currency='EUR',
+        actual_amount=90, actual_currency='EUR')
+    return req
+
+
 class NoSecondPaymentTests(TestCase):
     """A payment whose outcome is unclear blocks another attempt until it is settled."""
 
     def test_an_unclear_payment_cannot_be_paid_again(self):
-        owner = make_user('unclearowner', [GROUP_REQUESTER])
+        req = payable_request('unclear')
         finance = make_user('unclearfinance', [GROUP_FINANCE])
-        req = TravelRequest.objects.create(
-            user=owner, event=make_event(), state=RequestState.SUBMITTED_FOR_PAYMENT, description='T')
-        Expense.objects.create(
-            request=req, category='flight', description='F', estimated_amount=100,
-            estimated_currency='EUR', approved_amount=100, approved_currency='EUR',
-            actual_amount=90, actual_currency='EUR')
         client = wise_client(fund_or_advance_transfer=requests.ConnectionError('reset'))
         gateway = gateway_with(client)
         service = PaymentService()
@@ -147,6 +152,50 @@ class NoSecondPaymentTests(TestCase):
                 service.process_payment(req.pk, 'wise-api', finance)
         self.assertEqual(client.create_transfer.call_count, 1)
         self.assertEqual(PaymentRecord.objects.filter(object_id=req.pk).count(), 1)
+
+    def test_a_payment_being_sent_blocks_a_second_one_while_wise_is_called(self):
+        req = payable_request('midway')
+        finance = make_user('midwayfinance', [GROUP_FINANCE])
+        service = PaymentService()
+        seen = []
+
+        def initiate(payment_request):
+            seen.append(PaymentRecord.objects.get(object_id=req.pk).status)
+            with self.assertRaises(ValueError):
+                service.process_payment(req.pk, 'manual', finance)
+            from payments.base import PaymentResult
+            return PaymentResult(status='processing', external_id='31')
+        gateway = mock.Mock(initiate_payment=initiate)
+        with mock.patch('payments.services.get_gateway', return_value=gateway):
+            record = service.process_payment(req.pk, 'wise-api', finance)
+        self.assertEqual(seen, ['sending'])
+        self.assertEqual((record.status, record.external_id), ('processing', '31'))
+        self.assertEqual(PaymentRecord.objects.filter(object_id=req.pk).count(), 1)
+
+    def test_a_crash_in_the_gateway_leaves_nothing_behind(self):
+        req = payable_request('crash')
+        finance = make_user('crashfinance', [GROUP_FINANCE])
+        gateway = mock.Mock()
+        gateway.initiate_payment.side_effect = KeyError('transfer')
+        with mock.patch('payments.services.get_gateway', return_value=gateway):
+            with self.assertRaises(KeyError):
+                PaymentService().process_payment(req.pk, 'wise-api', finance)
+        self.assertFalse(PaymentRecord.objects.filter(object_id=req.pk).exists())
+
+    def test_a_send_that_never_finished_stops_blocking_after_a_while(self):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        from payments.services import SENDING_TIMEOUT_SECONDS
+        req = payable_request('stuck')
+        finance = make_user('stuckfinance', [GROUP_FINANCE])
+        service = PaymentService()
+        stuck = service._sending_record(req, 'wise-api', service.build_payment_request(req), finance)
+        self.assertTrue(service._payments_under_way(req).exists())
+        PaymentRecord.objects.filter(pk=stuck.pk).update(
+            created_at=timezone.now() - timedelta(seconds=SENDING_TIMEOUT_SECONDS + 1))
+        self.assertFalse(service._payments_under_way(req).exists())
 
 
 class WiseClientNetworkTests(TestCase):
