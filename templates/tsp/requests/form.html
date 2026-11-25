@@ -72,6 +72,25 @@
           <label class="label" for="{{ banking_form.bank_ifsc.id_for_label }}"><span class="label-text">IFSC</span></label>
           {{ banking_form.bank_ifsc }}{{ banking_form.bank_ifsc.errors }}
         </div>
+        <fieldset class="grid gap-4 md:grid-cols-2 md:col-span-2">
+          <legend class="text-sm font-medium mb-2">Your address, which Wise needs for the payee. It is sent to Wise and not stored here.</legend>
+          <div class="form-control md:col-span-2">
+            <label class="label" for="{{ banking_form.address_line.id_for_label }}"><span class="label-text">Street address *</span></label>
+            {{ banking_form.address_line }}{{ banking_form.address_line.errors }}
+          </div>
+          <div class="form-control">
+            <label class="label" for="{{ banking_form.city.id_for_label }}"><span class="label-text">City *</span></label>
+            {{ banking_form.city }}{{ banking_form.city.errors }}
+          </div>
+          <div class="form-control">
+            <label class="label" for="{{ banking_form.state.id_for_label }}"><span class="label-text">State / province</span></label>
+            {{ banking_form.state }}{{ banking_form.state.errors }}
+          </div>
+          <div class="form-control">
+            <label class="label" for="{{ banking_form.postal_code.id_for_label }}"><span class="label-text">Postal code *</span></label>
+            {{ banking_form.postal_code }}{{ banking_form.postal_code.errors }}
+          </div>
+        </fieldset>
         <div class="form-control">
           <label class="label" for="{{ banking_form.current_password.id_for_label }}"><span class="label-text">Current password</span></label>
           {{ banking_form.current_password }}

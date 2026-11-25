@@ -116,10 +116,10 @@ def run_verification_step(profile: UserProfile, state: dict, step_id: str) -> di
                 currency=banking_currency,
                 account_type=recipient_type,
                 country=payee_country,
-                address_line=profile.address_line or None,
-                city=profile.city or None,
-                post_code=profile.postal_code or None,
-                state=resolve_state(profile, payee_country),
+                address_line=banking.get('address_line') or None,
+                city=banking.get('city') or None,
+                post_code=banking.get('postal_code') or None,
+                state=resolve_state(banking, payee_country),
                 **bank,
             )
             state['account_id'] = payee['id']

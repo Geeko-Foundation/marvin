@@ -523,7 +523,7 @@ class PayoutChangeTests(TestCase):
 
     def form(self, **extra):
         from profile.forms import WiseRecipientForm
-        data = {'banking_method': 'iban', 'banking_currency': 'EUR',
+        data = {'banking_method': 'iban', 'banking_currency': 'EUR', 'address_line': '1 Main St', 'city': 'Berlin', 'postal_code': '10115', 
                 'bank_iban': 'DE89370400440532013000', **extra}
         return WiseRecipientForm(data, profile=self.profile)
 
@@ -557,7 +557,7 @@ class PayoutChangeTests(TestCase):
         self.profile.wise_account_id = 111
         self.profile.save()
         self.client.force_login(self.user)
-        data = {'banking_method': 'iban', 'banking_currency': 'EUR',
+        data = {'banking_method': 'iban', 'banking_currency': 'EUR', 'address_line': '1 Main St', 'city': 'Berlin', 'postal_code': '10115', 
                 'bank_iban': 'DE89370400440532013000', 'recreate': '1'}
         for attempt in range(5):
             self.client.post(reverse('signup_banking'), {**data, 'current_password': f'guess-{attempt}'})

@@ -103,6 +103,25 @@
           {{ form.bank_account_type }}{{ form.bank_account_type.errors }}
         </div>
       </div>
+      <fieldset class="grid gap-4 md:grid-cols-2">
+        <legend class="text-sm font-medium mb-2">Your address, which Wise needs for the payee. It is sent to Wise and not stored here.</legend>
+        <div class="form-control md:col-span-2">
+          <label class="label" for="{{ form.address_line.id_for_label }}"><span class="label-text">Street address *</span></label>
+          {{ form.address_line }}{{ form.address_line.errors }}
+        </div>
+        <div class="form-control">
+          <label class="label" for="{{ form.city.id_for_label }}"><span class="label-text">City *</span></label>
+          {{ form.city }}{{ form.city.errors }}
+        </div>
+        <div class="form-control">
+          <label class="label" for="{{ form.state.id_for_label }}"><span class="label-text">State / province</span></label>
+          {{ form.state }}{{ form.state.errors }}
+        </div>
+        <div class="form-control">
+          <label class="label" for="{{ form.postal_code.id_for_label }}"><span class="label-text">Postal code *</span></label>
+          {{ form.postal_code }}{{ form.postal_code.errors }}
+        </div>
+      </fieldset>
       {% if form.profile.has_had_payout_account %}
       <div class="form-control mt-4">
         <label class="label" for="{{ form.current_password.id_for_label }}"><span class="label-text">Current password *</span></label>

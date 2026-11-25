@@ -117,41 +117,36 @@ class WiseAddressTests(TestCase):
         self.assertEqual(resolve_country(UserProfile(country='AU'), {}), 'AU')
 
     def test_an_australian_state_resolves(self):
-        from profile.models import UserProfile
         from profile.services.wise_recipient import resolve_state
 
-        profile = UserProfile(country='Australia', state='Victoria')
-        self.assertEqual(resolve_state(profile, 'AU'), 'VIC')
+        self.assertEqual(resolve_state({'state': 'Victoria'}, 'AU'), 'VIC')
 
     def test_wa_depends_on_the_country(self):
-        from profile.models import UserProfile
         from profile.services.wise_recipient import resolve_state
 
         # Washington in one list, Western Australia in the other.
-        self.assertEqual(resolve_state(UserProfile(country='US', state='WA'), 'US'), 'WA')
-        self.assertEqual(resolve_state(UserProfile(country='AU', state='WA'), 'AU'), 'WA')
-        self.assertIsNone(resolve_state(UserProfile(country='DE', state='WA'), 'DE'))
+        self.assertEqual(resolve_state({'state': 'WA'}, 'US'), 'WA')
+        self.assertEqual(resolve_state({'state': 'WA'}, 'AU'), 'WA')
+        self.assertIsNone(resolve_state({'state': 'WA'}, 'DE'))
 
-    def test_a_profile_without_a_post_code_is_incomplete(self):
-        user = make_user('nopostcode', [GROUP_REQUESTER], onboarded=False)
+    def test_the_profile_needs_a_country_but_no_address(self):
+        user = make_user('noaddress', [GROUP_REQUESTER], onboarded=False)
         profile = user.profile
-        profile.address_line, profile.city, profile.country = '1 Main St', 'Berlin', 'DE'
-        profile.save()
         self.assertFalse(profile.is_profile_complete())
-        profile.postal_code = '10115'
+        profile.country = 'DE'
         profile.save()
         self.assertTrue(profile.is_profile_complete())
 
-    def test_a_us_profile_without_a_state_is_incomplete(self):
+    def test_a_us_payee_needs_a_state_on_the_banking_form(self):
+        from profile.forms import WiseRecipientForm
+
         user = make_user('nostate', [GROUP_REQUESTER], onboarded=False)
-        profile = user.profile
-        profile.address_line, profile.city = '1 Main St', 'Portland'
-        profile.country, profile.postal_code = 'US', '97201'
-        profile.save()
-        self.assertFalse(profile.is_profile_complete())
-        profile.state = 'Oregon'
-        profile.save()
-        self.assertTrue(profile.is_profile_complete())
+        user.profile.country = 'US'
+        data = {'banking_method': 'us_bank', 'banking_currency': 'USD', 'bank_account_no': '12345678',
+                'bank_routing_no': '111000025', 'bank_account_type': 'CHECKING',
+                'address_line': '1 Main St', 'city': 'Portland', 'postal_code': '97201'}
+        self.assertIn('state', WiseRecipientForm(data, profile=user.profile).errors)
+        self.assertTrue(WiseRecipientForm({**data, 'state': 'Oregon'}, profile=user.profile).is_valid())
 
 
 class BankingOptionsEndpointTests(TestCase):
@@ -184,3 +179,39 @@ class BankingOptionsEndpointTests(TestCase):
         with mock.patch('tsp.views.bank_choices', return_value=[]):
             response = self.client.get(reverse('signup_banking_options'), {'method': 'brazil'})
         self.assertEqual(response.status_code, 200)
+
+
+class AddressNotStoredTests(TestCase):
+    """The address goes to Wise with the bank details and is never saved here."""
+
+    def test_the_payee_gets_the_address_and_the_profile_does_not(self):
+        from unittest import mock
+
+        from profile.services.wise_verification import run_verification_step
+
+        user = make_user('payee', [GROUP_REQUESTER], onboarded=False)
+        profile = user.profile
+        profile.country = 'DE'
+        profile.save()
+        client = mock.Mock(sandbox=True, mode_label='sandbox')
+        client.create_payee.return_value = {'id': 5}
+        state = {'banking': {'banking_method': 'iban', 'banking_currency': 'EUR',
+                             'bank_iban': 'DE89370400440532013000', 'address_line': '1 Main St',
+                             'city': 'Berlin', 'postal_code': '10115', 'state': ''}}
+        with mock.patch('profile.services.wise_verification.get_wise_client', return_value=client):
+            run_verification_step(profile, state, 'create_payee')
+
+        sent = client.create_payee.call_args.kwargs
+        self.assertEqual((sent['address_line'], sent['city'], sent['post_code']), ('1 Main St', 'Berlin', '10115'))
+        profile.refresh_from_db()
+        self.assertEqual((profile.address_line, profile.city, profile.postal_code), ('', '', ''))
+
+    def test_the_profile_step_asks_for_no_address(self):
+        user = make_user('wizard', [GROUP_REQUESTER], onboarded=False)
+        self.client.force_login(user)
+        self.assertNotContains(self.client.get(reverse('signup_profile')), 'address_line')
+        user.profile.country = 'DE'
+        user.profile.save()
+        banking = self.client.get(reverse('signup_banking'))
+        for name in ('address_line', 'city', 'state', 'postal_code'):
+            self.assertContains(banking, f'name="{name}"')

@@ -2,7 +2,6 @@ from django.conf import settings
 from django.db import models
 
 from marvin.audit import AuditModel
-from profile.countries import STATE_CODES, normalise_country
 
 
 class BankingMethod(models.TextChoices):
@@ -129,21 +128,8 @@ class UserProfile(AuditModel):
         return settings.USE_WISE and self.is_requester and (self.user.is_staff or self.user.is_superuser)
 
     def is_profile_complete(self) -> bool:
-        """True when required personal and address fields are filled."""
-        user = self.user
-        required = [
-            user.first_name,
-            user.email,
-            self.address_line,
-            self.city,
-            self.country,
-            # Wise wants a post code on every corridor, and a state for US and
-            # Australian addresses, or it refuses to create the payee.
-            self.postal_code,
-        ]
-        if normalise_country(self.country) in STATE_CODES:
-            required.append(self.state)
-        return all(required)
+        """True when the name, email and country are filled in. The address is asked for with the bank details."""
+        return all([self.user.first_name, self.user.email, self.country])
 
     def is_wise_recipient_ready(self) -> bool:
         """True when a verified Wise account ID is linked on the profile."""

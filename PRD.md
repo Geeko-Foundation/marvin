@@ -270,14 +270,14 @@ All domain models in `profile`, `tsp` and `payments` inherit **`AuditModel`** (`
 | Field | Description |
 |---|---|
 | `user` | One-to-one with the Django user |
-| `phone`, `address_line`, `city`, `state`, `country`, `postal_code` | Contact details |
+| `phone`, `country` | Contact details. The address columns (`address_line`, `city`, `state`, `postal_code`) are no longer written and are kept only for older accounts |
 | `profile_completed_at` | When the profile step was completed |
 | `muted_notifications` | Notification kinds the user switched off |
 | `banking_method` | `iban`, `us_bank`, `india_ifsc`, `australia`, `brazil`, `indonesia`, `japan` |
 | `banking_currency` | Payout currency |
 | `wise_account_id`, `wise_recipient_verified_at` | Wise recipient and when it was verified |
 
-**Not stored:** IBAN, SWIFT, account numbers, routing or IFSC codes. These stay in the session only while Wise checks them, are dropped after an hour if the check is abandoned, and go straight to Wise.
+**Not stored:** the postal address, IBAN, SWIFT, account numbers, routing or IFSC codes. These stay in the session only while Wise checks them, are dropped after an hour if the check is abandoned, and go straight to Wise.
 
 Custom permissions: `submit_travel_requests`, `review_travel_requests`, `manage_events`, `view_reports`, `process_payments`.
 
@@ -375,8 +375,8 @@ Defined in `tsp/services/state_machine.py`. Each transition writes `StateHistory
 
 **Sign-up (`/signup/`):**
 1. Account (username, email, password), activated by an emailed link
-2. Profile (name, address, country)
-3. Wise banking: method and details, held in the session only
+2. Profile (name, phone, country)
+3. Wise banking: method, details and postal address, held in the session only (Wise needs the address to create the payee)
 4. Seven-step Wise verification with a progress view (see §10.2)
 5. Completion page
 

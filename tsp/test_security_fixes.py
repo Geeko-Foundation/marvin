@@ -150,10 +150,10 @@ class LiveBankCheckTests(TestCase):
         caches['limits'].clear()
         user = make_user('retrier', [GROUP_REQUESTER], onboarded=False)
         profile = user.profile
-        profile.address_line, profile.city, profile.country, profile.postal_code = '1 St', 'Berlin', 'DE', '10115'
+        profile.country = 'DE'
         profile.save()
         self.client.force_login(user)
-        data = {'banking_method': 'iban', 'banking_currency': 'EUR', 'bank_iban': 'DE89370400440532013000'}
+        data = {'banking_method': 'iban', 'banking_currency': 'EUR', 'address_line': '1 Main St', 'city': 'Berlin', 'postal_code': '10115', 'bank_iban': 'DE89370400440532013000'}
         for _ in range(5):
             self.client.post(reverse('signup_banking'), data)
         response = self.client.post(reverse('signup_banking'), data)
