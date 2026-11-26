@@ -1,7 +1,7 @@
 """Redirect requestors through onboarding until profile and Wise setup are complete."""
 
 from django.shortcuts import redirect
-from django.urls import resolve
+from django.urls import Resolver404, resolve
 
 from profile.decorators import get_profile
 from profile.services.wise_verification import verification_state
@@ -41,8 +41,8 @@ def _is_exempt(request) -> bool:
 
     try:
         match = resolve(request.path_info)
-    except Exception:
-        return request.path_info.startswith('/admin/')
+    except Resolver404:
+        return False
 
     if match.url_name == 'signup':
         return True
@@ -77,7 +77,7 @@ class RequesterOnboardingMiddleware:
                 if step:
                     try:
                         current = resolve(request.path_info).url_name
-                    except Exception:
+                    except Resolver404:
                         current = None
                     if current != step:
                         return redirect(step)

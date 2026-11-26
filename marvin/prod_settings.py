@@ -6,7 +6,7 @@ production security, performance optimizations, and strict environment validatio
 """
 
 from .settings import *
-from .utils import env, env_bool, env_list
+from .utils import env, env_bool
 from django.core.exceptions import ImproperlyConfigured
 
 # ==============================================================================

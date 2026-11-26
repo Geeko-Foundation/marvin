@@ -1,13 +1,7 @@
 """Browser push notifications via django-webpush.
 
-Suggested events (implemented below):
-- Request submitted          → TSP Committee
-- Request approved / rejected → Requester
-- Request accepted           → Requester (upload documents reminder)
-- Submitted for payment      → Finance
-- Request paid               → Requester
-- Request cancelled            → other party (requester or committee)
-- New comment on request     → other party
+Who is told about a state change lives in profile/services/recipients.py,
+shared with email. Comments and internal notes are routed here.
 """
 
 from __future__ import annotations
@@ -20,6 +14,7 @@ from django.urls import reverse
 
 from profile.groups import GROUP_FINANCE, GROUP_TSP
 from profile.models import muted
+from profile.services.recipients import state_change_recipients
 from tsp.models import RequestState, TravelRequest
 
 logger = logging.getLogger('marvin.webpush')
@@ -101,6 +96,17 @@ def _request_url(travel_request: TravelRequest) -> str:
     return absolute_url(path)
 
 
+# Title and body for each state. The recipients come from state_change_recipients.
+PUSH_TEXT = {
+    RequestState.SUBMITTED: ('New travel request', '{label} was submitted for review.'),
+    RequestState.APPROVED: ('Request approved', '{label} was approved by the committee.'),
+    RequestState.REJECTED: ('Request rejected', '{label} was rejected.{detail}'),
+    RequestState.ACCEPTED: ('Request accepted', '{label} was accepted by the requester.'),
+    RequestState.SUBMITTED_FOR_PAYMENT: ('Ready for payment', '{label} was submitted for reimbursement.'),
+    RequestState.PAID: ('Payment processed', 'Reimbursement for {label} has been processed.'),
+}
+
+
 def notify_request_state_change(
     travel_request: TravelRequest,
     from_state: str | None,
@@ -108,87 +114,20 @@ def notify_request_state_change(
     actor: User,
     notes: str = '',
 ) -> None:
-    """
-    Notify the appropriate party when a travel request changes state.
-
-    Called from the TSP state machine; routes to requester or committee/finance
-    groups depending on ``to_state``.
-    """
-    label = _request_label(travel_request)
-    url = _request_url(travel_request)
-    requester = travel_request.user
-
-    if from_state == RequestState.SUBMITTED_FOR_PAYMENT and to_state == RequestState.ACCEPTED:
-        # The requester took it back to edit; "accepted" would mislead them.
+    """Push to whoever needs to act next, the same people the email goes to."""
+    recipients = state_change_recipients(travel_request, from_state, to_state, actor)
+    if not recipients:
         return
-    if to_state == RequestState.SUBMITTED:
-        send_push_to_group(
-            GROUP_TSP,
-            kind=to_state, head='New travel request',
-            body=f'{label} was submitted for review.',
-            url=url,
-            exclude_user=actor,
-        )
-        for organiser in travel_request.event.organizers.exclude(pk=getattr(actor, 'pk', None)):
-            if travel_request.event.is_organised_by(organiser):
-                send_push_to_user(organiser, kind=to_state, head='New travel request',
-                                  body=f'{label} was submitted for review.', url=url)
-    elif to_state == RequestState.APPROVED:
-        send_push_to_user(
-            requester,
-            kind=to_state, head='Request approved',
-            body=f'{label} was approved by the committee.',
-            url=url,
-        )
-    elif to_state == RequestState.REJECTED:
-        detail = f' Notes: {notes}' if notes else ''
-        send_push_to_user(
-            requester,
-            kind=to_state, head='Request rejected',
-            body=f'{label} was rejected.{detail}',
-            url=url,
-        )
-    elif to_state == RequestState.ACCEPTED:
-        # The requester accepts, so telling them is telling them what they
-        # just did. The committee is who needs to know the trip is confirmed.
-        send_push_to_group(
-            GROUP_TSP,
-            kind=to_state, head='Request accepted',
-            body=f'{label} was accepted by the requester.',
-            url=url,
-            exclude_user=actor,
-        )
-    elif to_state == RequestState.SUBMITTED_FOR_PAYMENT:
-        send_push_to_group(
-            GROUP_FINANCE,
-            kind=to_state, head='Ready for payment',
-            body=f'{label} was submitted for reimbursement.',
-            url=url,
-            exclude_user=actor,
-        )
-    elif to_state == RequestState.PAID:
-        send_push_to_user(
-            requester,
-            kind=to_state, head='Payment processed',
-            body=f'Reimbursement for {label} has been processed.',
-            url=url,
-        )
-    elif to_state == RequestState.CANCELLED:
-        if actor.pk == requester.pk:
-            send_push_to_group(
-                GROUP_TSP,
-                kind=to_state, head='Request cancelled',
-                body=f'{label} was cancelled by the requester.',
-                url=url,
-                exclude_user=actor,
-            )
-        else:
-            send_push_to_user(
-                requester,
-                kind=to_state, head='Request cancelled',
-                body=f'{label} was cancelled by the committee.',
-                url=url,
-            )
+    label = _request_label(travel_request)
+    if to_state == RequestState.CANCELLED:
+        by = 'requester' if getattr(actor, 'pk', None) == travel_request.user_id else 'committee'
+        head, body = 'Request cancelled', f'{label} was cancelled by the {by}.'
+    else:
+        head, body = PUSH_TEXT[to_state]
+        body = body.format(label=label, detail=f' Notes: {notes}' if notes else '')
+    url = _request_url(travel_request)
+    for user in recipients:
+        send_push_to_user(user, kind=to_state, head=head, body=body, url=url)
 
 
 def notify_request_comment(travel_request: TravelRequest, actor: User, internal: bool = False) -> None:

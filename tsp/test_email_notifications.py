@@ -27,6 +27,15 @@ class EmailNotificationTests(TestCase):
         self.assertIn(self.committee.email, recipients)
         self.assertNotIn(self.owner.email, recipients)
 
+    def test_submitting_emails_the_event_organisers_once_each(self):
+        # Push already told organisers; email used to skip them.
+        organiser = make_user('mailorganiser', [])
+        self.request.event.organizers.add(organiser, self.committee)
+        transition_request(self.request, RequestState.SUBMITTED, self.owner)
+        recipients = [address for message in mail.outbox for address in message.to]
+        self.assertEqual(recipients.count(organiser.email), 1)
+        self.assertEqual(recipients.count(self.committee.email), 1)
+
     def test_approving_emails_the_requester(self):
         transition_request(self.request, RequestState.SUBMITTED, self.owner)
         mail.outbox = []
