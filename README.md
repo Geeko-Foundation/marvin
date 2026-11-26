@@ -275,7 +275,7 @@ DATABASE_USER=marvin
 DATABASE_PASSWORD=yourpassword
 ```
 
-Set `DATABASE_NAME`, `DATABASE_HOST` or `DATABASE_PORT` only when they differ. `DATABASE_URL` is not read. Install the driver with `uv sync --extra postgres` (`requirements.txt` already includes it).
+Set `DATABASE_NAME`, `DATABASE_HOST` or `DATABASE_PORT` only when they differ. `DATABASE_URL` is not read.
 
 CI runs the whole test suite against both SQLite and PostgreSQL. To run it against PostgreSQL locally, create a `marvin` database and user with password `marvin`, then:
 
