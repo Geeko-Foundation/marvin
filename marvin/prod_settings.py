@@ -50,8 +50,20 @@ X_FRAME_OPTIONS = 'DENY'
 # PERFORMANCE & DATABASE
 # ==============================================================================
 
-# Database persistent connections (reduces connection overhead under load)
-DATABASES['default']['CONN_MAX_AGE'] = int(env('DATABASE_CONN_MAX_AGE', '60'))
+# PostgreSQL. Only the credentials belong in .env; the rest are the usual
+# defaults, which a host such as Railway can still override.
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': env('DATABASE_NAME', 'marvin'),
+        'USER': env('DATABASE_USER'),
+        'PASSWORD': env('DATABASE_PASSWORD'),
+        'HOST': env('DATABASE_HOST', 'localhost'),
+        'PORT': env('DATABASE_PORT', '5432'),
+        # Reuse a connection for a minute rather than opening one per request.
+        'CONN_MAX_AGE': 60,
+    }
+}
 
 # Sign-in and other limits in the database, so every worker shares the counts
 # and a deploy does not reset them. The table is made by createcachetable.
@@ -62,8 +74,6 @@ CACHES['limits'] = {
     'OPTIONS': {'MAX_ENTRIES': 100_000},
 }
 
-# For PostgreSQL set DATABASE_ENGINE=django.db.backends.postgresql and
-# DATABASE_NAME, DATABASE_USER, DATABASE_PASSWORD, DATABASE_HOST, DATABASE_PORT.
 
 # ==============================================================================
 # STATIC & MEDIA ASSETS

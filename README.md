@@ -254,7 +254,8 @@ There are two settings modules:
 | `DEBUG` | `true` / `false` (always off in production) |
 | `ALLOWED_HOSTS` | Comma-separated hostnames (required in production) |
 | `CSRF_TRUSTED_ORIGINS` | Defaults to `https://` plus each public `ALLOWED_HOSTS` entry; set it only for plain http or a non-standard port |
-| `DATABASE_ENGINE`, `DATABASE_NAME`, `DATABASE_USER`, `DATABASE_PASSWORD`, `DATABASE_HOST`, `DATABASE_PORT` | Database connection (see PostgreSQL) |
+| `DATABASE_USER`, `DATABASE_PASSWORD` | PostgreSQL credentials in production (see PostgreSQL) |
+| `DATABASE_NAME`, `DATABASE_HOST`, `DATABASE_PORT` | Only when they differ from `marvin`, `localhost`, `5432` |
 | `MEDIA_ROOT` | Where uploaded documents are stored |
 | `EMAIL_HOST`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `DEFAULT_FROM_EMAIL` | SMTP mail (STARTTLS on port 587) |
 | `SITE_BASE_URL` | Public site URL for links in emails |
@@ -267,25 +268,20 @@ There are two settings modules:
 
 ## PostgreSQL
 
-SQLite is the default and needs no setup. For PostgreSQL, install the driver and point the app at your server:
+Development (`marvin.settings`) uses SQLite and needs no setup. Production (`marvin.prod_settings`) uses PostgreSQL. Its `DATABASES` block in `marvin/prod_settings.py` points at database `marvin` on `localhost:5432`, so `.env` usually needs only the credentials:
 
 ```bash
-uv sync --extra postgres
-```
-
-```bash
-DATABASE_ENGINE=django.db.backends.postgresql
-DATABASE_NAME=marvin
 DATABASE_USER=marvin
 DATABASE_PASSWORD=yourpassword
-DATABASE_HOST=localhost
-DATABASE_PORT=5432
-DATABASE_CONN_MAX_AGE=60      # seconds to reuse a connection; 0 closes each time
 ```
 
-Then run `python manage.py migrate` and `python manage.py seed_data` as usual. CI runs the whole test suite against both SQLite and PostgreSQL.
+Set `DATABASE_NAME`, `DATABASE_HOST` or `DATABASE_PORT` only when they differ. `DATABASE_URL` is not read. Install the driver with `uv sync --extra postgres` (`requirements.txt` already includes it).
 
-`DATABASE_URL` is not read. Set the separate variables above.
+CI runs the whole test suite against both SQLite and PostgreSQL. To run it against PostgreSQL locally, create a `marvin` database and user with password `marvin`, then:
+
+```bash
+DJANGO_SETTINGS_MODULE=marvin.ci_settings python manage.py test
+```
 
 ### Railway
 
@@ -294,7 +290,6 @@ Then run `python manage.py migrate` and `python manage.py seed_data` as usual. C
 3. Set the database variables from the PostgreSQL service's reference variables:
 
    ```bash
-   DATABASE_ENGINE=django.db.backends.postgresql
    DATABASE_NAME=${{Postgres.PGDATABASE}}
    DATABASE_USER=${{Postgres.PGUSER}}
    DATABASE_PASSWORD=${{Postgres.PGPASSWORD}}
@@ -302,7 +297,7 @@ Then run `python manage.py migrate` and `python manage.py seed_data` as usual. C
    DATABASE_PORT=${{Postgres.PGPORT}}
    ```
 
-   Without them the app falls back to SQLite on the service's disk, which is replaced on every deploy.
+   Railway's host, port and database name differ from the defaults, so all five are needed here.
 4. Attach a volume (for example at `/data`) and set `MEDIA_ROOT=/data/uploads`, or uploaded receipts and forms are lost on each deploy.
 5. Set `DJANGO_SECRET_KEY`, `ALLOWED_HOSTS`, `SITE_BASE_URL`, the email variables, `WISE_API_TOKEN` and the VAPID keys. Do not rely on the defaults in `marvin/settings.py`.
 6. Set the start command to `python manage.py collectstatic --noinput && python manage.py migrate && python manage.py createcachetable && gunicorn marvin.wsgi`. Production serves static files through a manifest, so pages fail to render if `collectstatic` has not run. The cache table holds the sign-in limits, so nobody can sign in without it; running the command again is harmless. Leave `loaddata` out: on a lasting database it would reset every record in the fixture on each deploy.
@@ -311,7 +306,7 @@ Then run `python manage.py migrate` and `python manage.py seed_data` as usual. C
 
 ## Development notes
 
-- **Database:** SQLite file at `db.sqlite3` in the project root. See PostgreSQL above to use that instead.
+- **Database:** SQLite file at `db.sqlite3` in the project root. Production uses PostgreSQL; see PostgreSQL above.
 - **Uploaded files:** stored under `uploads/`, or `MEDIA_ROOT` when set (served in development when `DEBUG=True`).
 - **Static files:** served from `static/` during development.
 - **Audit fields:** defined on abstract `AuditModel` in `marvin/audit.py`.

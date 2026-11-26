@@ -53,12 +53,7 @@ jobs:
           --health-retries 5
 
     env:
-      DATABASE_ENGINE: django.db.backends.postgresql
-      DATABASE_NAME: marvin
-      DATABASE_USER: marvin
-      DATABASE_PASSWORD: marvin
-      DATABASE_HOST: localhost
-      DATABASE_PORT: "5432"
+      DJANGO_SETTINGS_MODULE: marvin.ci_settings
 
     steps:
       - uses: actions/checkout@v4
