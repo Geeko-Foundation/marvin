@@ -12,6 +12,7 @@ from tsp.tests import make_committee, make_event, make_requester
     BRAND_STRAPLINE='',
     BRAND_THEME_LIGHT='emerald',
     BRAND_THEME_DARK='forest',
+    BRAND_SOURCE_URL='https://example.org/wanderer',
 )
 class BrandingTests(TestCase):
     """A fork should be able to rename and recolour everything from settings."""
@@ -22,6 +23,7 @@ class BrandingTests(TestCase):
         self.assertContains(response, 'GNOME Foundation')
         self.assertNotContains(response, 'Marvin')
         self.assertNotContains(response, 'Geeko')
+        self.assertContains(response, 'href="https://example.org/wanderer"')
 
     def test_a_fork_can_drop_the_strapline(self):
         response = self.client.get(reverse('login'))
