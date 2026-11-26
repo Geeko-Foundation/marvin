@@ -224,6 +224,7 @@ BRAND_ORG_NAME=GNOME Foundation
 BRAND_TAGLINE=Conference Travel Subsidy
 BRAND_THEME_LIGHT=emerald
 BRAND_THEME_DARK=forest
+BRAND_SOURCE_URL=https://github.com/gnome/wanderer
 ```
 
 The two theme values are [daisyUI theme names](https://daisyui.com/docs/themes/).
@@ -320,6 +321,13 @@ Then run `python manage.py migrate` and `python manage.py seed_data` as usual. C
 ## getting keys etc
 https://randomkeygen.com/vapid-key
 https://randomkeygen.com/django-secret-key
+
+## License
+
+Marvin is free software under the [GNU Affero General Public License v3](LICENSE).
+Because it runs as a web service, anyone using a deployment must be able to get
+its source code. Every page links to it in the footer; a fork that changes the
+code sets `BRAND_SOURCE_URL` to its own repository.
 
 ## Further reading
 
