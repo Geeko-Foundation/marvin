@@ -162,7 +162,7 @@ The committee can name **organisers** on an event (`Event.organizers`). An organ
 |---|---|---|
 | Runtime | Python 3.13+ | `uv` or `pip` |
 | Framework | Django 6 | Server-side rendered HTML |
-| Database | SQLite or PostgreSQL | PostgreSQL through `DATABASE_*` variables; CI tests both |
+| Database | SQLite in development, PostgreSQL in production | Credentials from `.env`; CI tests both |
 | Auth | Django auth, Groups, django-otp | Username/password, two-step sign-in with TOTP and backup codes |
 | UI | DaisyUI 5 + Tailwind 4 | Built ahead of time in `css_build/` to `static/css/styles.css`; themes `i-layer-light` / `i-layer-dark` |
 | Live updates | htmx 2 | Dashboard and payment queue sections refresh themselves |
@@ -230,7 +230,7 @@ uv run python manage.py runserver
 
 **Production** uses `DJANGO_SETTINGS_MODULE=marvin.prod_settings`, which refuses to start without a real `DJANGO_SECRET_KEY` and a public `ALLOWED_HOSTS`. The README's Railway section lists the steps. In short:
 
-- PostgreSQL through the `DATABASE_*` variables (`DATABASE_URL` is not read)
+- PostgreSQL in `prod_settings.py`, with only the credentials in `.env` (`DATABASE_URL` is not read)
 - a persistent volume for `MEDIA_ROOT`
 - start command: `python manage.py collectstatic --noinput && python manage.py migrate && python manage.py createcachetable && gunicorn marvin.wsgi`
 - `createcachetable` makes the `marvin_limits` table that holds sign-in limits; without it nobody can sign in
@@ -748,8 +748,8 @@ Each kind below can be muted per user. Anything not listed, such as a payment co
 | `DEBUG` | `true` | Always off in production |
 | `ALLOWED_HOSTS` | Local hosts | Required in production |
 | `CSRF_TRUSTED_ORIGINS` | *(empty)* | Only for plain http or a non-standard port |
-| `DATABASE_ENGINE`, `DATABASE_NAME`, `DATABASE_USER`, `DATABASE_PASSWORD`, `DATABASE_HOST`, `DATABASE_PORT` | SQLite | Database connection |
-| `DATABASE_CONN_MAX_AGE` | `60` | Connection reuse in production |
+| `DATABASE_USER`, `DATABASE_PASSWORD` | none | PostgreSQL credentials in production |
+| `DATABASE_NAME`, `DATABASE_HOST`, `DATABASE_PORT` | `marvin`, `localhost`, `5432` | Only when they differ |
 | `MEDIA_ROOT` | `uploads/` | Document storage |
 | `EMAIL_HOST`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `DEFAULT_FROM_EMAIL` | localhost | SMTP |
 | `SITE_BASE_URL` | `WEBPUSH_APP_BASE_URL` | Links in emails |

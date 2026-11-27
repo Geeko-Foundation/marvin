@@ -30,7 +30,6 @@ from django_tables2 import RequestConfig
 
 from marvin.validators import spreadsheet_safe
 from payments.models import PaymentRecord
-from payments.services import PaymentService
 from profile.audit_log import AuditLogEntry
 from profile.audit_log import record as audit
 from profile.decorators import get_profile

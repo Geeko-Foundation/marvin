@@ -10,13 +10,13 @@ from __future__ import annotations
 import logging
 
 from django.conf import settings
-from django.contrib.auth.models import Group, User
+from django.contrib.auth.models import User
 from django.core.mail import EmailMessage
 from django.template.loader import render_to_string
 from django.urls import reverse
 
-from profile.groups import GROUP_FINANCE, GROUP_TSP
 from profile.models import muted
+from profile.services.recipients import state_change_recipients
 from tsp.models import RequestState, TravelRequest
 
 logger = logging.getLogger('marvin.email')
@@ -25,15 +25,6 @@ logger = logging.getLogger('marvin.email')
 def request_url(travel_request: TravelRequest) -> str:
     base = getattr(settings, 'SITE_BASE_URL', '').rstrip('/')
     return f"{base}{reverse('request_detail', kwargs={'pk': travel_request.pk})}"
-
-
-def group_members(group_name: str, exclude: list[User] | None = None):
-    try:
-        members = Group.objects.get(name=group_name).user_set.all()
-    except Group.DoesNotExist:
-        return []
-    excluded = {user.pk for user in (exclude or []) if user is not None}
-    return [user for user in members if user.pk not in excluded]
 
 
 def send_to(recipients, *, subject: str, headline: str, travel_request, notes: str = '', kind: str | None = None) -> None:
@@ -60,6 +51,17 @@ def send_to(recipients, *, subject: str, headline: str, travel_request, notes: s
             logger.exception('Notification email to user %s failed', user.pk)
 
 
+# Subject and headline for each state. The recipients come from state_change_recipients.
+EMAIL_TEXT = {
+    RequestState.SUBMITTED: ('submitted for review', 'A travel request is waiting for the committee to review it.'),
+    RequestState.APPROVED: ('approved', 'Your travel request was approved. Accept it to confirm you are attending.'),
+    RequestState.REJECTED: ('rejected', 'Your travel request was rejected.'),
+    RequestState.ACCEPTED: ('accepted', 'The requester has accepted and will upload their documents.'),
+    RequestState.SUBMITTED_FOR_PAYMENT: ('ready for payment', 'A travel request has its documents in and is ready to be paid.'),
+    RequestState.PAID: ('paid', 'Your reimbursement has been processed.'),
+}
+
+
 def notify_request_state_change_email(
     travel_request: TravelRequest,
     from_state: str | None,
@@ -67,69 +69,21 @@ def notify_request_state_change_email(
     actor: User,
     notes: str = '',
 ) -> None:
-    """Email whoever needs to act next, matching the push notification rules."""
-    requester = travel_request.user
-    label = f'#{travel_request.pk} {travel_request.event.name}'
-
-    if from_state == RequestState.SUBMITTED_FOR_PAYMENT and to_state == RequestState.ACCEPTED:
-        # The requester took it back to edit; "accepted" would mislead them.
+    """Email whoever needs to act next, the same people the push goes to."""
+    recipients = state_change_recipients(travel_request, from_state, to_state, actor)
+    if not recipients:
         return
-    if to_state == RequestState.SUBMITTED:
-        send_to(
-            group_members(GROUP_TSP, exclude=[actor]),
-            kind=to_state, subject=f'Travel request {label} submitted for review',
-            headline='A travel request is waiting for the committee to review it.',
-            travel_request=travel_request,
-        )
-    elif to_state == RequestState.APPROVED:
-        send_to(
-            [requester],
-            kind=to_state, subject=f'Travel request {label} approved',
-            headline='Your travel request was approved. Accept it to confirm you are attending.',
-            travel_request=travel_request, notes=notes,
-        )
-    elif to_state == RequestState.REJECTED:
-        send_to(
-            [requester],
-            kind=to_state, subject=f'Travel request {label} rejected',
-            headline='Your travel request was rejected.',
-            travel_request=travel_request, notes=notes,
-        )
-    elif to_state == RequestState.ACCEPTED:
-        # Accepting is the requester's own action, so the committee is told
-        # instead; what to do next belongs on the page they are already on.
-        send_to(
-            group_members(GROUP_TSP, exclude=[actor]),
-            kind=to_state, subject=f'Travel request {label} accepted',
-            headline='The requester has accepted and will upload their documents.',
-            travel_request=travel_request,
-        )
-    elif to_state == RequestState.SUBMITTED_FOR_PAYMENT:
-        send_to(
-            group_members(GROUP_FINANCE, exclude=[actor]),
-            kind=to_state, subject=f'Travel request {label} ready for payment',
-            headline='A travel request has its documents in and is ready to be paid.',
-            travel_request=travel_request,
-        )
-    elif to_state == RequestState.PAID:
-        send_to(
-            [requester],
-            kind=to_state, subject=f'Travel request {label} paid',
-            headline='Your reimbursement has been processed.',
-            travel_request=travel_request,
-        )
-    elif to_state == RequestState.CANCELLED:
-        if actor.pk == requester.pk:
-            send_to(
-                group_members(GROUP_TSP, exclude=[actor]),
-                kind=to_state, subject=f'Travel request {label} cancelled',
-                headline='The requester cancelled their travel request.',
-                travel_request=travel_request, notes=notes,
-            )
-        else:
-            send_to(
-                [requester],
-                kind=to_state, subject=f'Travel request {label} cancelled',
-                headline='Your travel request was cancelled by the committee.',
-                travel_request=travel_request, notes=notes,
-            )
+    if to_state == RequestState.CANCELLED:
+        by_requester = getattr(actor, 'pk', None) == travel_request.user_id
+        subject = 'cancelled'
+        headline = ('The requester cancelled their travel request.' if by_requester
+                    else 'Your travel request was cancelled by the committee.')
+    else:
+        subject, headline = EMAIL_TEXT[to_state]
+    # Only the requester's own outcomes carry the reviewer's notes.
+    keep_notes = to_state in (RequestState.APPROVED, RequestState.REJECTED, RequestState.CANCELLED)
+    send_to(
+        recipients,
+        kind=to_state, subject=f'Travel request #{travel_request.pk} {travel_request.event.name} {subject}',
+        headline=headline, travel_request=travel_request, notes=notes if keep_notes else '',
+    )

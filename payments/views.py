@@ -12,6 +12,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods, require_POST
 
 from payments.forms import ProcessPaymentForm
+from payments.gateways.wise_api import WiseApiError
 from payments.models import PaymentRecord, WiseLogEntry, masked, transfer_id_in
 from payments.registry import (
     check_payment_permission,
@@ -29,6 +30,11 @@ from payments.webhooks import (
 from tsp.decorators import login_required
 
 logger = logging.getLogger('marvin.wise')
+
+PAYMENT_CRASHED = (
+    'Something went wrong on our side. Check the payment\'s status in the queue '
+    'before trying again, and tell an admin.'
+)
 
 
 def _require_payment_permission(view_func):
@@ -174,8 +180,12 @@ def process_payment(request):
                 f'{record.reference} was sent via {label} and is waiting to settle. '
                 'It leaves the queue once Wise confirms the transfer.'
             )
-    except Exception as exc:
+    except (ValueError, WiseApiError) as exc:
         level, text = messages.ERROR, str(exc)
+    except Exception:
+        # A bug, not a refusal: keep the traceback in the log, not on finance's screen.
+        logger.exception('Payment of queue item %s failed', form.cleaned_data['object_id'])
+        level, text = messages.ERROR, PAYMENT_CRASHED
 
     # The queue page sends this through htmx and swaps in the payment's status.
     if request.headers.get('HX-Request'):
@@ -231,8 +241,12 @@ def batch_export(request):
         response = HttpResponse(content, content_type=content_type)
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
         return response
-    except Exception as exc:
+    except (ValueError, WiseApiError) as exc:
         messages.error(request, str(exc))
+        return redirect('payments:dashboard')
+    except Exception:
+        logger.exception('Batch export via %s failed', gateway_id)
+        messages.error(request, PAYMENT_CRASHED)
         return redirect('payments:dashboard')
 
 

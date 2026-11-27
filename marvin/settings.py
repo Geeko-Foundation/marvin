@@ -115,16 +115,12 @@ CACHES = {
 
 # --- Database ---
 
-# SQLite by default; set DATABASE_ENGINE and the rest for PostgreSQL, as CI's
-# test-postgres job does. Payment row locks only take effect on PostgreSQL.
+# SQLite for development. Production uses PostgreSQL (prod_settings.py), and
+# ci_settings.py runs the tests against it. Payment row locks need PostgreSQL.
 DATABASES = {
     'default': {
-        'ENGINE': env('DATABASE_ENGINE', 'django.db.backends.sqlite3'),
-        'NAME': env('DATABASE_NAME', 'db.sqlite3'),
-        'USER': env('DATABASE_USER', ''),
-        'PASSWORD': env('DATABASE_PASSWORD', ''),
-        'HOST': env('DATABASE_HOST', ''),
-        'PORT': env('DATABASE_PORT', ''),
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',
     }
 }
 
@@ -291,6 +287,8 @@ BRAND_TAGLINE = env('BRAND_TAGLINE', 'Travel Support Program')
 BRAND_STRAPLINE = env('BRAND_STRAPLINE', 'Your Travel Assistant')
 # The travel support policy people agree to. Linked from the menu once set.
 BRAND_POLICY_URL = env('BRAND_POLICY_URL', 'https://geekos.org/travel-policy/')
+# The AGPL asks that people using the site can get its source. A fork points this at its own repository.
+BRAND_SOURCE_URL = env('BRAND_SOURCE_URL', 'https://github.com/Geeko-Foundation/marvin')
 
 # Theme names built into static/css/styles.css (see css_build/app.css).
 BRAND_THEME_LIGHT = env('BRAND_THEME_LIGHT', 'i-layer-light')
