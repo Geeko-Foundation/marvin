@@ -310,7 +310,7 @@
         <p class="text-sm opacity-80">Upload: {{ missing_docs|join:", " }}.</p>
         <div class="card-actions mt-2">
           <a href="{% url 'request_form' travel_request.pk %}" class="btn btn-primary btn-sm" target="_blank">Print signed form</a>
-          <a href="{% url 'request_actuals' travel_request.pk %}" class="btn btn-ghost btn-sm">Update costs</a>
+          <a href="{% url 'request_actuals' travel_request.pk %}" class="btn btn-outline btn-sm">Update costs</a>
         </div>
         {% else %}
 
@@ -319,7 +319,7 @@
             {% csrf_token %}
             <button type="submit" class="btn btn-success btn-sm">Submit for payment</button>
           </form>
-          <a href="{% url 'request_actuals' travel_request.pk %}" class="btn btn-ghost btn-sm">Update costs</a>
+          <a href="{% url 'request_actuals' travel_request.pk %}" class="btn btn-outline btn-sm">Update costs</a>
         </div>
         {% endif %}
       </div>
@@ -451,7 +451,7 @@
           {% endif %}
 
           {% if not travel_request.state == 'accepted' or travel_request.user_id != user.id %}
-          <a href="{% url 'request_form' travel_request.pk %}" class="btn btn-sm btn-ghost" target="_blank">Print Form</a>
+          <a href="{% url 'request_form' travel_request.pk %}" class="btn btn-sm btn-outline" target="_blank">Print Form</a>
           {% endif %}
           {% if travel_request.state == 'draft' or travel_request.state == 'submitted' or travel_request.state == 'approved' or travel_request.state == 'accepted' or travel_request.state == 'submitted_for_payment' %}
           {# A request under review has its own Reject, so the committee is not offered both. #}
@@ -485,13 +485,15 @@
         <form method="post" action="{% url 'request_comment' travel_request.pk %}">
           {% csrf_token %}
           {{ comment_form.body }}{{ comment_form.body.errors }}
-          {% if sees_internal_notes %}
-          <label class="label cursor-pointer justify-start gap-2 mt-2">
-            {{ comment_form.internal }}{{ comment_form.internal.errors }}
-            <span class="label-text text-sm">Internal note, visible only to the committee and finance</span>
-          </label>
-          {% endif %}
-          <button type="submit" class="btn btn-sm btn-primary mt-2">Add Comment</button>
+          <div class="flex flex-wrap items-center justify-between gap-3 mt-2">
+            {% if sees_internal_notes %}
+            <label class="label cursor-pointer justify-start gap-2 whitespace-normal">
+              {{ comment_form.internal }}{{ comment_form.internal.errors }}
+              <span class="label-text text-sm">Internal note, visible only to the committee and finance</span>
+            </label>
+            {% endif %}
+            <button type="submit" class="btn btn-sm btn-primary ms-auto">Add Comment</button>
+          </div>
         </form>
       </div>
     </div>
