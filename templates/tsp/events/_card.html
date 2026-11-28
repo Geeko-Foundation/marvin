@@ -62,6 +62,9 @@
       {% endif %}
       {% if profile.is_tsp or event.pk in organised_ids %}
         <a href="{% url 'event_edit' event.pk %}" class="btn btn-outline btn-sm">Edit</a>
+      {% elif profile.is_finance %}
+        {# Finance sets the budget; once set the event leaves the dashboard list, so it is changed from here. #}
+        <a href="{% url 'event_edit' event.pk %}" class="btn btn-outline btn-sm">{% if event.budget is None %}Set budget{% else %}Change budget{% endif %}</a>
       {% endif %}
       {% if profile.is_tsp %}
         {% if not event.request_count %}

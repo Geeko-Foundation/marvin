@@ -101,3 +101,20 @@ class EventDeadlineTests(TestCase):
 
     def test_sensible_deadlines_pass(self):
         self.assertTrue(self.form(requests_open_until='2027-11-28', reimbursements_open_until='2028-01-31').is_valid())
+
+
+class FinanceBudgetTests(TestCase):
+    """Finance can change a budget after setting it, not only the first time."""
+
+    def test_a_set_budget_can_be_changed_from_the_event_list(self):
+        from profile.groups import GROUP_FINANCE
+        from tsp.tests import make_user
+        event = make_event()
+        event.budget = 1000
+        event.save()
+        self.client.force_login(make_user('budgetfinance', [GROUP_FINANCE]))
+        page = self.client.get(reverse('event_list'))
+        self.assertContains(page, 'Change budget')
+        self.client.post(reverse('event_edit', args=[event.pk]), {'budget': '50000', 'budget_currency': 'EUR'})
+        event.refresh_from_db()
+        self.assertEqual(event.budget, 50000)
