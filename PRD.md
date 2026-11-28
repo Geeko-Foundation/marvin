@@ -579,15 +579,14 @@ PAYMENTS_PERMISSION_CHECK = 'profile.permissions.finance_can_process_payments'
 
 ### 10.2 Recipient Verification (Onboarding)
 
-`profile/services/wise_verification.py` runs seven steps:
+`profile/services/wise_verification.py` runs six steps:
 
 1. Create Wise payee account
 2. Confirm bank details with Wise
 3. Request exchange quote for test transfer
-4. Create test transfer
-5. Fund test transfer (sandbox only; skipped on a live account so no money moves)
-6. Cancel / reverse test transfer
-7. Save verification to the profile
+4. Create test transfer (never funded, so no money moves and nothing waits for approval in Wise)
+5. Cancel the test transfer
+6. Save verification to the profile
 
 Changing an existing payout account requires the current password, is rate limited, and is recorded in the audit log with an email to the account owner.
 

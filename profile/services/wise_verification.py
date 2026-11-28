@@ -23,8 +23,7 @@ VERIFICATION_STEPS = [
     ('add_bank_details', 'Confirm bank details with Wise'),
     ('create_quote', 'Request exchange quote for test transfer'),
     ('create_test_transfer', 'Create test transfer'),
-    ('fund_transfer', 'Fund test transfer from Wise balance'),
-    ('reverse_transfer', 'Cancel / reverse test transfer'),
+    ('reverse_transfer', 'Cancel test transfer'),
     ('finalize', 'Save verification to your profile'),
 ]
 
@@ -39,7 +38,6 @@ VERIFICATION_MAX_AGE_SECONDS = 60 * 60
 # funding it adds no check. On a live account funding would move real money,
 # and Wise asks for it to be approved in Wise, which would stop every sign-up.
 # The sandbox keeps the step so the whole flow is exercised there.
-MONEY_STEPS = {'fund_transfer'}
 
 
 class WiseVerificationError(Exception):
@@ -105,9 +103,7 @@ def run_verification_step(profile: UserProfile, state: dict, step_id: str) -> di
     )
 
     try:
-        if step_id in MONEY_STEPS and not client.sandbox:
-            result = {'skipped': 'A live account does not fund the test transfer.'}
-        elif step_id == 'create_payee':
+        if step_id == 'create_payee':
 
             payee_country = resolve_country(profile, banking)
             payee = client.create_payee(
@@ -155,18 +151,6 @@ def run_verification_step(profile: UserProfile, state: dict, step_id: str) -> di
             )
             state['transfer_id'] = transfer['id']
             result = {'transfer_id': transfer['id'], 'status': transfer['status']}
-
-        elif step_id == 'fund_transfer':
-            outcome = client.fund_or_advance_transfer(
-                state['transfer_id'],
-                sandbox_steps=('processing',),
-            )
-            transfer = outcome['transfer']
-            result = {
-                'transfer_id': state['transfer_id'],
-                'method': outcome['method'],
-                'transfer_status': transfer.get('status'),
-            }
 
         elif step_id == 'reverse_transfer':
             try:
