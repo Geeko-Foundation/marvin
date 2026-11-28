@@ -264,6 +264,16 @@ class CancelledTransferTests(TestCase):
         self.client.force_login(finance)
         page = self.client.get(reverse('request_detail', args=[req.pk]))
         self.assertContains(page, 'it was cancelled in Wise')
+        self.assertContains(page, 'back in the payment queue')
+        self.assertNotContains(page, 'Sending')
+
+    def test_a_cancelled_request_shows_no_transfer_warning(self):
+        finance = make_user('cancelledfinance', [GROUP_FINANCE])
+        req = paid_request(make_user('cancelledowner', [GROUP_REQUESTER]), state=RequestState.CANCELLED)
+        payment_for(req, status='cancelled', external_id='57', processed_by=finance)
+        self.client.force_login(finance)
+        page = self.client.get(reverse('request_detail', args=[req.pk]))
+        self.assertNotContains(page, 'did not go through')
         self.assertNotContains(page, 'Sending')
 
     def test_a_transfer_still_under_way_says_sending(self):

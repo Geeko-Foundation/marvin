@@ -969,7 +969,7 @@ def event_reject(request, pk):
     name = event.name
     event.delete()
     audit('event.rejected', user=request.user, target=name, detail=reason or 'no reason given')
-    messages.success(request, f'{name} rejected and the proposer has been told.' if emailed else f'{name} rejected.')
+    messages.error(request, f'{name} rejected and the proposer has been told.' if emailed else f'{name} rejected.')
     if not emailed:
         messages.warning(request, 'The proposer could not be emailed. Let them know directly.')
     return _back(request)
@@ -1509,7 +1509,10 @@ def request_batch_review(request):
             'All selected requests' if reviewed == len(ids)
             else f'{reviewed} request{"s" if reviewed != 1 else ""}'
         )
-        messages.success(request, f'{which} {action}d.')
+        if action == 'reject':
+            messages.error(request, f'{which} rejected.')
+        else:
+            messages.success(request, f'{which} approved.')
     if own:
         messages.warning(
             request,
@@ -1550,7 +1553,7 @@ def request_reject(request, pk):
             transition_request(
                 travel_request, RequestState.REJECTED, request.user, form.cleaned_data['notes'],
             )
-            messages.success(request, 'Request rejected.')
+            messages.error(request, 'Request rejected.')
         except StateTransitionError as e:
             messages.error(request, str(e))
     else:
@@ -1581,7 +1584,7 @@ def request_cancel(request, pk):
 
     try:
         transition_request(travel_request, RequestState.CANCELLED, request.user)
-        messages.success(request, 'Request cancelled.')
+        messages.error(request, 'Request cancelled.')
     except StateTransitionError as e:
         messages.error(request, str(e))
     return redirect('request_detail', pk=pk)

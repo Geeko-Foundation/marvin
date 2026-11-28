@@ -17,6 +17,8 @@
 
 {% with paid=travel_request.payment %}
 {% if paid and paid.purpose != 'advance' and paid.status == 'failed' or paid and paid.purpose != 'advance' and paid.status == 'cancelled' %}
+{# A failed transfer only matters while the request still waits to be paid; a closed request has nothing to act on. #}
+{% if travel_request.state == 'submitted_for_payment' %}
 <div class="alert alert-warning mb-6" role="status">
   <span>
     The transfer of <strong>{{ paid.amount|floatformat:"2g" }} {{ paid.currency }}</strong> on {{ paid.created_at|date:"j M Y" }} did not go through{% if paid.status == 'cancelled' %}: it was cancelled in Wise{% endif %}.
@@ -24,6 +26,7 @@
     {% if paid.external_id %}<span class="block text-sm">Wise transfer {{ paid.external_id }} · reference {{ paid.reference }}</span>{% endif %}
   </span>
 </div>
+{% endif %}
 {% elif paid and paid.purpose != 'advance' %}
 <div class="alert alert-success mb-6">
   <span>
@@ -66,7 +69,8 @@
   </form>
 </div>
 {% endif %}
-{% if travel_request.advance_amount or advance %}
+{# What the committee allows only matters while the trip is still ahead; a paid advance always shows. #}
+{% if advance or travel_request.awaiting_advance or travel_request.advance_amount and travel_request.state == 'approved' or travel_request.advance_amount and travel_request.state == 'accepted' %}
 <div class="alert mb-6">
   <span>
     {% if advance %}

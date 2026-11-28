@@ -253,5 +253,5 @@ def two_factor_disable(request):
     for device in devices_for_user(request.user, confirmed=None):
         device.delete()
     audit('two_factor.disabled', user=request.user, target=request.user.username)
-    messages.success(request, 'Two-step sign-in is off.')
+    messages.warning(request, 'Two-step sign-in is off. Turn it back on from this page to protect your account.')
     return redirect('profile')
