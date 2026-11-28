@@ -65,6 +65,20 @@ class ProductionSettingsTests(SimpleTestCase):
         )
 
 
+class MailSettingsTests(SimpleTestCase):
+    """The configured mailer can be built. Tests swap in an in-memory one, so check it in a fresh process."""
+
+    def test_the_mailer_accepts_its_options(self):
+        code = ('from django.core.mail import get_connection; '
+                'get_connection(fail_silently=True); print("ok")')
+        result = subprocess.run(
+            [sys.executable, '-c', f'import django; django.setup(); {code}'],
+            env={**os.environ, 'DJANGO_SETTINGS_MODULE': 'marvin.settings'},
+            cwd=ROOT, capture_output=True, text=True,
+        )
+        self.assertEqual(result.stdout.strip(), 'ok', result.stderr[-300:])
+
+
 class TrustedOriginsTests(SimpleTestCase):
     """Forms from the site's own https address are trusted without extra setup."""
 
