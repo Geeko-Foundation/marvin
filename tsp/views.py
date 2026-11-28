@@ -513,6 +513,38 @@ def _paginate(request, queryset, per_page, param='page'):
     return Paginator(queryset, per_page).get_page(request.GET.get(param))
 
 
+# Closed requests need nothing more from anyone; the rest are open.
+CLOSED_STATES = (RequestState.PAID, RequestState.REJECTED, RequestState.CANCELLED)
+
+
+@login_required
+def request_list(request):
+    """
+    Requests in two tabs, open and closed, like an issue tracker.
+    The committee and finance see every request, organisers also see their
+    events', and everyone sees their own.
+    """
+    profile = get_profile(request.user)
+    visible = TravelRequest.objects.select_related('user', 'event')
+    if not (profile.is_tsp or profile.is_finance):
+        visible = visible.filter(Q(user=request.user) | Q(event__in=Event.organised_by(request.user)))
+    closed = request.GET.get('tab') == 'closed'
+    status = request.GET.get('status', '')
+    shown = visible.filter(state__in=CLOSED_STATES) if closed else visible.exclude(state__in=CLOSED_STATES)
+    if status in RequestState.values:
+        shown = shown.filter(state=status)
+    tab_states = [(value, label) for value, label in RequestState.choices
+                  if (value in CLOSED_STATES) == closed]
+    return render(request, 'tsp/requests/list.html', {
+        'requests': _paginate(request, shown.order_by('-updated_at'), 25),
+        'closed': closed,
+        'status': status,
+        'tab_states': tab_states,
+        'open_count': visible.exclude(state__in=CLOSED_STATES).count(),
+        'closed_count': visible.filter(state__in=CLOSED_STATES).count(),
+    })
+
+
 def _requester_sections(request):
     """Dashboard data for someone who submits requests."""
     my_requests = TravelRequest.objects.filter(user=request.user).select_related('event')
@@ -855,6 +887,9 @@ def event_edit(request, pk):
             audit('event.updated', user=request.user, target=event.name,
                   detail=', '.join(form.changed_data) or 'no fields changed')
             messages.success(request, 'Budget saved.' if form_class is EventBudgetForm else 'Event updated.')
+            next_url = request.GET.get('next')
+            if _is_safe_redirect(request, next_url):
+                return redirect(next_url)
             return redirect('dashboard' if form_class is EventBudgetForm else 'event_list')
     else:
         form = form_class(instance=event)

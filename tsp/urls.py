@@ -44,6 +44,7 @@ urlpatterns = [
     path('events/<int:pk>/reject/', views.event_reject, name='event_reject'),
     path('search/', views.search, name='search'),
     path('requests/check-account/', views.check_wise_account, name='check_wise_account'),
+    path('requests/', views.request_list, name='request_list'),
     path('requests/new/', views.request_create, name='request_create'),
     path('requests/batch/', views.request_batch_review, name='request_batch_review'),
     path('requests/<int:pk>/', views.request_detail, name='request_detail'),

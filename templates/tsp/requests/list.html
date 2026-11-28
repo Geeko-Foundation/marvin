@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% load tsp_tags %}
+
+{% block title %}Requests{% endblock %}
+
+{% block content %}
+<div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+  <h1 class="text-2xl font-bold">Requests</h1>
+  {% if profile.is_requester or profile.is_tsp %}<a href="{% url 'request_create' %}" class="btn btn-primary btn-sm">New Request</a>{% endif %}
+</div>
+
+<div class="card bg-base-100 shadow-sm">
+  <div class="card-body gap-4">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <nav aria-label="Open or closed requests" class="join">
+        <a href="?tab=open" class="join-item btn btn-sm{% if not closed %} btn-active{% endif %}"{% if not closed %} aria-current="page"{% endif %}>
+          Open <span class="badge badge-sm">{{ open_count }}</span>
+        </a>
+        <a href="?tab=closed" class="join-item btn btn-sm{% if closed %} btn-active{% endif %}"{% if closed %} aria-current="page"{% endif %}>
+          Closed <span class="badge badge-sm">{{ closed_count }}</span>
+        </a>
+      </nav>
+      <form method="get" class="flex items-center gap-2">
+        <input type="hidden" name="tab" value="{% if closed %}closed{% else %}open{% endif %}">
+        <label for="status-filter" class="text-sm opacity-70">Status</label>
+        <select id="status-filter" name="status" class="select select-bordered select-sm" onchange="this.form.requestSubmit()">
+          <option value="">All</option>
+          {% for value, label in tab_states %}
+          <option value="{{ value }}"{% if value == status %} selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+        <noscript><button type="submit" class="btn btn-sm">Filter</button></noscript>
+      </form>
+    </div>
+
+    {% if requests %}
+    <div class="overflow-x-auto">
+      <table class="table">
+        <thead><tr><th>Request</th><th>Requester</th><th>Event</th><th>Status</th><th>Updated</th></tr></thead>
+        <tbody>
+          {% for req in requests %}
+          <tr>
+            <td><a href="{% url 'request_detail' req.pk %}" class="link link-primary font-medium">{{ req.reference }}</a></td>
+            <td>{{ req.user.get_full_name|default:req.user.email }}</td>
+            <td>{{ req.event.name }}</td>
+            <td><span class="badge {{ req.state|state_badge }} badge-sm whitespace-nowrap">{{ req.get_state_display }}</span></td>
+            <td class="whitespace-nowrap"><time datetime="{{ req.updated_at|date:'c' }}">{{ req.updated_at|date:"j M Y" }}</time></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% include 'partials/pagination.html' with page_obj=requests param='page' %}
+    {% else %}
+    <p class="text-sm opacity-70">{% if closed %}No closed requests{% else %}No open requests{% endif %}{% if status %} with this status{% endif %}.</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

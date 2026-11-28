@@ -115,6 +115,42 @@ class FinanceBudgetTests(TestCase):
         self.client.force_login(make_user('budgetfinance', [GROUP_FINANCE]))
         page = self.client.get(reverse('event_list'))
         self.assertContains(page, 'Change budget')
-        self.client.post(reverse('event_edit', args=[event.pk]), {'budget': '50000', 'budget_currency': 'EUR'})
+        response = self.client.post(reverse('event_edit', args=[event.pk]) + '?next=/events/',
+                                    {'budget': '50000', 'budget_currency': 'EUR'})
+        self.assertRedirects(response, '/events/', fetch_redirect_response=False)
         event.refresh_from_db()
         self.assertEqual(event.budget, 50000)
+
+
+class RequestListTests(TestCase):
+    """Requests in open and closed tabs, each person seeing only what they may."""
+
+    def setUp(self):
+        from tsp.models import RequestState, TravelRequest
+        self.owner = make_requester('listowner')
+        self.other = make_requester('listother')
+        event = make_event()
+        self.open_req = TravelRequest.objects.create(user=self.owner, event=event, state=RequestState.SUBMITTED)
+        self.paid_req = TravelRequest.objects.create(user=self.owner, event=event, state=RequestState.PAID)
+        self.someone_elses = TravelRequest.objects.create(user=self.other, event=event, state=RequestState.SUBMITTED)
+
+    def test_open_and_closed_tabs_split_by_state(self):
+        self.client.force_login(make_committee('listchair'))
+        open_page = self.client.get(reverse('request_list'))
+        self.assertContains(open_page, self.open_req.reference)
+        self.assertNotContains(open_page, f'>{self.paid_req.reference}<')
+        self.assertContains(open_page, 'Open <span class="badge badge-sm">2</span>', html=False)
+        closed_page = self.client.get(reverse('request_list') + '?tab=closed')
+        self.assertContains(closed_page, f'>{self.paid_req.reference}<')
+        self.assertNotContains(closed_page, f'>{self.open_req.reference}<')
+
+    def test_a_requester_sees_only_their_own(self):
+        self.client.force_login(self.owner)
+        page = self.client.get(reverse('request_list'))
+        self.assertContains(page, f'>{self.open_req.reference}<')
+        self.assertNotContains(page, f'>{self.someone_elses.reference}<')
+
+    def test_the_status_filter_narrows_the_tab(self):
+        self.client.force_login(make_committee('listfilter'))
+        page = self.client.get(reverse('request_list') + '?tab=closed&status=rejected')
+        self.assertContains(page, 'No closed requests with this status')

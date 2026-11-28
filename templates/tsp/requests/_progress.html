@@ -1,15 +1,15 @@
 {# Where the request is and what it is waiting on. Built by the request_progress tag. #}
 {% load tsp_tags %}
-<section class="card bg-base-100 shadow-sm mb-6" aria-labelledby="progress-heading">
+<section class="card bg-base-100 shadow-sm" aria-labelledby="progress-heading">
   <div class="card-body gap-3">
-    <h2 id="progress-heading" class="card-title text-base">Progress <span class="text-sm font-normal opacity-60">{{ done_count }} of {{ total }} stages</span></h2>
+    <h2 id="progress-heading" class="card-title text-lg">Progress <span class="text-sm font-normal opacity-60">{{ done_count }} of {{ total }} stages</span></h2>
     <div>
-      {# In a row, stacked on phones so every stage stays readable. #}
-      <ol class="steps steps-stack-sm w-full" aria-label="Request stages">
+      {# Down the side of the request, one stage under the next. #}
+      <ol class="steps steps-vertical w-full" aria-label="Request stages">
         {% for step in steps %}
         <li class="step {% if step.stopped %}step-error{% elif step.done %}step-primary{% endif %}"
             {% if step.current %}aria-current="step"{% endif %}>
-          <span class="text-xs{% if step.current %} font-semibold{% endif %}">{{ step.label }}{% if step.done and not step.current %}<span class="sr-only"> (done)</span>{% endif %}
+          <span class="text-xs text-start{% if step.current %} font-semibold{% endif %}">{{ step.label }}{% if step.done and not step.current %}<span class="sr-only"> (done)</span>{% endif %}
             {% if step.entry %}<span class="block font-normal opacity-60">{{ step.entry.created_at|date:"j M Y" }}</span><span class="block font-normal opacity-60">{{ step.entry.actor|default:step.entry.user.get_full_name|default:step.entry.user.username }}</span>{% endif %}
           </span>
         </li>

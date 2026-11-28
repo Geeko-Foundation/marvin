@@ -43,9 +43,11 @@ def account_username(value: str) -> str:
     """
     value = value.strip()
     if '@' in value:
-        user = User.objects.filter(email__iexact=value).only('username').first()
-        if user:
-            return user.username
+        # Accounts from before emails were unique may share one; then the email
+        # names nobody in particular and the username has to be used.
+        matches = list(User.objects.filter(email__iexact=value).values_list('username', flat=True)[:2])
+        if len(matches) == 1:
+            return matches[0]
     return value
 
 

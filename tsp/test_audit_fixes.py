@@ -385,9 +385,9 @@ class ApprovalShareTests(TestCase):
 
 
 class PaymentSummaryTests(TestCase):
-    """The requester sees what Wise charged and what reached their account."""
+    """The requester sees what reached their account; finance also sees Wise's fee."""
 
-    def test_fee_and_conversion_are_shown_to_the_requester(self):
+    def test_the_requester_sees_the_conversion_but_not_the_fee(self):
         from django.contrib.contenttypes.models import ContentType
         owner = make_user('summaryowner', [GROUP_REQUESTER])
         req = TravelRequest.objects.create(
@@ -401,9 +401,13 @@ class PaymentSummaryTests(TestCase):
                       'target_amount': '978.09', 'target_currency': 'INR'})
         self.client.force_login(owner)
         html = self.client.get(reverse('request_detail', args=[req.pk])).content.decode()
-        self.assertIn("Wise's fee of 0.57 EUR was paid by the foundation.", html)
+        self.assertNotIn("Wise's fee", html)
         self.assertIn('978.09 INR reaches the account', html)
         self.assertIn(f'Wise transfer 2149871408 · reference {req.reference}', html)
+
+        self.client.force_login(make_user('summaryfinance', [GROUP_FINANCE]))
+        html = self.client.get(reverse('request_detail', args=[req.pk])).content.decode()
+        self.assertIn("Wise's fee of 0.57 EUR was paid by the foundation.", html)
 
 
 class ApprovalPercentRecordTests(TestCase):

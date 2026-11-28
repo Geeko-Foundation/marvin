@@ -268,3 +268,15 @@ class EmailAsUsernameTests(TestCase):
         self.client.get(link_in(mail.outbox[-1]))
         user.refresh_from_db()
         self.assertEqual((user.username, user.email), ('new@example.org', 'new@example.org'))
+
+
+class SharedEmailSignInTests(TestCase):
+    """Two older accounts with one email: the email names neither, the usernames still work."""
+
+    def test_each_signs_in_with_its_username_and_the_email_alone_signs_in_nobody(self):
+        first = User.objects.create_user('first', 'shared@example.org', 'pw-one-long-enough')
+        User.objects.create_user('second', 'shared@example.org', 'pw-two-long-enough')
+        self.client.post(reverse('login'), {'username': 'shared@example.org', 'password': 'pw-one-long-enough'})
+        self.assertNotIn('_auth_user_id', self.client.session)
+        self.client.post(reverse('login'), {'username': 'first', 'password': 'pw-one-long-enough'})
+        self.assertEqual(int(self.client.session['_auth_user_id']), first.pk)
