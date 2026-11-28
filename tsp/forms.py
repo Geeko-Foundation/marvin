@@ -1,6 +1,8 @@
 import os
 from decimal import Decimal
 
+import logging
+
 from django import forms
 from django.contrib.auth.forms import (
     AuthenticationForm,
@@ -581,11 +583,21 @@ restrict(RejectForm, notes=text(2000))
 
 
 class PasswordResetRequestForm(PasswordResetForm):
-    """Django's reset form, styled like the rest of the site."""
+    """Django's reset form, styled like the rest of the site, that never crashes on a mail failure."""
+
+    sent = True
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['email'].widget.attrs.update({'class': INPUT_CLASS, 'autocomplete': 'email'})
+
+    def send_mail(self, *args, **kwargs):
+        try:
+            super().send_mail(*args, **kwargs)
+        except Exception:
+            # The reset page reads the same either way, so nobody learns which addresses exist.
+            logging.getLogger('marvin.email').exception('Password link email was not sent')
+            self.sent = False
 
 
 class NewPasswordForm(SetPasswordForm):

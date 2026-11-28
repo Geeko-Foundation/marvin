@@ -1,0 +1,18 @@
+Hello {{ recipient.first_name|default:recipient.get_username }},
+{% if accepted %}
+Thank you for proposing {{ event.name }}. The committee has accepted it and it is now open for travel support requests. Finance will set its budget.
+
+Event:  {{ event.name }}, {{ event.location }}
+Dates:  {{ event.start_date|date:"j M Y" }} to {{ event.end_date|date:"j M Y" }}
+
+See the event and apply:
+{{ url }}
+{% else %}
+Thank you for proposing {{ event.name }}. After review, the committee has decided not to support it at this time.
+{% if reason %}
+Reason given:
+{{ reason }}
+{% endif %}
+If you have questions, reply to the travel support committee or propose the event again with more detail:
+{{ url }}
+{% endif %}{% include "email/_signature.txt" %}

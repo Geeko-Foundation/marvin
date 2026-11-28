@@ -241,8 +241,10 @@ def signup_account(request):
             user = form.save()
             user.is_active = False
             user.save(update_fields=['is_active'])
-            send_activation_email(request, user)
-            return render(request, 'tsp/signup/check_email.html', {'email': user.email, 'wizard_step': 1})
+            sent = send_activation_email(request, user)
+            return render(request, 'tsp/signup/check_email.html', {
+                'email': user.email, 'wizard_step': 1, 'send_failed': not sent,
+            })
     else:
         form = SignupAccountForm()
 
@@ -802,12 +804,15 @@ def event_create(request):
             if profile.is_tsp:
                 messages.success(request, 'Event created successfully.')
             else:
+                from marvin.mail import absolute_url, send_email
                 from profile.services.push_notifications import send_push_to_group
-                send_push_to_group(
-                    GROUP_TSP, head='Event proposed',
-                    body=f'{request.user.get_full_name() or request.user.username} proposed {event.name}.',
-                    url=reverse('event_edit', args=[event.pk]),
-                )
+                proposer = request.user.get_full_name() or request.user.username
+                url = absolute_url(reverse('event_list'))
+                send_push_to_group(GROUP_TSP, head='Event proposed', body=f'{proposer} proposed {event.name}.', url=url)
+                for member in User.objects.filter(groups__name=GROUP_TSP, is_active=True).exclude(pk=request.user.pk):
+                    send_email(member.email, f'New event proposed: {event.name}', 'email/event_proposed.txt', {
+                        'recipient': member, 'event': event, 'proposer': proposer, 'url': url,
+                    })
                 messages.success(
                     request,
                     'Thanks. The committee will set a budget and open it for requests.',
@@ -858,21 +863,40 @@ def event_edit(request, pk):
 
 
 def _tell_proposer(event, accepted, reason=''):
-    """Let whoever proposed an event know what the committee decided."""
+    """Tell whoever proposed an event what the committee decided. Returns whether the email went."""
     proposer = event.proposed_by
     if not proposer:
-        return
-    from django.core.mail import send_mail
-
+        return True
+    from marvin.mail import absolute_url, send_email
     from profile.services.push_notifications import send_push_to_user
+
     if accepted:
+        url = absolute_url(reverse('request_create') + f'?event={event.pk}')
         head, body = 'Event accepted', f'{event.name} was accepted and is open for travel requests.'
+        subject = f'{event.name} has been accepted'
     else:
+        url = absolute_url(reverse('event_list'))
         head = 'Event not accepted'
         body = f'{event.name} was not accepted.' + (f' Reason: {reason}' if reason else '')
-    send_push_to_user(proposer, head=head, body=body, url=reverse('event_list'))
-    if proposer.email:
-        send_mail(head, body, None, [proposer.email], fail_silently=True)
+        subject = f'Your proposed event {event.name} was not accepted'
+    send_push_to_user(proposer, head=head, body=body, url=url)
+    return send_email(proposer.email, subject, 'email/event_decision.txt', {
+        'recipient': proposer, 'event': event, 'accepted': accepted, 'reason': reason, 'url': url,
+    })
+
+
+def _proposal_or_message(request, pk):
+    """The proposal to decide on, or None with a message when someone already did."""
+    event = Event.objects.filter(pk=pk).select_related('proposed_by').first()
+    if event is None or event.proposed_by_id is None:
+        messages.info(request, 'That proposal has already been reviewed.')
+        return None
+    return event
+
+
+def _back(request):
+    next_url = request.POST.get('next')
+    return redirect(next_url if _is_safe_redirect(request, next_url) else 'event_list')
 
 
 @login_required
@@ -880,14 +904,18 @@ def _tell_proposer(event, accepted, reason=''):
 @require_POST
 def event_accept(request, pk):
     """Accept a proposed event: it leaves the proposals queue and opens for requests."""
-    event = get_object_or_404(Event, pk=pk, proposed_by__isnull=False)
-    _tell_proposer(event, accepted=True)
+    event = _proposal_or_message(request, pk)
+    if event is None:
+        return _back(request)
+    emailed = _tell_proposer(event, accepted=True)
     event.proposed_by = None
     event.accepting_requests = True
     event.save(update_fields=['proposed_by', 'accepting_requests'])
     audit('event.accepted', user=request.user, target=event.name)
     messages.success(request, f'{event.name} accepted and open for requests. Finance sets its budget.')
-    return redirect(request.POST.get('next') if _is_safe_redirect(request, request.POST.get('next')) else 'event_list')
+    if not emailed:
+        messages.warning(request, 'The proposer could not be emailed. Let them know directly.')
+    return _back(request)
 
 
 @login_required
@@ -895,18 +923,21 @@ def event_accept(request, pk):
 @require_POST
 def event_reject(request, pk):
     """Turn down a proposed event. Nobody can have applied, since proposals stay closed."""
-    event = get_object_or_404(Event, pk=pk, proposed_by__isnull=False)
+    event = _proposal_or_message(request, pk)
+    if event is None:
+        return _back(request)
+    if event.requests.exists():
+        messages.error(request, f'{event.name} already has travel requests, so it cannot be rejected. Close it instead.')
+        return _back(request)
     reason = ' '.join(request.POST.get('reason', '').split())[:500]
-    _tell_proposer(event, accepted=False, reason=reason)
+    emailed = _tell_proposer(event, accepted=False, reason=reason)
     name = event.name
-    try:
-        event.delete()
-    except ProtectedError:
-        messages.error(request, f'{name} already has travel requests, so it cannot be rejected. Close it instead.')
-        return redirect('event_list')
+    event.delete()
     audit('event.rejected', user=request.user, target=name, detail=reason or 'no reason given')
-    messages.success(request, f'{name} rejected.')
-    return redirect(request.POST.get('next') if _is_safe_redirect(request, request.POST.get('next')) else 'event_list')
+    messages.success(request, f'{name} rejected and the proposer has been told.' if emailed else f'{name} rejected.')
+    if not emailed:
+        messages.warning(request, 'The proposer could not be emailed. Let them know directly.')
+    return _back(request)
 
 
 @login_required

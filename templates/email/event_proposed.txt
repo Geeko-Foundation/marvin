@@ -1,0 +1,12 @@
+Hello {{ recipient.first_name|default:recipient.get_username }},
+
+{{ proposer }} has proposed a new event for travel support.
+
+Event:     {{ event.name }}, {{ event.location }}
+Dates:     {{ event.start_date|date:"j M Y" }} to {{ event.end_date|date:"j M Y" }}{% if event.suggested_budget %}
+Suggested budget: {{ event.suggested_budget|floatformat:"2g" }} {{ event.budget_currency }}{% endif %}{% if event.url %}
+Website:   {{ event.url }}{% endif %}
+
+Accept or reject it from the events page:
+{{ url }}
+{% include "email/_signature.txt" %}

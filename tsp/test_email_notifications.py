@@ -70,7 +70,7 @@ class EmailNotificationTests(TestCase):
 
     def test_a_broken_template_does_not_block_the_transition(self):
         transition_request(self.request, RequestState.SUBMITTED, self.owner)
-        with mock.patch('profile.services.email_notifications.render_to_string',
+        with mock.patch('marvin.mail.render_to_string',
                         side_effect=RuntimeError('template blew up')):
             with self.assertLogs('marvin.email', level='ERROR'):
                 transition_request(self.request, RequestState.APPROVED, self.committee)
@@ -79,7 +79,7 @@ class EmailNotificationTests(TestCase):
 
     def test_a_broken_mail_server_does_not_block_the_transition(self):
         transition_request(self.request, RequestState.SUBMITTED, self.owner)
-        with mock.patch('profile.services.email_notifications.EmailMessage.send',
+        with mock.patch('marvin.mail.EmailMessage.send',
                         side_effect=OSError('smtp is down')):
             with self.assertLogs('marvin.email', level='ERROR') as logged:
                 transition_request(self.request, RequestState.APPROVED, self.committee)

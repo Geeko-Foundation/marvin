@@ -1,9 +1,8 @@
 Hello {{ user.first_name|default:user.get_username }},
 
-Someone asked to use this address for a Marvin account. If it was you, open
-this link to confirm it:
+A request was made to use this address for a {{ app_name|default:"Marvin" }} account. If it was you, confirm it by opening this link:
 
 {{ link }}
 
-Until then, emails keep going to the old address. The link works once and
-expires after three days. If you did not ask for this, ignore this email.
+Until you confirm, emails continue to go to the previous address. The link can be used once and expires after three days. If you did not request this, you can ignore this email.
+{% include "email/_signature.txt" %}

@@ -1,9 +1,18 @@
+Hello {{ recipient.first_name|default:recipient.get_username }},
+
 {{ headline }}
 
-Request:  #{{ travel_request.pk }} {{ travel_request.event.name }}
-Event:    {{ travel_request.event.location }}, {{ travel_request.event.start_date }} to {{ travel_request.event.end_date }}
+Request:   {{ travel_request.reference }}
+Event:     {{ travel_request.event.name }}, {{ travel_request.event.location }}
+Dates:     {{ travel_request.event.start_date|date:"j M Y" }} to {{ travel_request.event.end_date|date:"j M Y" }}
 Requester: {{ travel_request.user.get_full_name|default:travel_request.user.username }}
 {% if notes %}
-Notes: {{ notes }}
+Notes from the reviewer:
+{{ notes }}
 {% endif %}
-See the request: {{ url }}
+Open the request:
+{{ url }}
+
+You can choose which updates you receive in your profile:
+{{ site_url }}/profile/#notifications
+{% include "email/_signature.txt" %}
