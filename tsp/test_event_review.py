@@ -154,3 +154,10 @@ class RequestListTests(TestCase):
         self.client.force_login(make_committee('listfilter'))
         page = self.client.get(reverse('request_list') + '?tab=closed&status=rejected')
         self.assertContains(page, 'No closed requests with this status')
+
+    def test_a_requester_gets_their_own_list_without_a_requester_column(self):
+        self.client.force_login(self.owner)
+        page = self.client.get(reverse('request_list') + '?tab=closed')
+        self.assertContains(page, 'My requests')
+        self.assertContains(page, f'>{self.paid_req.reference}<')
+        self.assertNotContains(page, '<th>Requester</th>')

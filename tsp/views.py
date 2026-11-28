@@ -526,8 +526,10 @@ def request_list(request):
     """
     profile = get_profile(request.user)
     visible = TravelRequest.objects.select_related('user', 'event')
+    organises = Event.organised_by(request.user)
+    sees_others = profile.is_tsp or profile.is_finance or organises.exists()
     if not (profile.is_tsp or profile.is_finance):
-        visible = visible.filter(Q(user=request.user) | Q(event__in=Event.organised_by(request.user)))
+        visible = visible.filter(Q(user=request.user) | Q(event__in=organises))
     closed = request.GET.get('tab') == 'closed'
     status = request.GET.get('status', '')
     shown = visible.filter(state__in=CLOSED_STATES) if closed else visible.exclude(state__in=CLOSED_STATES)
@@ -537,6 +539,7 @@ def request_list(request):
                   if (value in CLOSED_STATES) == closed]
     return render(request, 'tsp/requests/list.html', {
         'requests': _paginate(request, shown.order_by('-updated_at'), 25),
+        'sees_others': sees_others,
         'closed': closed,
         'status': status,
         'tab_states': tab_states,

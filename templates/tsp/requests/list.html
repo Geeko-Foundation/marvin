@@ -5,7 +5,7 @@
 
 {% block content %}
 <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
-  <h1 class="text-2xl font-bold">Requests</h1>
+  <h1 class="text-2xl font-bold">{% if sees_others %}Requests{% else %}My requests{% endif %}</h1>
   {% if profile.is_requester or profile.is_tsp %}<a href="{% url 'request_create' %}" class="btn btn-primary btn-sm">New Request</a>{% endif %}
 </div>
 
@@ -36,12 +36,12 @@
     {% if requests %}
     <div class="overflow-x-auto">
       <table class="table">
-        <thead><tr><th>Request</th><th>Requester</th><th>Event</th><th>Status</th><th>Updated</th></tr></thead>
+        <thead><tr><th>Request</th>{% if sees_others %}<th>Requester</th>{% endif %}<th>Event</th><th>Status</th><th>Updated</th></tr></thead>
         <tbody>
           {% for req in requests %}
           <tr>
             <td><a href="{% url 'request_detail' req.pk %}" class="link link-primary font-medium">{{ req.reference }}</a></td>
-            <td>{{ req.user.get_full_name|default:req.user.email }}</td>
+            {% if sees_others %}<td>{{ req.user.get_full_name|default:req.user.email }}</td>{% endif %}
             <td>{{ req.event.name }}</td>
             <td><span class="badge {{ req.state|state_badge }} badge-sm whitespace-nowrap">{{ req.get_state_display }}</span></td>
             <td class="whitespace-nowrap"><time datetime="{{ req.updated_at|date:'c' }}">{{ req.updated_at|date:"j M Y" }}</time></td>
