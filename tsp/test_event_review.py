@@ -139,7 +139,7 @@ class RequestListTests(TestCase):
         open_page = self.client.get(reverse('request_list'))
         self.assertContains(open_page, self.open_req.reference)
         self.assertNotContains(open_page, f'>{self.paid_req.reference}<')
-        self.assertContains(open_page, 'Open <span class="badge badge-sm">2</span>', html=False)
+        self.assertContains(open_page, 'leading-5">2</span>')
         closed_page = self.client.get(reverse('request_list') + '?tab=closed')
         self.assertContains(closed_page, f'>{self.paid_req.reference}<')
         self.assertNotContains(closed_page, f'>{self.open_req.reference}<')
