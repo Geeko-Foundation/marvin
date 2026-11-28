@@ -13,10 +13,10 @@
   <div class="card-body gap-4">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <nav aria-label="Open or closed requests" class="join">
-        <a href="?tab=open" class="join-item btn btn-sm{% if not closed %} btn-active{% endif %}"{% if not closed %} aria-current="page"{% endif %}>
+        <a href="?tab=open" class="join-item btn btn-sm {% if not closed %}btn-primary{% else %}btn-outline{% endif %}"{% if not closed %} aria-current="page"{% endif %}>
           Open <span class="badge badge-sm">{{ open_count }}</span>
         </a>
-        <a href="?tab=closed" class="join-item btn btn-sm{% if closed %} btn-active{% endif %}"{% if closed %} aria-current="page"{% endif %}>
+        <a href="?tab=closed" class="join-item btn btn-sm {% if closed %}btn-primary{% else %}btn-outline{% endif %}"{% if closed %} aria-current="page"{% endif %}>
           Closed <span class="badge badge-sm">{{ closed_count }}</span>
         </a>
       </nav>
