@@ -85,8 +85,9 @@
 {% endif %}
 {% endwith %}
 
+{# min-w-0: grid columns otherwise grow to their widest table and push the page off a phone screen. #}
 <div class="grid gap-6 lg:grid-cols-3">
-  <div class="lg:col-span-2 flex flex-col gap-6">
+  <div class="lg:col-span-2 flex flex-col gap-6 min-w-0">
     <div class="card bg-base-100 shadow-sm">
       <div class="card-body">
         <h2 class="card-title text-lg">Request Details</h2>
@@ -499,7 +500,8 @@
     </div>
   </div>
 
-  <div class="h-fit lg:sticky lg:top-4">
+  {# First on smaller screens, so where the request stands is the first thing seen; the side column on desktop. #}
+  <div class="h-fit min-w-0 order-first lg:order-none lg:sticky lg:top-4">
     {% request_progress travel_request state_history %}
   </div>
 </div>
