@@ -293,7 +293,7 @@
     <div class="card bg-base-100 shadow-sm border border-primary" id="reimbursement">
       <div class="card-body">
         <h2 class="card-title text-lg">Reimbursement</h2>
-        <ul class="steps steps-vertical md:steps-horizontal w-full my-2">
+        <ul class="steps steps-stack-sm w-full my-2">
           <li class="step step-primary">Actual costs</li>
           <li class="step {% if has_actuals %}step-primary{% endif %}">Documents</li>
           <li class="step {% if has_actuals and not missing_docs %}step-primary{% endif %}">Submit for payment</li>
@@ -301,13 +301,13 @@
         {% if not has_actuals %}
         <p class="text-sm opacity-80">Back from the event? Enter what you actually spent.</p>
         <div class="card-actions mt-2">
-          <a href="{% url 'request_actuals' travel_request.pk %}" class="btn btn-primary btn-sm">Ask for reimbursement</a>
+          <a href="{% url 'request_actuals' travel_request.pk %}" class="btn btn-primary btn-sm">Update costs</a>
         </div>
         {% elif missing_docs %}
         <p class="text-sm opacity-80">Upload: {{ missing_docs|join:", " }}.</p>
         <div class="card-actions mt-2">
           <a href="{% url 'request_form' travel_request.pk %}" class="btn btn-primary btn-sm" target="_blank">Print signed form</a>
-          <a href="{% url 'request_actuals' travel_request.pk %}" class="btn btn-ghost btn-sm">Change actual costs</a>
+          <a href="{% url 'request_actuals' travel_request.pk %}" class="btn btn-ghost btn-sm">Update costs</a>
         </div>
         {% else %}
 
@@ -316,7 +316,7 @@
             {% csrf_token %}
             <button type="submit" class="btn btn-success btn-sm">Submit for payment</button>
           </form>
-          <a href="{% url 'request_actuals' travel_request.pk %}" class="btn btn-ghost btn-sm">Change actual costs</a>
+          <a href="{% url 'request_actuals' travel_request.pk %}" class="btn btn-ghost btn-sm">Update costs</a>
         </div>
         {% endif %}
       </div>
