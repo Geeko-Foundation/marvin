@@ -313,12 +313,12 @@ Linked to any payable through a GenericForeignKey. Fields: `gateway_id` (`wise-a
 
 `python manage.py seed_data` loads `tsp/fixtures/initial.json` and sets every password to `demo` (`--force` flushes and reloads).
 
-| Username | Group | Notes |
+| Email | Group | Notes |
 |---|---|---|
-| `admin` | TSP Committee | Staff and superuser |
-| `finance_team` | Finance | |
-| `douglasd`, `jane_doe`, `patrickf` | Requester | Demo requesters with requests in several states |
-| `superuser` | Requester | Staff superuser; can skip Wise banking |
+| `admin@example.com` | TSP Committee | Staff and superuser |
+| `finance@example.com` | Finance | |
+| `douglas@example.com`, `jane@example.com`, `patrickf@geekos.org` | Requester | Demo requesters with requests in several states |
+| `superuser@example.com` | Requester | Staff superuser; can skip Wise banking |
 
 **Events:** openSUSE Conference 2026 and 2027, FOSDEM 2026, LinuxConf.au 2026.
 

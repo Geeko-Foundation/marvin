@@ -98,7 +98,7 @@ uv run python manage.py seed_data
 
 `seed_data` loads users, groups, profiles, and events from `tsp/fixtures/initial.json` and sets every user's password to **`demo`**. On a non-empty database it only resets passwords; pass **`--force`** to flush and reload demo data from scratch.
 
-Alternatively, create a superuser manually:
+Alternatively, create a superuser manually. Enter your email address when it asks for a username, since that is what you sign in with:
 
 ```bash
 python manage.py createsuperuser
@@ -114,20 +114,20 @@ Open [http://127.0.0.1:8000/login/](http://127.0.0.1:8000/login/) in your browse
 
 ## Demo accounts
 
-After seeding, all users share the password **`demo`**. Sign in with username and password at `/login/`.
+After seeding, all users share the password **`demo`**. Sign in at `/login/` with the email address and password.
 
-| Username | Role | Notes |
-|----------|------|-------|
-| `admin` | TSP Committee, staff / superuser | Full Django admin access |
-| `douglasd`, `jane_doe`, `patrickf` | Requester | Can submit travel requests; seeded with requests in several states |
-| `finance_team` | Finance | Can process reimbursements |
-| `superuser` | Requester, staff / superuser | Can skip Wise banking during onboarding |
+| Email | Role | Notes |
+|-------|------|-------|
+| `admin@example.com` | TSP Committee, staff / superuser | Full Django admin access |
+| `douglas@example.com`, `jane@example.com`, `patrickf@geekos.org` | Requester | Can submit travel requests; seeded with requests in several states |
+| `finance@example.com` | Finance | Can process reimbursements |
+| `superuser@example.com` | Requester, staff / superuser | Can skip Wise banking during onboarding |
 
 ## URLs
 
 | URL | Description |
 |-----|-------------|
-| `/login/` | Application login (username + password) |
+| `/login/` | Application login (email + password) |
 | `/signup/` | New requestor registration wizard |
 | `/` | Role-based dashboard |
 | `/profile/` | Personal profile, banking metadata, push notification settings |
@@ -310,8 +310,8 @@ DJANGO_SETTINGS_MODULE=marvin.ci_settings python manage.py test
 - **Uploaded files:** stored under `uploads/`, or `MEDIA_ROOT` when set (served in development when `DEBUG=True`).
 - **Static files:** served from `static/` during development.
 - **Audit fields:** defined on abstract `AuditModel` in `marvin/audit.py`.
-- **Login URLs:** the app uses `/login/` with the email address and password (accounts made before email sign-in can still use their username); Django admin uses `/admin/login/` separately.
-- **Usernames:** new accounts use their email address as the username, so every account has a unique one. Changing the email moves the username with it.
+- **Login URLs:** the app uses `/login/` with the email address and password; Django admin uses `/admin/login/` separately.
+- **Accounts are identified by email:** the email address is the username, so every account has a unique one, and changing the email moves the username with it. When creating an admin with `createsuperuser`, enter the email address as the username too.
 - **UserProfile:** lives in the `profile` app (`profile.UserProfile`); database table remains `tsp_userprofile` for migration compatibility.
 
 ## getting keys etc
