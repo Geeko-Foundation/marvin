@@ -52,6 +52,11 @@ def account_username(value: str) -> str:
 class LoginForm(AuthenticationForm):
     """Email (or older username) and password, with Tailwind-styled fields."""
 
+    error_messages = {
+        **AuthenticationForm.error_messages,
+        'invalid_login': 'That email and password do not match an account. Check them and try again.',
+    }
+
     username = forms.CharField(
         widget=forms.TextInput(attrs={
             'class': INPUT_CLASS,

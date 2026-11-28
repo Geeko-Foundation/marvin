@@ -24,7 +24,7 @@
         {% for entry in entries %}
         <tr>
           <td class="whitespace-nowrap">{{ entry.created_at|date:"j M Y, H:i" }}</td>
-          <td>{{ entry.user.username|default:"system" }}</td>
+          <td>{% if entry.user %}{{ entry.user.get_full_name|default:entry.user.username }}{% else %}system{% endif %}</td>
           <td><code class="text-xs">{{ entry.action }}</code></td>
           <td>{{ entry.target|link_requests }}</td>
           <td class="text-sm opacity-80">{{ entry.detail|link_requests }}</td>

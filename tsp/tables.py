@@ -48,11 +48,9 @@ class EventTable(tables.Table):
 class UserTable(tables.Table):
     """Staff-only search results table for Django users and profiles."""
 
-    username = tables.Column(linkify={
-        'viewname': 'admin:auth_user_change',
-        'args': [tables.A('pk')],
-    })
-    full_name = tables.Column(empty_values=(), orderable=False, verbose_name='Name')
+    # The username is the email, so the name leads and links to the account.
+    full_name = tables.Column(empty_values=(), order_by=('first_name', 'last_name'), verbose_name='Name',
+                              linkify={'viewname': 'admin:auth_user_change', 'args': [tables.A('pk')]})
     email = tables.EmailColumn()
     groups = tables.Column(empty_values=(), orderable=False)
     country = tables.Column(empty_values=(), orderable=False)
@@ -62,17 +60,17 @@ class UserTable(tables.Table):
         model = User
         # Listing fields explicitly; without it every User column is shown,
         # the password hash included.
-        fields = ('username', 'email')
-        sequence = ('username', 'full_name', 'email', 'groups', 'country', 'staff')
+        fields = ('email',)
+        sequence = ('full_name', 'email', 'groups', 'country', 'staff')
         attrs = {
             'class': 'table table-zebra w-full',
         }
         empty_text = 'No users match your search.'
-        order_by = 'username'
+        order_by = 'email'
 
     def render_full_name(self, record):
-        """Display ``User.get_full_name()`` or a dash when empty."""
-        return record.get_full_name() or '-'
+        """The person's name, or their email when no name was given."""
+        return record.get_full_name() or record.email or record.username
 
     def render_groups(self, record):
         """Comma-separated Marvin group names."""

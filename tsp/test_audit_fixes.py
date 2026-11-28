@@ -319,6 +319,8 @@ class HistoryVisibilityTests(TestCase):
         from tsp.models import StateHistory
         self.owner = make_user('historyowner', [GROUP_REQUESTER])
         self.finance = make_user('historyfinance', [GROUP_FINANCE])
+        self.finance.first_name, self.finance.last_name = 'Fiona', 'Ledger'
+        self.finance.save()
         self.req = TravelRequest.objects.create(
             user=self.owner, event=make_event(), state=RequestState.PAID, description='T')
         StateHistory.objects.create(
@@ -334,7 +336,7 @@ class HistoryVisibilityTests(TestCase):
 
     def test_the_requester_sees_the_team_not_the_username_or_internal_notes(self):
         html = self.page(self.owner)
-        self.assertNotIn('historyfinance', html)
+        self.assertNotIn('Fiona Ledger', html)
         self.assertIn('Finance', html)
         self.assertNotIn('Travel committee', html)
         self.assertNotIn('over budget', html)
@@ -343,7 +345,7 @@ class HistoryVisibilityTests(TestCase):
 
     def test_staff_still_see_who_did_it(self):
         html = self.page(make_user('historytsp', [GROUP_TSP]))
-        self.assertIn('historyfinance', html)
+        self.assertIn('Fiona Ledger', html)
         self.assertIn('over budget by 40 EUR', html)
 
 

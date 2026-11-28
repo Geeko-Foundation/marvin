@@ -15,8 +15,18 @@
   </div>
 </div>
 
+{% request_progress travel_request state_history %}
+
 {% with paid=travel_request.payment %}
-{% if paid and paid.purpose != 'advance' and paid.status != 'failed' %}
+{% if paid and paid.purpose != 'advance' and paid.status == 'failed' or paid and paid.purpose != 'advance' and paid.status == 'cancelled' %}
+<div class="alert alert-warning mb-6" role="status">
+  <span>
+    The transfer of <strong>{{ paid.amount|floatformat:"2g" }} {{ paid.currency }}</strong> on {{ paid.created_at|date:"j M Y" }} did not go through{% if paid.status == 'cancelled' %}: it was cancelled in Wise{% endif %}.
+    The request is back in the payment queue and can be paid again.
+    {% if paid.external_id %}<span class="block text-sm">Wise transfer {{ paid.external_id }} · reference {{ paid.reference }}</span>{% endif %}
+  </span>
+</div>
+{% elif paid and paid.purpose != 'advance' %}
 <div class="alert alert-success mb-6">
   <span>
     {% if paid.status == 'success' or paid.status == 'completed' %}Paid{% else %}Sending{% endif %}
@@ -72,8 +82,8 @@
 {% endif %}
 {% endwith %}
 
-<div class="grid gap-6 lg:grid-cols-3">
-  <div class="lg:col-span-2 flex flex-col gap-6">
+<div class="grid gap-6">
+  <div class="flex flex-col gap-6">
     <div class="card bg-base-100 shadow-sm">
       <div class="card-body">
         <h2 class="card-title text-lg">Request Details</h2>
@@ -484,30 +494,5 @@
     </div>
   </div>
 
-  <div class="card bg-base-100 shadow-sm h-fit">
-    <div class="card-body">
-      <h2 class="card-title text-lg">History</h2>
-      {% if state_history %}
-      <ul class="timeline timeline-vertical timeline-compact">
-        {% for entry in state_history %}
-        <li>
-          <div class="timeline-start text-xs opacity-60">{{ entry.created_at|date:"j M, H:i" }}</div>
-          <div class="timeline-middle">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4 text-primary"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clip-rule="evenodd" /></svg>
-          </div>
-          <div class="timeline-end timeline-box text-sm">
-            <span class="badge {{ entry.to_state|state_badge }} badge-xs whitespace-nowrap">{{ entry.to_state|state_label }}</span>
-            <p class="text-xs opacity-60">{{ entry.actor|default:entry.user.username }}</p>
-            {% if entry.notes %}<p class="text-xs mt-1">{{ entry.notes }}</p>{% endif %}
-          </div>
-          <hr/>
-        </li>
-        {% endfor %}
-      </ul>
-      {% else %}
-      <p class="text-sm opacity-60">Nothing has happened to this request yet.</p>
-      {% endif %}
-    </div>
-  </div>
 </div>
 {% endblock %}
