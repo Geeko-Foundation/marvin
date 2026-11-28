@@ -73,7 +73,9 @@ class SignInLimitTests(TestCase):
         self.user.set_password(PASSWORD)
         self.user.save()
 
-    def test_made_up_names_cannot_push_a_lock_out(self):
+    # Counts live in 15-minute windows; a fixed clock stops the run crossing one and resetting them.
+    @mock.patch('tsp.views.time.time', return_value=1_800_000_000)
+    def test_made_up_names_cannot_push_a_lock_out(self, _clock):
         for _ in range(10):
             self.client.post(reverse('login'), {'username': 'target', 'password': 'wrong'})
         # More than the default cache holds, which used to flush the count.
