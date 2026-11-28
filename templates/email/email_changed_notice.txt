@@ -1,0 +1,9 @@
+Hello {{ user.first_name|default:user.get_username }},
+
+The email address on your {{ app_name|default:"Marvin" }} account was changed to {{ new_email }}. From now on, emails go to the new address{% if username_changed %} and you sign in with it{% endif %}.
+
+If you did not make this change, contact the travel support committee straight away.
+
+Your profile:
+{{ site_url }}/profile/
+{% include "email/_signature.txt" %}

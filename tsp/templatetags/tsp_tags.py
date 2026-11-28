@@ -84,3 +84,59 @@ def vapid_public_key():
     from django.conf import settings
 
     return settings.WEBPUSH_SETTINGS['VAPID_PUBLIC_KEY']
+
+
+# The road a request travels, in order, with what the page calls each stage.
+PROGRESS_STAGES = [
+    ('submitted', 'Submitted'),
+    ('approved', 'Approved'),
+    ('accepted', 'Accepted'),
+    ('submitted_for_payment', 'Receipts in'),
+    ('paid', 'Paid'),
+]
+
+# Who the request is waiting on, said plainly, for each state.
+WAITING_ON = {
+    'draft': 'Not sent yet. Submit it when it is ready, and the committee will review it.',
+    'submitted': 'Waiting for the committee to review it.',
+    'approved': 'Waiting for the requester to accept the approved support.',
+    'accepted': 'Waiting for the requester to upload receipts and documents after the trip.',
+    'submitted_for_payment': 'Waiting for finance to pay it.',
+    'paid': 'Done. The reimbursement has been paid.',
+    'rejected': 'Not approved. Nothing more is needed.',
+    'cancelled': 'Cancelled. Nothing more is needed.',
+}
+
+
+@register.inclusion_tag('tsp/requests/_progress.html')
+def request_progress(travel_request, history=()):
+    """
+    Where a request is on its way to being paid, what it is waiting on, and
+    its history: when each stage was reached and by whom, then every change.
+    ``history`` is the page's list, already trimmed for what this viewer may read.
+    """
+    state = travel_request.state
+    reached_at = {entry.to_state: entry for entry in history}
+    order = [key for key, _ in PROGRESS_STAGES]
+    if state in order:
+        reached = order.index(state)
+    else:
+        # Rejected, cancelled or a draft: show how far it got before stopping.
+        been = {h.to_state for h in travel_request.state_history.all()}
+        reached = max((i for i, key in enumerate(order) if key in been), default=-1)
+    stopped = state in ('rejected', 'cancelled')
+    steps = [{'label': label, 'done': i <= reached, 'current': i == reached and not stopped,
+              'entry': reached_at.get(key) if i <= reached else None}
+             for i, (key, label) in enumerate(PROGRESS_STAGES)]
+    if stopped:
+        steps = steps[:reached + 1] + [{'label': 'Not approved' if state == 'rejected' else 'Cancelled',
+                                        'done': True, 'current': True, 'stopped': True,
+                                        'entry': reached_at.get(state)}]
+    waiting = WAITING_ON.get(state, '')
+    payment = travel_request.payment
+    if state == 'submitted_for_payment' and payment and payment.status not in ('failed', 'cancelled', 'exported'):
+        waiting = 'The transfer is on its way. It is marked paid once Wise confirms it.'
+    if state == 'accepted':
+        waiting += f' Claims close on {travel_request.event.reimbursement_deadline():%d %b %Y}.'.replace(' 0', ' ')
+    return {'steps': steps, 'waiting': waiting, 'stopped': stopped, 'history': history,
+            'done_count': sum(s['done'] and not s.get('stopped') for s in steps), 'total': len(PROGRESS_STAGES)}

@@ -252,3 +252,63 @@ class RequestActionsPlacementTests(TestCase):
         html = self.client.get(reverse('request_detail', args=[req.pk])).content.decode()
         self.assertLess(html.index('>Documents</h2>'), html.index('>Submit for Review<'))
         self.assertLess(html.index('>Submit for Review<'), html.index('>Comments</h2>'))
+
+
+class CancelledTransferTests(TestCase):
+    """A transfer cancelled in Wise reads as not sent, not as still on its way."""
+
+    def test_the_request_page_says_it_did_not_go_through(self):
+        finance = make_user('cancelfinance', [GROUP_FINANCE])
+        req = paid_request(make_user('cancelowner', [GROUP_REQUESTER]), state=RequestState.SUBMITTED_FOR_PAYMENT)
+        payment_for(req, status='cancelled', external_id='55', processed_by=finance)
+        self.client.force_login(finance)
+        page = self.client.get(reverse('request_detail', args=[req.pk]))
+        self.assertContains(page, 'it was cancelled in Wise')
+        self.assertContains(page, 'back in the payment queue')
+        self.assertNotContains(page, 'Sending')
+
+    def test_a_cancelled_request_shows_no_transfer_warning(self):
+        finance = make_user('cancelledfinance', [GROUP_FINANCE])
+        req = paid_request(make_user('cancelledowner', [GROUP_REQUESTER]), state=RequestState.CANCELLED)
+        payment_for(req, status='cancelled', external_id='57', processed_by=finance)
+        self.client.force_login(finance)
+        page = self.client.get(reverse('request_detail', args=[req.pk]))
+        self.assertNotContains(page, 'did not go through')
+        self.assertNotContains(page, 'Sending')
+
+    def test_a_transfer_still_under_way_says_sending(self):
+        finance = make_user('sendfinance', [GROUP_FINANCE])
+        req = paid_request(make_user('sendowner', [GROUP_REQUESTER]), state=RequestState.SUBMITTED_FOR_PAYMENT)
+        payment_for(req, status='processing', external_id='56', processed_by=finance)
+        self.client.force_login(finance)
+        self.assertContains(self.client.get(reverse('request_detail', args=[req.pk])), 'Sending')
+
+
+class SignInMessageTests(TestCase):
+    def test_a_wrong_sign_in_talks_about_email_not_username(self):
+        page = self.client.post(reverse('login'), {'username': 'nobody@example.org', 'password': 'x'})
+        self.assertContains(page, 'That email and password do not match an account.')
+
+
+class RequestProgressTests(TestCase):
+    """The request page shows how far a request has got and what it is waiting on."""
+
+    def page_for(self, state, history=()):
+        finance = make_user('progressfinance', [GROUP_FINANCE])
+        req = paid_request(make_user('progressowner', [GROUP_REQUESTER]), state=state)
+        for to_state in history:
+            req.state_history.create(to_state=to_state, from_state=None, user=finance)
+        self.client.force_login(finance)
+        return self.client.get(reverse('request_detail', args=[req.pk]))
+
+    def test_an_approved_request_waits_for_the_requester(self):
+        page = self.page_for(RequestState.APPROVED)
+        self.assertContains(page, '2 of 5 stages')
+        self.assertContains(page, 'aria-current="step"', count=1)
+        self.assertContains(page, 'Waiting for the requester to accept')
+
+    def test_a_rejected_request_stops_where_it_got_to(self):
+        page = self.page_for(RequestState.REJECTED, history=[RequestState.SUBMITTED, RequestState.REJECTED])
+        self.assertContains(page, 'Not approved')
+        self.assertContains(page, '1 of 5 stages')
+        self.assertContains(page, 'Status:')

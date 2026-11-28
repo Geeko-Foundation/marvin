@@ -1,12 +1,13 @@
 """Confirming that an email address belongs to the person using it."""
 
+from django.conf import settings
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
 from django.core import signing
-from django.core.mail import send_mail
-from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
+
+from marvin.mail import send_email
 
 
 class ActivationTokenGenerator(PasswordResetTokenGenerator):
@@ -32,12 +33,8 @@ def send_activation_email(request, user):
         'uidb64': urlsafe_base64_encode(force_bytes(user.pk)),
         'token': activation_token.make_token(user),
     }))
-    send_mail(
-        'Confirm your email address for Marvin',
-        render_to_string('email/activate_account.txt', {'user': user, 'link': link}),
-        None,
-        [user.email],
-    )
+    return send_email(user.email, f'Confirm your email address for {settings.BRAND_APP_NAME}',
+                      'email/activate_account.txt', {'user': user, 'link': link})
 
 
 EMAIL_CHANGE_SALT = 'marvin.accounts.email_change'
@@ -53,12 +50,8 @@ def send_email_change_link(request, user, new_email):
     """
     token = signing.dumps({'user': user.pk, 'from': user.email, 'to': new_email}, salt=EMAIL_CHANGE_SALT)
     link = request.build_absolute_uri(reverse('email_change_confirm', kwargs={'token': token}))
-    send_mail(
-        'Confirm your new email address for Marvin',
-        render_to_string('email/confirm_email_change.txt', {'user': user, 'link': link}),
-        None,
-        [new_email],
-    )
+    return send_email(new_email, f'Confirm your new email address for {settings.BRAND_APP_NAME}',
+                      'email/confirm_email_change.txt', {'user': user, 'link': link})
 
 
 def read_email_change_link(token):

@@ -304,10 +304,11 @@ MAILERS = {
             'use_tls': True,    # port is not needed: it defaults to 587 with use_tls True.
             'username': env('EMAIL_HOST_USER', ''),
             'password': env('EMAIL_HOST_PASSWORD', ''),
-            'default_from_email': env('DEFAULT_FROM_EMAIL', ''),
         },
     },
 }
+# The sender is a setting of its own; the SMTP mailer refuses it as an option.
+DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', 'webmaster@localhost')
 
 # Where links in notification emails point.
 SITE_BASE_URL = env('SITE_BASE_URL', env('WEBPUSH_APP_BASE_URL', 'http://127.0.0.1:8000'))

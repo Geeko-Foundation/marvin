@@ -59,6 +59,7 @@ from tsp.forms import (
     DocumentUploadForm,
     EventBudgetForm,
     EventForm,
+    EventOrganiserForm,
     EventProposalForm,
     ExpenseActualFormSet,
     ExpenseFormSet,
@@ -67,6 +68,7 @@ from tsp.forms import (
     ReportFilterForm,
     SearchForm,
     SignupAccountForm,
+    account_username,
     TravelRequestForm,
 )
 from tsp.models import (
@@ -169,13 +171,14 @@ def _client_address(request):
 
 
 def login_view(request):
-    """Authenticate with username/password; honor ``next`` redirect when present."""
+    """Authenticate with email (or older username) and password; honor ``next``."""
     if request.user.is_authenticated:
         return redirect('dashboard')
 
     form = LoginForm(request, data=request.POST or None)
     if request.method == 'POST':
-        username = request.POST.get('username', '').strip().lower()
+        # An email and a username for the same account share one counter.
+        username = account_username(request.POST.get('username', '')).lower()
         account_key = 'login-failures:' + username
         failures_key = f'{account_key}:{_client_address(request)}'
         under_attack = _count(account_key, LOGIN_LOCK_SECONDS) >= LOGIN_ACCOUNT_FAILURE_LIMIT
@@ -238,8 +241,10 @@ def signup_account(request):
             user = form.save()
             user.is_active = False
             user.save(update_fields=['is_active'])
-            send_activation_email(request, user)
-            return render(request, 'tsp/signup/check_email.html', {'email': user.email, 'wizard_step': 1})
+            sent = send_activation_email(request, user)
+            return render(request, 'tsp/signup/check_email.html', {
+                'email': user.email, 'wizard_step': 1, 'send_failed': not sent,
+            })
     else:
         form = SignupAccountForm()
 
@@ -508,6 +513,41 @@ def _paginate(request, queryset, per_page, param='page'):
     return Paginator(queryset, per_page).get_page(request.GET.get(param))
 
 
+# Closed requests need nothing more from anyone; the rest are open.
+CLOSED_STATES = (RequestState.PAID, RequestState.REJECTED, RequestState.CANCELLED)
+
+
+@login_required
+def request_list(request):
+    """
+    Requests in two tabs, open and closed, like an issue tracker.
+    The committee and finance see every request, organisers also see their
+    events', and everyone sees their own.
+    """
+    profile = get_profile(request.user)
+    visible = TravelRequest.objects.select_related('user', 'event')
+    organises = Event.organised_by(request.user)
+    sees_others = profile.is_tsp or profile.is_finance or organises.exists()
+    if not (profile.is_tsp or profile.is_finance):
+        visible = visible.filter(Q(user=request.user) | Q(event__in=organises))
+    closed = request.GET.get('tab') == 'closed'
+    status = request.GET.get('status', '')
+    shown = visible.filter(state__in=CLOSED_STATES) if closed else visible.exclude(state__in=CLOSED_STATES)
+    if status in RequestState.values:
+        shown = shown.filter(state=status)
+    tab_states = [(value, label) for value, label in RequestState.choices
+                  if (value in CLOSED_STATES) == closed]
+    return render(request, 'tsp/requests/list.html', {
+        'requests': _paginate(request, shown.order_by('-updated_at'), 25),
+        'sees_others': sees_others,
+        'closed': closed,
+        'status': status,
+        'tab_states': tab_states,
+        'open_count': visible.exclude(state__in=CLOSED_STATES).count(),
+        'closed_count': visible.filter(state__in=CLOSED_STATES).count(),
+    })
+
+
 def _requester_sections(request):
     """Dashboard data for someone who submits requests."""
     my_requests = TravelRequest.objects.filter(user=request.user).select_related('event')
@@ -747,7 +787,7 @@ def event_list(request):
     date_from = _date_param(request, 'from')
     date_to = _date_param(request, 'to')
 
-    events = Event.objects.annotate(request_count=Count('requests'))
+    events = Event.objects.annotate(request_count=Count('requests')).select_related('proposed_by')
     if date_from:
         events = events.filter(start_date__gte=date_from)
     if date_to:
@@ -760,6 +800,7 @@ def event_list(request):
     past = sorted((e for e in events if e.is_past), key=lambda e: e.start_date, reverse=True)
 
     return render(request, 'tsp/events/list.html', {
+        'organised_ids': set(Event.organised_by(request.user).values_list('pk', flat=True)),
         'upcoming': upcoming,
         'past': past,
         'profile': profile,
@@ -798,12 +839,15 @@ def event_create(request):
             if profile.is_tsp:
                 messages.success(request, 'Event created successfully.')
             else:
+                from marvin.mail import absolute_url, send_email
                 from profile.services.push_notifications import send_push_to_group
-                send_push_to_group(
-                    GROUP_TSP, head='Event proposed',
-                    body=f'{request.user.get_full_name() or request.user.username} proposed {event.name}.',
-                    url=reverse('event_edit', args=[event.pk]),
-                )
+                proposer = request.user.get_full_name() or request.user.username
+                url = absolute_url(reverse('event_list'))
+                send_push_to_group(GROUP_TSP, head='Event proposed', body=f'{proposer} proposed {event.name}.', url=url)
+                for member in User.objects.filter(groups__name=GROUP_TSP, is_active=True).exclude(pk=request.user.pk):
+                    send_email(member.email, f'New event proposed: {event.name}', 'email/event_proposed.txt', {
+                        'recipient': member, 'event': event, 'proposer': proposer, 'url': url,
+                    })
                 messages.success(
                     request,
                     'Thanks. The committee will set a budget and open it for requests.',
@@ -829,13 +873,16 @@ def event_edit(request, pk):
     elif profile.is_finance:
         form_class = EventBudgetForm
         template = 'tsp/events/budget.html'
+    elif event.is_organised_by(request.user):
+        form_class = EventOrganiserForm
+        template = 'tsp/events/organiser.html'
     else:
         raise PermissionDenied
     if request.method == 'POST':
         form = form_class(request.POST, instance=event)
         if form.is_valid():
             event = form.save(commit=False)
-            if form_class is not EventBudgetForm:
+            if form_class not in (EventBudgetForm, EventOrganiserForm):
                 # The committee has reviewed it, so it leaves the proposals queue.
                 event.proposed_by = None
             event.save()
@@ -843,11 +890,92 @@ def event_edit(request, pk):
             audit('event.updated', user=request.user, target=event.name,
                   detail=', '.join(form.changed_data) or 'no fields changed')
             messages.success(request, 'Budget saved.' if form_class is EventBudgetForm else 'Event updated.')
+            next_url = request.GET.get('next')
+            if _is_safe_redirect(request, next_url):
+                return redirect(next_url)
             return redirect('dashboard' if form_class is EventBudgetForm else 'event_list')
     else:
         form = form_class(instance=event)
 
     return render(request, template, {'form': form, 'profile': profile, 'event': event})
+
+
+def _tell_proposer(event, accepted, reason=''):
+    """Tell whoever proposed an event what the committee decided. Returns whether the email went."""
+    proposer = event.proposed_by
+    if not proposer:
+        return True
+    from marvin.mail import absolute_url, send_email
+    from profile.services.push_notifications import send_push_to_user
+
+    if accepted:
+        url = absolute_url(reverse('request_create') + f'?event={event.pk}')
+        head, body = 'Event accepted', f'{event.name} was accepted and is open for travel requests.'
+        subject = f'{event.name} has been accepted'
+    else:
+        url = absolute_url(reverse('event_list'))
+        head = 'Event not accepted'
+        body = f'{event.name} was not accepted.' + (f' Reason: {reason}' if reason else '')
+        subject = f'Your proposed event {event.name} was not accepted'
+    send_push_to_user(proposer, head=head, body=body, url=url)
+    return send_email(proposer.email, subject, 'email/event_decision.txt', {
+        'recipient': proposer, 'event': event, 'accepted': accepted, 'reason': reason, 'url': url,
+    })
+
+
+def _proposal_or_message(request, pk):
+    """The proposal to decide on, or None with a message when someone already did."""
+    event = Event.objects.filter(pk=pk).select_related('proposed_by').first()
+    if event is None or event.proposed_by_id is None:
+        messages.info(request, 'That proposal has already been reviewed.')
+        return None
+    return event
+
+
+def _back(request):
+    next_url = request.POST.get('next')
+    return redirect(next_url if _is_safe_redirect(request, next_url) else 'event_list')
+
+
+@login_required
+@group_required(GROUP_TSP)
+@require_POST
+def event_accept(request, pk):
+    """Accept a proposed event: it leaves the proposals queue and opens for requests."""
+    event = _proposal_or_message(request, pk)
+    if event is None:
+        return _back(request)
+    emailed = _tell_proposer(event, accepted=True)
+    event.proposed_by = None
+    event.accepting_requests = True
+    event.save(update_fields=['proposed_by', 'accepting_requests'])
+    audit('event.accepted', user=request.user, target=event.name)
+    messages.success(request, f'{event.name} accepted and open for requests. Finance sets its budget.')
+    if not emailed:
+        messages.warning(request, 'The proposer could not be emailed. Let them know directly.')
+    return _back(request)
+
+
+@login_required
+@group_required(GROUP_TSP)
+@require_POST
+def event_reject(request, pk):
+    """Turn down a proposed event. Nobody can have applied, since proposals stay closed."""
+    event = _proposal_or_message(request, pk)
+    if event is None:
+        return _back(request)
+    if event.requests.exists():
+        messages.error(request, f'{event.name} already has travel requests, so it cannot be rejected. Close it instead.')
+        return _back(request)
+    reason = ' '.join(request.POST.get('reason', '').split())[:500]
+    emailed = _tell_proposer(event, accepted=False, reason=reason)
+    name = event.name
+    event.delete()
+    audit('event.rejected', user=request.user, target=name, detail=reason or 'no reason given')
+    messages.error(request, f'{name} rejected and the proposer has been told.' if emailed else f'{name} rejected.')
+    if not emailed:
+        messages.warning(request, 'The proposer could not be emailed. Let them know directly.')
+    return _back(request)
 
 
 @login_required
@@ -945,7 +1073,7 @@ def request_create(request):
         _tell_about_refund(request, owing)
         return redirect('request_detail', pk=owing.pk)
     if request.method == 'POST':
-        form = TravelRequestForm(request.POST)
+        form = TravelRequestForm(request.POST, user=request.user)
         form_is_valid = form.is_valid()
         formset = ExpenseFormSet(request.POST, form_kwargs={'event': form.cleaned_data.get('event')})
         if form_is_valid and formset.is_valid():
@@ -960,7 +1088,7 @@ def request_create(request):
             messages.success(request, 'Request created as draft.')
             return redirect('request_detail', pk=travel_request.pk)
     else:
-        form = TravelRequestForm()
+        form = TravelRequestForm(user=request.user)
         formset = ExpenseFormSet()
 
     return render(request, 'tsp/requests/form.html', {
@@ -1120,7 +1248,7 @@ def request_edit(request, pk):
             if not (travel_request.is_editable_by_requester or needs_review_again):
                 messages.error(request, 'This request can no longer be edited.')
                 return redirect('request_detail', pk=pk)
-            form = TravelRequestForm(request.POST, instance=travel_request)
+            form = TravelRequestForm(request.POST, instance=travel_request, user=travel_request.user)
             form_is_valid = form.is_valid()
             event = form.cleaned_data.get('event') or travel_request.event
             formset = ExpenseFormSet(request.POST, instance=travel_request, form_kwargs={'event': event})
@@ -1134,7 +1262,7 @@ def request_edit(request, pk):
                     messages.success(request, 'Request updated.')
                 return redirect('request_detail', pk=pk)
     else:
-        form = TravelRequestForm(instance=travel_request)
+        form = TravelRequestForm(instance=travel_request, user=travel_request.user)
         formset = ExpenseFormSet(instance=travel_request)
 
     return render(request, 'tsp/requests/form.html', {
@@ -1384,7 +1512,10 @@ def request_batch_review(request):
             'All selected requests' if reviewed == len(ids)
             else f'{reviewed} request{"s" if reviewed != 1 else ""}'
         )
-        messages.success(request, f'{which} {action}d.')
+        if action == 'reject':
+            messages.error(request, f'{which} rejected.')
+        else:
+            messages.success(request, f'{which} approved.')
     if own:
         messages.warning(
             request,
@@ -1425,7 +1556,7 @@ def request_reject(request, pk):
             transition_request(
                 travel_request, RequestState.REJECTED, request.user, form.cleaned_data['notes'],
             )
-            messages.success(request, 'Request rejected.')
+            messages.error(request, 'Request rejected.')
         except StateTransitionError as e:
             messages.error(request, str(e))
     else:
@@ -1456,7 +1587,7 @@ def request_cancel(request, pk):
 
     try:
         transition_request(travel_request, RequestState.CANCELLED, request.user)
-        messages.success(request, 'Request cancelled.')
+        messages.error(request, 'Request cancelled.')
     except StateTransitionError as e:
         messages.error(request, str(e))
     return redirect('request_detail', pk=pk)

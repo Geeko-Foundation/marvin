@@ -32,7 +32,7 @@ class AccountTests(TestCase):
 
     def sign_up(self, email='newcomer@example.org', password=PASSWORD):
         return self.client.post(reverse('signup'), {
-            'username': 'newcomer', 'email': email, 'first_name': 'New', 'last_name': 'Comer',
+            'email': email, 'first_name': 'New', 'last_name': 'Comer',
             'password1': password, 'password2': password,
         })
 
@@ -49,13 +49,13 @@ class AccountTests(TestCase):
         self.sign_up()
         response = self.client.get(link_in(mail.outbox[0]))
         self.assertRedirects(response, reverse('login'), fetch_redirect_response=False)
-        self.assertTrue(User.objects.get(username='newcomer').is_active)
+        self.assertTrue(User.objects.get(username='newcomer@example.org').is_active)
         self.assertNotIn('_auth_user_id', self.client.session)
 
     def test_sign_up_refuses_a_weak_password(self):
         response = self.sign_up(password='a')
         self.assertContains(response, 'This password is too short.')
-        self.assertFalse(User.objects.filter(username='newcomer').exists())
+        self.assertFalse(User.objects.filter(username='newcomer@example.org').exists())
 
     def test_the_link_can_be_sent_again_only_a_few_times_a_day(self):
         self.sign_up()
@@ -73,7 +73,9 @@ class SignInLimitTests(TestCase):
         self.user.set_password(PASSWORD)
         self.user.save()
 
-    def test_made_up_names_cannot_push_a_lock_out(self):
+    # Counts live in 15-minute windows; a fixed clock stops the run crossing one and resetting them.
+    @mock.patch('tsp.views.time.time', return_value=1_800_000_000)
+    def test_made_up_names_cannot_push_a_lock_out(self, _clock):
         for _ in range(10):
             self.client.post(reverse('login'), {'username': 'target', 'password': 'wrong'})
         # More than the default cache holds, which used to flush the count.
@@ -129,22 +131,26 @@ class RecordKeepingTests(TestCase):
 
 class LiveBankCheckTests(TestCase):
 
-    def test_a_live_account_checks_the_transfer_but_never_funds_it(self):
-        from profile.services.wise_verification import run_verification_step
-        profile = make_user('payee', [GROUP_REQUESTER]).profile
-        state = {'account_id': 5, 'banking': {'banking_method': 'iban', 'bank_iban': 'DE89370400440532013000'}}
-        client = mock.Mock(sandbox=False)
-        client.create_quote.return_value = {'id': 'q1', 'rate': 1}
-        client.create_transfer.return_value = {'id': 7, 'status': 'incoming_payment_waiting'}
-        client.reverse_transfer.return_value = {'status': 'cancelled'}
-        with mock.patch('profile.services.wise_verification.get_wise_client', return_value=client):
-            for step in ('create_quote', 'create_test_transfer'):
-                run_verification_step(profile, state, step)
-            self.assertIn('skipped', run_verification_step(profile, state, 'fund_transfer'))
-            run_verification_step(profile, state, 'reverse_transfer')
-        client.create_transfer.assert_called_once()
-        client.fund_or_advance_transfer.assert_not_called()
-        client.reverse_transfer.assert_called_once_with(7)
+    def test_the_bank_check_creates_and_cancels_a_transfer_but_never_funds_it(self):
+        # Funding needs an approval in Wise, which left a paused 0.01 transfer
+        # for every check. Creating the transfer is what proves the account.
+        from profile.services.wise_verification import VERIFICATION_STEPS, run_verification_step
+        self.assertNotIn('fund_transfer', [step for step, _ in VERIFICATION_STEPS])
+        for sandbox in (False, True):
+            with self.subTest(sandbox=sandbox):
+                profile = make_user(f'payee{int(sandbox)}', [GROUP_REQUESTER]).profile
+                state = {'account_id': 5, 'banking': {'banking_method': 'iban', 'bank_iban': 'DE89370400440532013000'}}
+                client = mock.Mock(sandbox=sandbox)
+                client.create_quote.return_value = {'id': 'q1', 'rate': 1}
+                client.create_transfer.return_value = {'id': 7, 'status': 'incoming_payment_waiting'}
+                client.reverse_transfer.return_value = {'status': 'cancelled'}
+                with mock.patch('profile.services.wise_verification.get_wise_client', return_value=client):
+                    for step in ('create_quote', 'create_test_transfer', 'reverse_transfer'):
+                        run_verification_step(profile, state, step)
+                client.create_transfer.assert_called_once()
+                client.fund_or_advance_transfer.assert_not_called()
+                client.fund_transfer.assert_not_called()
+                client.reverse_transfer.assert_called_once_with(7)
 
     def test_bank_setup_stops_after_a_few_tries_a_day(self):
         caches['limits'].clear()

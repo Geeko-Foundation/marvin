@@ -1,6 +1,8 @@
 import os
 from decimal import Decimal
 
+import logging
+
 from django import forms
 from django.contrib.auth.forms import (
     AuthenticationForm,
@@ -10,6 +12,7 @@ from django.contrib.auth.forms import (
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
 from django.core.validators import MinValueValidator
+from django.db.models import Q
 
 from marvin.validators import NAME, line, restrict, single_line, text
 from profile.models import UserProfile
@@ -33,8 +36,28 @@ CURRENCY_CHOICES = [
 INPUT_CLASS = 'input input-bordered w-full'
 
 
+def account_username(value: str) -> str:
+    """
+    The username to sign in as. New accounts use their email as the username;
+    older ones may still sign in with either.
+    """
+    value = value.strip()
+    if '@' in value:
+        # Accounts from before emails were unique may share one; then the email
+        # names nobody in particular and the username has to be used.
+        matches = list(User.objects.filter(email__iexact=value).values_list('username', flat=True)[:2])
+        if len(matches) == 1:
+            return matches[0]
+    return value
+
+
 class LoginForm(AuthenticationForm):
-    """Username/password login with Tailwind-styled fields."""
+    """Email (or older username) and password, with Tailwind-styled fields."""
+
+    error_messages = {
+        **AuthenticationForm.error_messages,
+        'invalid_login': 'That email and password do not match an account. Check them and try again.',
+    }
 
     username = forms.CharField(
         widget=forms.TextInput(attrs={
@@ -50,14 +73,13 @@ class LoginForm(AuthenticationForm):
         }),
     )
 
+    def clean_username(self):
+        return account_username(self.cleaned_data['username'])
+
 
 class SignupAccountForm(forms.Form):
-    """Step 1 of the sign-up wizard - create a requestor account."""
+    """Step 1 of the sign-up wizard - create a requestor account. The email is the username."""
 
-    username = forms.CharField(
-        max_length=150,
-        widget=forms.TextInput(attrs={'class': INPUT_CLASS, 'autocomplete': 'username'}),
-    )
     first_name = forms.CharField(
         max_length=150,
         widget=forms.TextInput(attrs={'class': INPUT_CLASS, 'autocomplete': 'given-name'}),
@@ -79,17 +101,12 @@ class SignupAccountForm(forms.Form):
         widget=forms.PasswordInput(attrs={'class': INPUT_CLASS, 'autocomplete': 'new-password'}),
     )
 
-    def clean_username(self):
-        """Reject usernames that already exist (case-insensitive)."""
-        username = self.cleaned_data['username']
-        if User.objects.filter(username__iexact=username).exists():
-            raise forms.ValidationError('This username is already taken.')
-        return username
-
     def clean_email(self):
-        """Reject emails already registered to another account."""
-        email = self.cleaned_data['email']
-        if User.objects.filter(email__iexact=email).exists():
+        """One account per email, and it has to fit in the username it becomes."""
+        email = self.cleaned_data['email'].strip().lower()
+        if len(email) > 150:
+            raise forms.ValidationError('Use an email address of 150 characters or fewer.')
+        if User.objects.filter(Q(email__iexact=email) | Q(username__iexact=email)).exists():
             raise forms.ValidationError('An account with this email already exists.')
         return email
 
@@ -103,7 +120,7 @@ class SignupAccountForm(forms.Form):
         if p1:
             # The same rules a password reset applies, checked against the
             # name and email typed in alongside it.
-            user = User(username=cleaned.get('username', ''), email=cleaned.get('email', ''),
+            user = User(username=cleaned.get('email', ''), email=cleaned.get('email', ''),
                         first_name=cleaned.get('first_name', ''), last_name=cleaned.get('last_name', ''))
             try:
                 validate_password(p1, user)
@@ -117,7 +134,7 @@ class SignupAccountForm(forms.Form):
         from profile.groups import GROUP_REQUESTER, assign_user_to_group
 
         user = User.objects.create_user(
-            username=self.cleaned_data['username'],
+            username=self.cleaned_data['email'],
             email=self.cleaned_data['email'],
             password=self.cleaned_data['password1'],
             first_name=self.cleaned_data['first_name'],
@@ -223,6 +240,11 @@ class EventForm(forms.ModelForm):
         start, end = cleaned.get('start_date'), cleaned.get('end_date')
         if start and end and end < start:
             self.add_error('end_date', 'The end date cannot be before the start date.')
+        requests_close, claims_close = cleaned.get('requests_open_until'), cleaned.get('reimbursements_open_until')
+        if end and requests_close and requests_close > end:
+            self.add_error('requests_open_until', 'Requests have to close by the end of the event.')
+        if end and claims_close and claims_close < end:
+            self.add_error('reimbursements_open_until', 'Claims cannot close before the event ends.')
         self.instance.extra_expense_categories = (
             list(cleaned.get('offered_categories') or []) + list(cleaned.get('custom_categories') or [])
         )
@@ -244,6 +266,15 @@ class EventBudgetForm(forms.ModelForm):
 
     def clean_budget_currency(self):
         return self.cleaned_data.get('budget_currency') or 'EUR'
+
+
+class EventOrganiserForm(forms.ModelForm):
+    """What an organiser may change: the details people read, not dates, budget or who reviews."""
+
+    class Meta:
+        model = Event
+        fields = ['location', 'url', 'description', 'visa_letters_offered']
+        widgets = {name: EventForm.Meta.widgets[name] for name in fields}
 
 
 class EventProposalForm(forms.ModelForm):
@@ -293,10 +324,14 @@ class TravelRequestForm(forms.ModelForm):
         Offer only events still taking requests.
 
         A request already filed against an event that has since closed keeps
-        that event, so editing it does not force a different one.
+        that event, so editing it does not force a different one. Organisers
+        review their event's requests, so they cannot apply to it themselves.
         """
+        user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
         events = Event.open_for_requests()
+        if user is not None:
+            events = events.exclude(pk__in=Event.organised_by(user).values('pk'))
         if self.instance.pk and self.instance.event_id:
             events = events | Event.objects.filter(pk=self.instance.event_id)
         self.fields['event'].queryset = events.distinct().order_by('start_date')
@@ -547,17 +582,29 @@ restrict(SignupAccountForm, first_name=NAME, last_name=NAME)
 restrict(TravelRequestForm, talk_title=line(300), description=text(5000))
 restrict(ExpenseForm, description=line(300))
 restrict(EventForm, name=line(200), location=line(200), description=text(5000))
+restrict(EventProposalForm, name=line(200), location=line(200), description=text(5000))
+restrict(EventOrganiserForm, location=line(200), description=text(5000))
 restrict(CommentForm, body=text(5000))
 restrict(ApprovalForm, notes=text(2000))
 restrict(RejectForm, notes=text(2000))
 
 
 class PasswordResetRequestForm(PasswordResetForm):
-    """Django's reset form, styled like the rest of the site."""
+    """Django's reset form, styled like the rest of the site, that never crashes on a mail failure."""
+
+    sent = True
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['email'].widget.attrs.update({'class': INPUT_CLASS, 'autocomplete': 'email'})
+
+    def send_mail(self, *args, **kwargs):
+        try:
+            super().send_mail(*args, **kwargs)
+        except Exception:
+            # The reset page reads the same either way, so nobody learns which addresses exist.
+            logging.getLogger('marvin.email').exception('Password link email was not sent')
+            self.sent = False
 
 
 class NewPasswordForm(SetPasswordForm):

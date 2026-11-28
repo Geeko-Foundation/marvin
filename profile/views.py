@@ -2,10 +2,10 @@ import base64
 
 import qrcode
 import qrcode.image.svg
+from django.conf import settings
 from django.contrib import messages
-from django.contrib.auth.forms import PasswordResetForm
 from django.contrib.auth.models import User
-from django.core.mail import send_mail
+from django.db.models import Q
 
 from django.shortcuts import redirect, render
 from django.urls import reverse
@@ -22,7 +22,9 @@ from profile.decorators import get_profile
 from profile.forms import ProfileForm, StaffBankingForm
 from profile.models import NOTIFICATION_KINDS
 from profile.two_factor import has_authenticator, two_factor_required
+from marvin.mail import send_email
 from tsp.accounts import read_email_change_link, send_email_change_link
+from tsp.forms import PasswordResetRequestForm
 from tsp.decorators import login_required
 
 
@@ -106,27 +108,33 @@ def notification_settings(request):
 
 def ask_to_confirm_email(request, form):
     """Send the confirmation link when the form asked for a new email address."""
-    if form.new_email:
-        send_email_change_link(request, request.user, form.new_email)
+    if not form.new_email:
+        return
+    if send_email_change_link(request, request.user, form.new_email):
         messages.info(request, f'We sent a link to {form.new_email}. Your email changes once you open it.')
+    else:
+        messages.error(request, f'We could not send a link to {form.new_email}. Your email is unchanged; please try again later.')
 
 
 def email_change_confirm(request, token):
     """Move an account to the email address the link was sent to."""
     link = read_email_change_link(token)
     user = link and User.objects.filter(pk=link[0], email=link[1]).first()
-    if not user or User.objects.filter(email__iexact=link[2]).exclude(pk=user.pk).exists():
+    taken = user and User.objects.filter(
+        Q(email__iexact=link[2]) | Q(username__iexact=link[2])).exclude(pk=user.pk).exists()
+    if not user or taken:
         messages.error(request, 'That link has expired or was already used. Change your email again to get a new one.')
         return redirect('profile')
+    # Accounts that sign in with their email keep doing so with the new one.
+    username_changed = user.username.lower() == link[1].lower()
+    if username_changed:
+        user.username = link[2].lower()
     user.email = link[2]
-    user.save(update_fields=['email'])
+    user.save(update_fields=['email', 'username'])
     # The old address hears about it, so the owner learns if it was not them.
-    send_mail(
-        'Your Marvin email address was changed',
-        f'The email address on your Marvin account {user.username} was changed to {link[2]}.\n\n'
-        'If you did not do this, contact the TSP team straight away.',
-        None, [link[1]], fail_silently=True,
-    )
+    send_email(link[1], f'Your {settings.BRAND_APP_NAME} email address was changed', 'email/email_changed_notice.txt', {
+        'user': user, 'new_email': link[2], 'username_changed': username_changed,
+    })
     audit('account.email_changed', user=user, target=user.username, detail=f'{link[1]} to {link[2]}')
     messages.success(request, f'Your email is now {user.email}.')
     return redirect('profile')
@@ -141,7 +149,7 @@ def password_change_email(request):
     Changing it only through the inbox means someone at an unlocked screen
     cannot lock the owner out of their own account.
     """
-    form = PasswordResetForm({'email': request.user.email})
+    form = PasswordResetRequestForm({'email': request.user.email})
     if form.is_valid():
         form.save(
             request=request,
@@ -149,7 +157,10 @@ def password_change_email(request):
             subject_template_name='email/password_change_subject.txt',
             email_template_name='email/password_change.txt',
         )
-    messages.success(request, f'We have emailed {request.user.email} a link to choose a new password.')
+    if form.sent:
+        messages.success(request, f'We have emailed {request.user.email} a link to choose a new password.')
+    else:
+        messages.error(request, 'We could not send the email just now. Please try again in a few minutes.')
     return redirect('profile')
 
 
@@ -242,5 +253,5 @@ def two_factor_disable(request):
     for device in devices_for_user(request.user, confirmed=None):
         device.delete()
     audit('two_factor.disabled', user=request.user, target=request.user.username)
-    messages.success(request, 'Two-step sign-in is off.')
+    messages.warning(request, 'Two-step sign-in is off. Turn it back on from this page to protect your account.')
     return redirect('profile')

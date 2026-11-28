@@ -86,7 +86,10 @@
       {% for event in proposed_events %}
       <li class="flex flex-wrap items-center justify-between gap-2 py-2">
         <span>{{ event.name }} <span class="text-sm opacity-60">· {{ event.location }} · {{ event.start_date|date:"j M Y" }} · by {{ event.proposed_by.get_full_name|default:event.proposed_by.username }}{% if event.suggested_budget %} · suggested {{ event.suggested_budget|floatformat:"0g" }} {{ event.budget_currency }}{% endif %}</span></span>
-        <a href="{% url 'event_edit' event.pk %}" class="btn btn-sm btn-primary">Review</a>
+        <span class="flex flex-wrap gap-2">
+          <a href="{% url 'event_edit' event.pk %}" class="btn btn-sm btn-outline">Review</a>
+          {% include "tsp/events/_proposal_actions.html" %}
+        </span>
       </li>
       {% endfor %}
     </ul>

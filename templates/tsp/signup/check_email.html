@@ -6,10 +6,14 @@
 <div class="card bg-base-100 shadow-xl">
   <div class="card-body">
     <h2 class="card-title">Confirm your email</h2>
+    {% if send_failed %}
+    <div class="alert alert-warning text-sm" role="alert">Your account is created, but we could not send the email just now. Please use the button below to send it again in a few minutes.</div>
+    {% else %}
     <p class="text-sm opacity-70">
       We sent a link to <strong>{{ email }}</strong>. Open it to switch your account on and carry on with the next steps.
     </p>
     <p class="text-sm opacity-70">Nothing arrived after a few minutes? Check your spam folder, or send it again.</p>
+    {% endif %}
     <form method="post" action="{% url 'signup_resend' %}" class="mt-2">
       {% csrf_token %}
       <input type="hidden" name="email" value="{{ email }}">

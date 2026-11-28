@@ -49,16 +49,16 @@ class Command(BaseCommand):
             )
             if dry_run:
                 continue
+            deadline = travel_request.event.reimbursement_deadline()
             send_to(
                 [travel_request.user],
-                subject=f'{left} day(s) left to claim for {travel_request.event.name}',
-                headline='Your reimbursement window is closing',
-                travel_request=travel_request,
-                notes=(
+                subject=f'Reminder: {left} day(s) left to claim for {travel_request.event.name}',
+                headline=(
                     f'Claims for {travel_request.event.name} close on '
-                    f'{travel_request.event.reimbursement_deadline()}. Upload your '
-                    f'receipts and report what the trip cost before then.'
+                    f'{deadline.day} {deadline:%b %Y}. Please upload your '
+                    f'receipts and enter what the trip actually cost before then, so we can reimburse you.'
                 ),
+                travel_request=travel_request,
             )
             travel_request.claim_reminder_days = due
             travel_request.save(update_fields=['claim_reminder_days'])

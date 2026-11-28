@@ -19,7 +19,7 @@
     <div class="card-body">
       <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h2 class="font-semibold">{{ item.title }}</h2>
+          <h2 class="font-semibold">{% if item.detail_url %}<a href="{{ item.detail_url }}" class="link link-hover">{{ item.title }}</a>{% else %}{{ item.title }}{% endif %}</h2>
           {% if item.subtitle %}<p class="text-sm opacity-60">{{ item.subtitle }}</p>{% endif %}
           {% if item.totals %}
           <p class="text-sm">To pay:

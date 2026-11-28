@@ -1,0 +1,36 @@
+{# Where the request is and what it is waiting on. Built by the request_progress tag. #}
+{% load tsp_tags %}
+<section class="card bg-base-100 shadow-sm" aria-labelledby="progress-heading">
+  <div class="card-body gap-3">
+    <h2 id="progress-heading" class="card-title text-lg">Progress <span class="text-sm font-normal opacity-60">{{ done_count }} of {{ total }} stages</span></h2>
+    <div>
+      {# Down the side column on desktop; a row across the page on smaller screens. #}
+      <ol class="steps steps-side-lg w-full" aria-label="Request stages">
+        {% for step in steps %}
+        <li class="step {% if step.stopped %}step-error{% elif step.done %}step-primary{% endif %}"
+            {% if step.current %}aria-current="step"{% endif %}>
+          <span class="text-xs{% if step.current %} font-semibold{% endif %}">{{ step.label }}{% if step.done and not step.current %}<span class="sr-only"> (done)</span>{% endif %}
+            {% if step.entry %}{# Too much for five columns on a phone; the full history below has it there. #}<span class="hidden sm:block font-normal opacity-60">{{ step.entry.created_at|date:"j M Y" }}</span><span class="hidden sm:block font-normal opacity-60">{{ step.entry.actor|default:step.entry.user.get_full_name|default:step.entry.user.username }}</span>{% endif %}
+          </span>
+        </li>
+        {% endfor %}
+      </ol>
+    </div>
+    <p class="text-sm"><strong>{% if stopped or done_count == total %}Status:{% else %}Next:{% endif %}</strong> {{ waiting }}</p>
+    {% if history %}
+    <details class="text-sm">
+      <summary class="cursor-pointer opacity-70">Full history ({{ history|length }} change{{ history|length|pluralize }})</summary>
+      <ol class="mt-2 divide-y divide-base-300">
+        {% for entry in history %}
+        <li class="py-2 flex flex-wrap gap-x-3 gap-y-1">
+          <time class="opacity-60" datetime="{{ entry.created_at|date:'c' }}">{{ entry.created_at|date:"j M Y, H:i" }}</time>
+          <span class="badge {{ entry.to_state|state_badge }} badge-sm whitespace-nowrap">{{ entry.to_state|state_label }}</span>
+          <span class="opacity-70">{{ entry.actor|default:entry.user.get_full_name|default:entry.user.username }}</span>
+          {% if entry.notes %}<p class="basis-full">{{ entry.notes }}</p>{% endif %}
+        </li>
+        {% endfor %}
+      </ol>
+    </details>
+    {% endif %}
+  </div>
+</section>

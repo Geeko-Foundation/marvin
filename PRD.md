@@ -74,7 +74,7 @@ This PRD describes **Marvin as implemented today** in this repository, plus know
 | # | Non-Goal | Rationale |
 |---|---|---|
 | NG1 | Multi-tenant SaaS | Each org runs its own instance |
-| NG2 | OAuth/SSO integration | Username/password with two-step sign-in; SSO is roadmap |
+| NG2 | OAuth/SSO integration | Email and password with two-step sign-in; SSO is roadmap |
 | NG3 | Mobile-native app | Responsive web is sufficient |
 | NG4 | Exact multi-currency accounting | Conversions use daily reference rates for guidance; Wise's quote decides the amount paid |
 
@@ -163,7 +163,7 @@ The committee can name **organisers** on an event (`Event.organizers`). An organ
 | Runtime | Python 3.13+ | `uv` or `pip` |
 | Framework | Django 6 | Server-side rendered HTML |
 | Database | SQLite in development, PostgreSQL in production | Credentials from `.env`; CI tests both |
-| Auth | Django auth, Groups, django-otp | Username/password, two-step sign-in with TOTP and backup codes |
+| Auth | Django auth, Groups, django-otp | Email and password, two-step sign-in with TOTP and backup codes |
 | UI | DaisyUI 5 + Tailwind 4 | Built ahead of time in `css_build/` to `static/css/styles.css`; themes `i-layer-light` / `i-layer-dark` |
 | Live updates | htmx 2 | Dashboard and payment queue sections refresh themselves |
 | Print | paper-css | Printable reimbursement form |
@@ -313,12 +313,12 @@ Linked to any payable through a GenericForeignKey. Fields: `gateway_id` (`wise-a
 
 `python manage.py seed_data` loads `tsp/fixtures/initial.json` and sets every password to `demo` (`--force` flushes and reloads).
 
-| Username | Group | Notes |
+| Email | Group | Notes |
 |---|---|---|
-| `admin` | TSP Committee | Staff and superuser |
-| `finance_team` | Finance | |
-| `douglasd`, `jane_doe`, `patrickf` | Requester | Demo requesters with requests in several states |
-| `superuser` | Requester | Staff superuser; can skip Wise banking |
+| `admin@example.com` | TSP Committee | Staff and superuser |
+| `finance@example.com` | Finance | |
+| `douglas@example.com`, `jane@example.com`, `patrickf@geekos.org` | Requester | Demo requesters with requests in several states |
+| `superuser@example.com` | Requester | Staff superuser; can skip Wise banking |
 
 **Events:** openSUSE Conference 2026 and 2027, FOSDEM 2026, LinuxConf.au 2026.
 
@@ -374,7 +374,7 @@ Defined in `tsp/services/state_machine.py`. Each transition writes `StateHistory
 - Password reset by email; changing the email address needs a link sent to the new address.
 
 **Sign-up (`/signup/`):**
-1. Account (username, email, password), activated by an emailed link
+1. Account (email as the username, and a password), activated by an emailed link
 2. Profile (name, phone, country)
 3. Wise banking: method, details and postal address, held in the session only (Wise needs the address to create the payee)
 4. Seven-step Wise verification with a progress view (see §10.2)
@@ -579,15 +579,14 @@ PAYMENTS_PERMISSION_CHECK = 'profile.permissions.finance_can_process_payments'
 
 ### 10.2 Recipient Verification (Onboarding)
 
-`profile/services/wise_verification.py` runs seven steps:
+`profile/services/wise_verification.py` runs six steps:
 
 1. Create Wise payee account
 2. Confirm bank details with Wise
 3. Request exchange quote for test transfer
-4. Create test transfer
-5. Fund test transfer (sandbox only; skipped on a live account so no money moves)
-6. Cancel / reverse test transfer
-7. Save verification to the profile
+4. Create test transfer (never funded, so no money moves and nothing waits for approval in Wise)
+5. Cancel the test transfer
+6. Save verification to the profile
 
 Changing an existing payout account requires the current password, is rate limited, and is recorded in the audit log with an email to the account owner.
 
@@ -688,7 +687,7 @@ Each kind below can be muted per user. Anything not listed, such as a payment co
 
 | Gap | Notes |
 |---|---|
-| No SSO | Username/password with two-step sign-in |
+| No SSO | Email and password with two-step sign-in |
 | Wise funding | Personal-token accounts cannot fund through the API; finance approves payments in Wise |
 | Push needs HTTPS | Browsers require a secure context |
 | Claim reminders need a scheduler | The command does not schedule itself |

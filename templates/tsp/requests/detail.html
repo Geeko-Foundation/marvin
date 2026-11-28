@@ -16,13 +16,25 @@
 </div>
 
 {% with paid=travel_request.payment %}
-{% if paid and paid.purpose != 'advance' and paid.status != 'failed' %}
+{% if paid and paid.purpose != 'advance' and paid.status == 'failed' or paid and paid.purpose != 'advance' and paid.status == 'cancelled' %}
+{# A failed transfer only matters while the request still waits to be paid; a closed request has nothing to act on. #}
+{% if travel_request.state == 'submitted_for_payment' %}
+<div class="alert alert-warning mb-6" role="status">
+  <span>
+    The transfer of <strong>{{ paid.amount|floatformat:"2g" }} {{ paid.currency }}</strong> on {{ paid.created_at|date:"j M Y" }} did not go through{% if paid.status == 'cancelled' %}: it was cancelled in Wise{% endif %}.
+    The request is back in the payment queue and can be paid again.
+    {% if paid.external_id %}<span class="block text-sm">Wise transfer {{ paid.external_id }} · reference {{ paid.reference }}</span>{% endif %}
+  </span>
+</div>
+{% endif %}
+{% elif paid and paid.purpose != 'advance' %}
 <div class="alert alert-success mb-6">
   <span>
     {% if paid.status == 'success' or paid.status == 'completed' %}Paid{% else %}Sending{% endif %}
     <strong>{{ paid.amount|floatformat:"2g" }} {{ paid.currency }}</strong> on {{ paid.created_at|date:"j M Y" }}.
     {% with m=paid.metadata %}
-    {% if m.fee %}Wise's fee of {{ m.fee }} {{ m.fee_currency|default:paid.currency }} was paid by the foundation.{% endif %}
+    {# The fee is the foundation's cost, for finance; the requester only needs what reached them. #}
+    {% if m.fee and m.fee != '0' and m.fee != '0.0' and m.fee != '0.00' and profile.is_finance %}Wise's fee of {{ m.fee }} {{ m.fee_currency|default:paid.currency }} was paid by the foundation.{% endif %}
     {% if m.target_currency and m.target_currency != paid.currency %}
     Converted at 1 {{ paid.currency }} = {{ m.exchange_rate }} {{ m.target_currency }}, so {{ m.target_amount }} {{ m.target_currency }} reaches the account.
     {% endif %}
@@ -57,7 +69,8 @@
   </form>
 </div>
 {% endif %}
-{% if travel_request.advance_amount or advance %}
+{# What the committee allows only matters while the trip is still ahead; a paid advance always shows. #}
+{% if advance or travel_request.awaiting_advance or travel_request.advance_amount and travel_request.state == 'approved' or travel_request.advance_amount and travel_request.state == 'accepted' %}
 <div class="alert mb-6">
   <span>
     {% if advance %}
@@ -72,8 +85,9 @@
 {% endif %}
 {% endwith %}
 
+{# min-w-0: grid columns otherwise grow to their widest table and push the page off a phone screen. #}
 <div class="grid gap-6 lg:grid-cols-3">
-  <div class="lg:col-span-2 flex flex-col gap-6">
+  <div class="lg:col-span-2 flex flex-col gap-6 min-w-0">
     <div class="card bg-base-100 shadow-sm">
       <div class="card-body">
         <h2 class="card-title text-lg">Request Details</h2>
@@ -283,7 +297,7 @@
     <div class="card bg-base-100 shadow-sm border border-primary" id="reimbursement">
       <div class="card-body">
         <h2 class="card-title text-lg">Reimbursement</h2>
-        <ul class="steps steps-vertical md:steps-horizontal w-full my-2">
+        <ul class="steps steps-stack-sm w-full my-2">
           <li class="step step-primary">Actual costs</li>
           <li class="step {% if has_actuals %}step-primary{% endif %}">Documents</li>
           <li class="step {% if has_actuals and not missing_docs %}step-primary{% endif %}">Submit for payment</li>
@@ -291,13 +305,13 @@
         {% if not has_actuals %}
         <p class="text-sm opacity-80">Back from the event? Enter what you actually spent.</p>
         <div class="card-actions mt-2">
-          <a href="{% url 'request_actuals' travel_request.pk %}" class="btn btn-primary btn-sm">Ask for reimbursement</a>
+          <a href="{% url 'request_actuals' travel_request.pk %}" class="btn btn-primary btn-sm">Update costs</a>
         </div>
         {% elif missing_docs %}
         <p class="text-sm opacity-80">Upload: {{ missing_docs|join:", " }}.</p>
         <div class="card-actions mt-2">
           <a href="{% url 'request_form' travel_request.pk %}" class="btn btn-primary btn-sm" target="_blank">Print signed form</a>
-          <a href="{% url 'request_actuals' travel_request.pk %}" class="btn btn-ghost btn-sm">Change actual costs</a>
+          <a href="{% url 'request_actuals' travel_request.pk %}" class="btn btn-outline btn-sm">Update costs</a>
         </div>
         {% else %}
 
@@ -306,7 +320,7 @@
             {% csrf_token %}
             <button type="submit" class="btn btn-success btn-sm">Submit for payment</button>
           </form>
-          <a href="{% url 'request_actuals' travel_request.pk %}" class="btn btn-ghost btn-sm">Change actual costs</a>
+          <a href="{% url 'request_actuals' travel_request.pk %}" class="btn btn-outline btn-sm">Update costs</a>
         </div>
         {% endif %}
       </div>
@@ -438,7 +452,7 @@
           {% endif %}
 
           {% if not travel_request.state == 'accepted' or travel_request.user_id != user.id %}
-          <a href="{% url 'request_form' travel_request.pk %}" class="btn btn-sm btn-ghost" target="_blank">Print Form</a>
+          <a href="{% url 'request_form' travel_request.pk %}" class="btn btn-sm btn-outline" target="_blank">Print Form</a>
           {% endif %}
           {% if travel_request.state == 'draft' or travel_request.state == 'submitted' or travel_request.state == 'approved' or travel_request.state == 'accepted' or travel_request.state == 'submitted_for_payment' %}
           {# A request under review has its own Reject, so the committee is not offered both. #}
@@ -472,42 +486,23 @@
         <form method="post" action="{% url 'request_comment' travel_request.pk %}">
           {% csrf_token %}
           {{ comment_form.body }}{{ comment_form.body.errors }}
-          {% if sees_internal_notes %}
-          <label class="label cursor-pointer justify-start gap-2 mt-2">
-            {{ comment_form.internal }}{{ comment_form.internal.errors }}
-            <span class="label-text text-sm">Internal note, visible only to the committee and finance</span>
-          </label>
-          {% endif %}
-          <button type="submit" class="btn btn-sm btn-primary mt-2">Add Comment</button>
+          <div class="flex flex-wrap items-center justify-between gap-3 mt-2">
+            {% if sees_internal_notes %}
+            <label class="label cursor-pointer justify-start gap-2 whitespace-normal">
+              {{ comment_form.internal }}{{ comment_form.internal.errors }}
+              <span class="label-text text-sm">Internal note, visible only to the committee and finance</span>
+            </label>
+            {% endif %}
+            <button type="submit" class="btn btn-sm btn-primary ms-auto">Add Comment</button>
+          </div>
         </form>
       </div>
     </div>
   </div>
 
-  <div class="card bg-base-100 shadow-sm h-fit">
-    <div class="card-body">
-      <h2 class="card-title text-lg">History</h2>
-      {% if state_history %}
-      <ul class="timeline timeline-vertical timeline-compact">
-        {% for entry in state_history %}
-        <li>
-          <div class="timeline-start text-xs opacity-60">{{ entry.created_at|date:"j M, H:i" }}</div>
-          <div class="timeline-middle">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4 text-primary"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clip-rule="evenodd" /></svg>
-          </div>
-          <div class="timeline-end timeline-box text-sm">
-            <span class="badge {{ entry.to_state|state_badge }} badge-xs whitespace-nowrap">{{ entry.to_state|state_label }}</span>
-            <p class="text-xs opacity-60">{{ entry.actor|default:entry.user.username }}</p>
-            {% if entry.notes %}<p class="text-xs mt-1">{{ entry.notes }}</p>{% endif %}
-          </div>
-          <hr/>
-        </li>
-        {% endfor %}
-      </ul>
-      {% else %}
-      <p class="text-sm opacity-60">Nothing has happened to this request yet.</p>
-      {% endif %}
-    </div>
+  {# First on smaller screens, so where the request stands is the first thing seen; the side column on desktop. #}
+  <div class="h-fit min-w-0 order-first lg:order-none lg:sticky lg:top-4">
+    {% request_progress travel_request state_history %}
   </div>
 </div>
 {% endblock %}

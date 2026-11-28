@@ -23,6 +23,11 @@ ONBOARDING_URL_NAMES = {
     'check_wise_account',
     'login',
     'logout',
+    # Two-step sign-in comes first: its middleware sends people here, so
+    # sending them back to onboarding would bounce between the two forever.
+    'two_factor_setup',
+    'two_factor_verify',
+    'two_factor_backup_codes',
 }
 
 

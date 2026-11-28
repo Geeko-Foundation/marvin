@@ -147,8 +147,9 @@ class OrganiserTests(TestCase):
         self.event.save()
         self.assertEqual(self.client.get(reverse('request_detail', args=[self.request.pk])).status_code, 403)
 
-    def test_an_organiser_cannot_edit_the_event_or_pay(self):
-        self.assertEqual(self.client.get(reverse('event_edit', args=[self.event.pk])).status_code, 403)
+    def test_an_organiser_edits_only_the_details_and_cannot_pay(self):
+        page = self.client.get(reverse('event_edit', args=[self.event.pk]))
+        self.assertTemplateUsed(page, 'tsp/events/organiser.html')
         self.assertEqual(self.client.get(reverse('payments:dashboard')).status_code, 403)
 
     def test_the_dashboard_lists_requests_to_review(self):
@@ -186,7 +187,7 @@ class ReimbursementFlowTests(TestCase):
     def test_documents_come_after_the_actual_costs(self):
         travel_request = make_request(self.owner, RequestState.ACCEPTED)
         page = self.client.get(reverse('request_detail', args=[travel_request.pk]))
-        self.assertContains(page, 'Ask for reimbursement')
+        self.assertContains(page, 'Update costs')
         self.assertContains(page, 'once your actual costs are in')
         expense = travel_request.expenses.get()
         expense.actual_amount, expense.actual_currency = Decimal('480'), 'EUR'

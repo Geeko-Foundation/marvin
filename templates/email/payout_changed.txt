@@ -1,0 +1,7 @@
+Hello {{ user.first_name|default:user.get_username }},
+
+The bank account your travel support is paid to was just changed.
+
+If you made this change, no action is needed. If you did not, sign in, change your password and contact the travel support committee straight away:
+{{ site_url }}/profile/
+{% include "email/_signature.txt" %}
