@@ -8,6 +8,7 @@ from django_otp.oath import totp
 from django_otp.plugins.otp_static.models import StaticDevice
 from django_otp.plugins.otp_totp.models import TOTPDevice
 
+from profile.models import UserProfile
 from profile.groups import GROUP_FINANCE, GROUP_REQUESTER, GROUP_TSP
 from tsp.tests import make_user
 
@@ -21,26 +22,26 @@ def link_in(message):
 class EmailConfirmationTests(TestCase):
     """A new account works only once its email address has been confirmed."""
 
-    def sign_up(self, username='newcomer', email='newcomer@example.org'):
+    def sign_up(self, email='newcomer@example.org'):
         return self.client.post(reverse('signup'), {
-            'username': username, 'email': email, 'first_name': 'New', 'last_name': 'Comer',
+            'email': email, 'first_name': 'New', 'last_name': 'Comer',
             'password1': PASSWORD, 'password2': PASSWORD,
         })
 
     def test_signing_up_sends_a_link_and_the_account_waits_for_it(self):
         response = self.sign_up()
         self.assertContains(response, 'Confirm your email')
-        self.assertFalse(User.objects.get(username='newcomer').is_active)
+        self.assertFalse(User.objects.get(username='newcomer@example.org').is_active)
         self.assertEqual(len(mail.outbox), 1)
         self.assertNotIn('_auth_user_id', self.client.session)
-        self.assertFalse(self.client.login(username='newcomer', password=PASSWORD))
+        self.assertFalse(self.client.login(username='newcomer@example.org', password=PASSWORD))
 
     def test_the_link_switches_the_account_on_once(self):
         self.sign_up()
         link = link_in(mail.outbox[0])
         self.assertRedirects(self.client.get(link), reverse('login'), fetch_redirect_response=False)
-        self.assertTrue(User.objects.get(username='newcomer').is_active)
-        self.assertTrue(self.client.login(username='newcomer', password=PASSWORD))
+        self.assertTrue(User.objects.get(username='newcomer@example.org').is_active)
+        self.assertTrue(self.client.login(username='newcomer@example.org', password=PASSWORD))
 
         self.client.logout()
         self.client.get(link)
@@ -59,7 +60,7 @@ class EmailConfirmationTests(TestCase):
         from django.utils.encoding import force_bytes
         from django.utils.http import urlsafe_base64_encode
         self.sign_up()
-        user = User.objects.get(username='newcomer')
+        user = User.objects.get(username='newcomer@example.org')
         uid = urlsafe_base64_encode(force_bytes(user.pk))
         self.client.get(reverse('signup_activate', args=[uid, default_token_generator.make_token(user)]))
         user.refresh_from_db()
@@ -98,6 +99,15 @@ class TwoStepSignInTests(TestCase):
         codes = self.set_up_two_step(finance)
         self.assertEqual(len(codes), 10)
         self.assertEqual(self.client.get(reverse('dashboard')).status_code, 200)
+
+    def test_a_new_superuser_reaches_two_step_setup_instead_of_looping(self):
+        # createsuperuser makes no profile, so the first visit files them under
+        # Requester with onboarding to do; the two redirects used to chase each other.
+        admin = User.objects.create_superuser('firstadmin', 'admin@example.org', 'x')
+        self.client.force_login(admin)
+        self.assertRedirects(self.client.get(reverse('dashboard')),
+                             reverse('two_factor_setup') + '?next=%2F', fetch_redirect_response=False)
+        self.assertContains(self.client.get(reverse('two_factor_setup')), '<svg')
 
     def test_the_next_sign_in_asks_for_a_code_and_a_backup_code_works_once(self):
         committee = make_user('otpcommittee', [GROUP_TSP])
@@ -220,3 +230,41 @@ class EmailChangeTests(TestCase):
     def test_keeping_the_same_address_sends_nothing(self):
         self.change_to('OLD@example.org')
         self.assertEqual(len(mail.outbox), 0)
+
+
+class EmailAsUsernameTests(TestCase):
+    """New accounts sign in with their email, so every username is unique by email."""
+
+    def sign_up(self, email):
+        return self.client.post(reverse('signup'), {
+            'first_name': 'Ada', 'last_name': 'Lovelace', 'email': email,
+            'password1': 'a-long-unusual-passphrase', 'password2': 'a-long-unusual-passphrase',
+        })
+
+    def test_the_email_becomes_the_username(self):
+        self.sign_up('Ada@Example.org')
+        self.assertTrue(User.objects.filter(username='ada@example.org', email='ada@example.org').exists())
+
+    def test_an_email_in_use_cannot_sign_up_again(self):
+        self.sign_up('ada@example.org')
+        self.assertContains(self.sign_up('ADA@example.org'), 'An account with this email already exists.')
+        self.assertEqual(User.objects.filter(email__iexact='ada@example.org').count(), 1)
+
+    def test_an_older_account_signs_in_with_its_email_or_username(self):
+        user = make_user('oldname', [GROUP_REQUESTER])
+        for name in ('oldname', 'OLDNAME@example.org'):
+            with self.subTest(name=name):
+                self.client.logout()
+                self.client.post(reverse('login'), {'username': name, 'password': 'x'})
+                self.assertEqual(int(self.client.session['_auth_user_id']), user.pk)
+
+    def test_changing_the_email_moves_the_username_with_it(self):
+        user = User.objects.create_user('ada@example.org', 'ada@example.org', 'x')
+        UserProfile.objects.create(user=user, country='India')
+        self.client.force_login(user)
+        self.client.post(reverse('profile'), {
+            'first_name': 'Ada', 'last_name': 'L', 'email': 'new@example.org', 'current_password': 'x',
+        })
+        self.client.get(link_in(mail.outbox[-1]))
+        user.refresh_from_db()
+        self.assertEqual((user.username, user.email), ('new@example.org', 'new@example.org'))

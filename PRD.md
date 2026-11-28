@@ -74,7 +74,7 @@ This PRD describes **Marvin as implemented today** in this repository, plus know
 | # | Non-Goal | Rationale |
 |---|---|---|
 | NG1 | Multi-tenant SaaS | Each org runs its own instance |
-| NG2 | OAuth/SSO integration | Username/password with two-step sign-in; SSO is roadmap |
+| NG2 | OAuth/SSO integration | Email and password with two-step sign-in; SSO is roadmap |
 | NG3 | Mobile-native app | Responsive web is sufficient |
 | NG4 | Exact multi-currency accounting | Conversions use daily reference rates for guidance; Wise's quote decides the amount paid |
 
@@ -163,7 +163,7 @@ The committee can name **organisers** on an event (`Event.organizers`). An organ
 | Runtime | Python 3.13+ | `uv` or `pip` |
 | Framework | Django 6 | Server-side rendered HTML |
 | Database | SQLite in development, PostgreSQL in production | Credentials from `.env`; CI tests both |
-| Auth | Django auth, Groups, django-otp | Username/password, two-step sign-in with TOTP and backup codes |
+| Auth | Django auth, Groups, django-otp | Email and password, two-step sign-in with TOTP and backup codes |
 | UI | DaisyUI 5 + Tailwind 4 | Built ahead of time in `css_build/` to `static/css/styles.css`; themes `i-layer-light` / `i-layer-dark` |
 | Live updates | htmx 2 | Dashboard and payment queue sections refresh themselves |
 | Print | paper-css | Printable reimbursement form |
@@ -374,7 +374,7 @@ Defined in `tsp/services/state_machine.py`. Each transition writes `StateHistory
 - Password reset by email; changing the email address needs a link sent to the new address.
 
 **Sign-up (`/signup/`):**
-1. Account (username, email, password), activated by an emailed link
+1. Account (email as the username, and a password), activated by an emailed link
 2. Profile (name, phone, country)
 3. Wise banking: method, details and postal address, held in the session only (Wise needs the address to create the payee)
 4. Seven-step Wise verification with a progress view (see §10.2)
@@ -688,7 +688,7 @@ Each kind below can be muted per user. Anything not listed, such as a payment co
 
 | Gap | Notes |
 |---|---|
-| No SSO | Username/password with two-step sign-in |
+| No SSO | Email and password with two-step sign-in |
 | Wise funding | Personal-token accounts cannot fund through the API; finance approves payments in Wise |
 | Push needs HTTPS | Browsers require a secure context |
 | Claim reminders need a scheduler | The command does not schedule itself |

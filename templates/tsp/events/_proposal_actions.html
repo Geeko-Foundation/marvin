@@ -1,0 +1,11 @@
+{# Accept or turn down a proposed event. Expects ``event``; ``next`` is where to come back to. #}
+<form method="post" action="{% url 'event_accept' event.pk %}">
+  {% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
+  <button type="submit" class="btn btn-success btn-sm">Accept</button>
+</form>
+<form method="post" action="{% url 'event_reject' event.pk %}"
+      data-confirm="Reject {{ event.name }}?" data-confirm-action="Reject event"
+      data-confirm-detail="It is removed and {{ event.proposed_by.get_full_name|default:event.proposed_by.username }} is told.">
+  {% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
+  <button type="submit" class="btn btn-outline btn-error btn-sm">Reject</button>
+</form>

@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% load tsp_tags %}
+
+{% block title %}Edit {{ event.name }}{% endblock %}
+
+{% block content %}
+<h1 class="text-2xl font-bold mb-1">Edit {{ event.name }}</h1>
+<p class="opacity-60 mb-6">{{ event.start_date|date_range:event.end_date }}. As an organiser you can update the details people read; the committee sets the dates, deadlines and budget.</p>
+
+<form method="post" class="max-w-xl">
+  {% csrf_token %}
+  <div class="card bg-base-100 shadow-sm">
+    <div class="card-body gap-4">
+      <div class="form-control">
+        <label class="label" for="{{ form.location.id_for_label }}"><span class="label-text">Location</span></label>
+        {{ form.location }}{{ form.location.errors }}
+      </div>
+      <div class="form-control">
+        <label class="label" for="{{ form.url.id_for_label }}"><span class="label-text">Event URL</span></label>
+        {{ form.url }}{{ form.url.errors }}
+      </div>
+      <div class="form-control">
+        <label class="label" for="{{ form.description.id_for_label }}"><span class="label-text">Description</span></label>
+        {{ form.description }}{{ form.description.errors }}
+      </div>
+      <label class="label cursor-pointer justify-start gap-3">
+        {{ form.visa_letters_offered }}{{ form.visa_letters_offered.errors }}
+        <span class="label-text">Visa letters offered</span>
+      </label>
+      <div class="card-actions justify-end">
+        <a href="{% url 'event_list' %}" class="btn btn-ghost">Cancel</a>
+        <button type="submit" class="btn btn-primary">Save Changes</button>
+      </div>
+    </div>
+  </div>
+</form>
+{% endblock %}

@@ -6,6 +6,7 @@ from django.contrib import messages
 from django.contrib.auth.forms import PasswordResetForm
 from django.contrib.auth.models import User
 from django.core.mail import send_mail
+from django.db.models import Q
 
 from django.shortcuts import redirect, render
 from django.urls import reverse
@@ -115,11 +116,15 @@ def email_change_confirm(request, token):
     """Move an account to the email address the link was sent to."""
     link = read_email_change_link(token)
     user = link and User.objects.filter(pk=link[0], email=link[1]).first()
-    if not user or User.objects.filter(email__iexact=link[2]).exclude(pk=user.pk).exists():
+    taken = Q(email__iexact=link[2]) | Q(username__iexact=link[2])
+    if not user or User.objects.filter(taken).exclude(pk=user.pk).exists():
         messages.error(request, 'That link has expired or was already used. Change your email again to get a new one.')
         return redirect('profile')
+    # Accounts that sign in with their email keep doing so with the new one.
+    if user.username.lower() == link[1].lower():
+        user.username = link[2].lower()
     user.email = link[2]
-    user.save(update_fields=['email'])
+    user.save(update_fields=['email', 'username'])
     # The old address hears about it, so the owner learns if it was not them.
     send_mail(
         'Your Marvin email address was changed',

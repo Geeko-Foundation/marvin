@@ -59,6 +59,7 @@ from tsp.forms import (
     DocumentUploadForm,
     EventBudgetForm,
     EventForm,
+    EventOrganiserForm,
     EventProposalForm,
     ExpenseActualFormSet,
     ExpenseFormSet,
@@ -67,6 +68,7 @@ from tsp.forms import (
     ReportFilterForm,
     SearchForm,
     SignupAccountForm,
+    account_username,
     TravelRequestForm,
 )
 from tsp.models import (
@@ -169,13 +171,14 @@ def _client_address(request):
 
 
 def login_view(request):
-    """Authenticate with username/password; honor ``next`` redirect when present."""
+    """Authenticate with email (or older username) and password; honor ``next``."""
     if request.user.is_authenticated:
         return redirect('dashboard')
 
     form = LoginForm(request, data=request.POST or None)
     if request.method == 'POST':
-        username = request.POST.get('username', '').strip().lower()
+        # An email and a username for the same account share one counter.
+        username = account_username(request.POST.get('username', '')).lower()
         account_key = 'login-failures:' + username
         failures_key = f'{account_key}:{_client_address(request)}'
         under_attack = _count(account_key, LOGIN_LOCK_SECONDS) >= LOGIN_ACCOUNT_FAILURE_LIMIT
@@ -747,7 +750,7 @@ def event_list(request):
     date_from = _date_param(request, 'from')
     date_to = _date_param(request, 'to')
 
-    events = Event.objects.annotate(request_count=Count('requests'))
+    events = Event.objects.annotate(request_count=Count('requests')).select_related('proposed_by')
     if date_from:
         events = events.filter(start_date__gte=date_from)
     if date_to:
@@ -760,6 +763,7 @@ def event_list(request):
     past = sorted((e for e in events if e.is_past), key=lambda e: e.start_date, reverse=True)
 
     return render(request, 'tsp/events/list.html', {
+        'organised_ids': set(Event.organised_by(request.user).values_list('pk', flat=True)),
         'upcoming': upcoming,
         'past': past,
         'profile': profile,
@@ -829,13 +833,16 @@ def event_edit(request, pk):
     elif profile.is_finance:
         form_class = EventBudgetForm
         template = 'tsp/events/budget.html'
+    elif event.is_organised_by(request.user):
+        form_class = EventOrganiserForm
+        template = 'tsp/events/organiser.html'
     else:
         raise PermissionDenied
     if request.method == 'POST':
         form = form_class(request.POST, instance=event)
         if form.is_valid():
             event = form.save(commit=False)
-            if form_class is not EventBudgetForm:
+            if form_class not in (EventBudgetForm, EventOrganiserForm):
                 # The committee has reviewed it, so it leaves the proposals queue.
                 event.proposed_by = None
             event.save()
@@ -848,6 +855,58 @@ def event_edit(request, pk):
         form = form_class(instance=event)
 
     return render(request, template, {'form': form, 'profile': profile, 'event': event})
+
+
+def _tell_proposer(event, accepted, reason=''):
+    """Let whoever proposed an event know what the committee decided."""
+    proposer = event.proposed_by
+    if not proposer:
+        return
+    from django.core.mail import send_mail
+
+    from profile.services.push_notifications import send_push_to_user
+    if accepted:
+        head, body = 'Event accepted', f'{event.name} was accepted and is open for travel requests.'
+    else:
+        head = 'Event not accepted'
+        body = f'{event.name} was not accepted.' + (f' Reason: {reason}' if reason else '')
+    send_push_to_user(proposer, head=head, body=body, url=reverse('event_list'))
+    if proposer.email:
+        send_mail(head, body, None, [proposer.email], fail_silently=True)
+
+
+@login_required
+@group_required(GROUP_TSP)
+@require_POST
+def event_accept(request, pk):
+    """Accept a proposed event: it leaves the proposals queue and opens for requests."""
+    event = get_object_or_404(Event, pk=pk, proposed_by__isnull=False)
+    _tell_proposer(event, accepted=True)
+    event.proposed_by = None
+    event.accepting_requests = True
+    event.save(update_fields=['proposed_by', 'accepting_requests'])
+    audit('event.accepted', user=request.user, target=event.name)
+    messages.success(request, f'{event.name} accepted and open for requests. Finance sets its budget.')
+    return redirect(request.POST.get('next') if _is_safe_redirect(request, request.POST.get('next')) else 'event_list')
+
+
+@login_required
+@group_required(GROUP_TSP)
+@require_POST
+def event_reject(request, pk):
+    """Turn down a proposed event. Nobody can have applied, since proposals stay closed."""
+    event = get_object_or_404(Event, pk=pk, proposed_by__isnull=False)
+    reason = ' '.join(request.POST.get('reason', '').split())[:500]
+    _tell_proposer(event, accepted=False, reason=reason)
+    name = event.name
+    try:
+        event.delete()
+    except ProtectedError:
+        messages.error(request, f'{name} already has travel requests, so it cannot be rejected. Close it instead.')
+        return redirect('event_list')
+    audit('event.rejected', user=request.user, target=name, detail=reason or 'no reason given')
+    messages.success(request, f'{name} rejected.')
+    return redirect(request.POST.get('next') if _is_safe_redirect(request, request.POST.get('next')) else 'event_list')
 
 
 @login_required
@@ -945,7 +1004,7 @@ def request_create(request):
         _tell_about_refund(request, owing)
         return redirect('request_detail', pk=owing.pk)
     if request.method == 'POST':
-        form = TravelRequestForm(request.POST)
+        form = TravelRequestForm(request.POST, user=request.user)
         form_is_valid = form.is_valid()
         formset = ExpenseFormSet(request.POST, form_kwargs={'event': form.cleaned_data.get('event')})
         if form_is_valid and formset.is_valid():
@@ -960,7 +1019,7 @@ def request_create(request):
             messages.success(request, 'Request created as draft.')
             return redirect('request_detail', pk=travel_request.pk)
     else:
-        form = TravelRequestForm()
+        form = TravelRequestForm(user=request.user)
         formset = ExpenseFormSet()
 
     return render(request, 'tsp/requests/form.html', {
@@ -1120,7 +1179,7 @@ def request_edit(request, pk):
             if not (travel_request.is_editable_by_requester or needs_review_again):
                 messages.error(request, 'This request can no longer be edited.')
                 return redirect('request_detail', pk=pk)
-            form = TravelRequestForm(request.POST, instance=travel_request)
+            form = TravelRequestForm(request.POST, instance=travel_request, user=travel_request.user)
             form_is_valid = form.is_valid()
             event = form.cleaned_data.get('event') or travel_request.event
             formset = ExpenseFormSet(request.POST, instance=travel_request, form_kwargs={'event': event})
@@ -1134,7 +1193,7 @@ def request_edit(request, pk):
                     messages.success(request, 'Request updated.')
                 return redirect('request_detail', pk=pk)
     else:
-        form = TravelRequestForm(instance=travel_request)
+        form = TravelRequestForm(instance=travel_request, user=travel_request.user)
         formset = ExpenseFormSet(instance=travel_request)
 
     return render(request, 'tsp/requests/form.html', {

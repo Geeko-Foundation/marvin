@@ -32,7 +32,7 @@ class AccountTests(TestCase):
 
     def sign_up(self, email='newcomer@example.org', password=PASSWORD):
         return self.client.post(reverse('signup'), {
-            'username': 'newcomer', 'email': email, 'first_name': 'New', 'last_name': 'Comer',
+            'email': email, 'first_name': 'New', 'last_name': 'Comer',
             'password1': password, 'password2': password,
         })
 
@@ -49,13 +49,13 @@ class AccountTests(TestCase):
         self.sign_up()
         response = self.client.get(link_in(mail.outbox[0]))
         self.assertRedirects(response, reverse('login'), fetch_redirect_response=False)
-        self.assertTrue(User.objects.get(username='newcomer').is_active)
+        self.assertTrue(User.objects.get(username='newcomer@example.org').is_active)
         self.assertNotIn('_auth_user_id', self.client.session)
 
     def test_sign_up_refuses_a_weak_password(self):
         response = self.sign_up(password='a')
         self.assertContains(response, 'This password is too short.')
-        self.assertFalse(User.objects.filter(username='newcomer').exists())
+        self.assertFalse(User.objects.filter(username='newcomer@example.org').exists())
 
     def test_the_link_can_be_sent_again_only_a_few_times_a_day(self):
         self.sign_up()

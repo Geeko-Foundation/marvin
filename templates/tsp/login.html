@@ -35,14 +35,14 @@
     <div class="card bg-base-100 w-full max-w-lg shadow-xl">
       <div class="card-body">
         <h2 class="card-title">Sign in</h2>
-        <p class="text-sm opacity-60 mb-4">Enter your username and password to continue.</p>
+        <p class="text-sm opacity-60 mb-4">Enter your email and password to continue.</p>
 
         <form method="post" action="{% url 'login' %}" class="grid gap-4">
           {% csrf_token %}
           {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
 
           <div class="form-control">
-            <label class="label" for="id_username"><span class="label-text">Username</span></label>
+            <label class="label" for="id_username"><span class="label-text">Email</span></label>
             {{ form.username }}
             {{ form.username.errors }}
           </div>

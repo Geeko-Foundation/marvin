@@ -310,7 +310,8 @@ DJANGO_SETTINGS_MODULE=marvin.ci_settings python manage.py test
 - **Uploaded files:** stored under `uploads/`, or `MEDIA_ROOT` when set (served in development when `DEBUG=True`).
 - **Static files:** served from `static/` during development.
 - **Audit fields:** defined on abstract `AuditModel` in `marvin/audit.py`.
-- **Login URLs:** the app uses `/login/` (username/password); Django admin uses `/admin/login/` separately.
+- **Login URLs:** the app uses `/login/` with the email address and password (accounts made before email sign-in can still use their username); Django admin uses `/admin/login/` separately.
+- **Usernames:** new accounts use their email address as the username, so every account has a unique one. Changing the email moves the username with it.
 - **UserProfile:** lives in the `profile` app (`profile.UserProfile`); database table remains `tsp_userprofile` for migration compatibility.
 
 ## getting keys etc
